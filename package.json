@@ -1,0 +1,24 @@
+{
+  "name": "legal-navigator-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "법률 절차 길잡이 — 일반인을 위한 생활법률 정보·절차·표준서식 안내 MCP 서버 (법률자문 아님)",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "express": "^5.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
