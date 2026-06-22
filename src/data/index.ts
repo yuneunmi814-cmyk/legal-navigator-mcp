@@ -7,10 +7,32 @@ import * as consumer from "./consumer.js";
 import * as traffic from "./traffic.js";
 import * as criminal from "./criminal.js";
 import * as civil from "./civil.js";
+import * as civilAdvanced from "./civil_advanced.js";
+import * as sexualViolence from "./sexual_violence.js";
+import * as domesticViolence from "./domestic_violence.js";
+import * as stalking from "./stalking.js";
+import * as digitalSexCrime from "./digital_sex_crime.js";
+import * as violence from "./violence.js";
+import * as defamation from "./defamation.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 
-const domains = [labor, housing, money, consumer, traffic, criminal, civil];
+const domains = [
+  labor,
+  housing,
+  money,
+  consumer,
+  traffic,
+  criminal,
+  civil,
+  civilAdvanced,
+  sexualViolence,
+  domesticViolence,
+  stalking,
+  digitalSexCrime,
+  violence,
+  defamation,
+];
 
 export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));
 export const CHECKLISTS: Record<string, Checklist> = Object.assign({}, ...domains.map((d) => d.checklists));
@@ -32,7 +54,6 @@ export const STATUTES: Statute[] = domains
 export const TOPIC_KEYS = Object.keys(PROCEDURES) as [string, ...string[]];
 export const FORM_KEYS = Object.keys(FORMS) as [string, ...string[]];
 
-// 주제 목록(카테고리·제목) — list_topics 도구용
 export interface TopicMeta {
   key: string;
   category: Category;
@@ -50,6 +71,12 @@ export const CATEGORIES: Category[] = [
   "돈거래",
   "소비자",
   "교통사고",
-  "형사",
   "민사절차",
+  "형사절차",
+  "폭력·협박",
+  "가정폭력",
+  "성폭력피해자",
+  "스토킹",
+  "디지털성범죄",
+  "명예훼손·모욕",
 ];
