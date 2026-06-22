@@ -14,6 +14,15 @@ import * as stalking from "./stalking.js";
 import * as digitalSexCrime from "./digital_sex_crime.js";
 import * as violence from "./violence.js";
 import * as defamation from "./defamation.js";
+import * as family from "./family.js";
+import * as inheritance from "./inheritance.js";
+import * as debtRelief from "./debt_relief.js";
+import * as voicePhishing from "./voice_phishing.js";
+import * as schoolViolence from "./school_violence.js";
+import * as industrialAccident from "./industrial_accident.js";
+import * as administrative from "./administrative.js";
+import * as medicalTax from "./medical_tax.js";
+import * as housingRepair from "./housing_repair.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 
@@ -32,6 +41,15 @@ const domains = [
   digitalSexCrime,
   violence,
   defamation,
+  family,
+  inheritance,
+  debtRelief,
+  voicePhishing,
+  schoolViolence,
+  industrialAccident,
+  administrative,
+  medicalTax,
+  housingRepair,
 ];
 
 export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));
@@ -79,4 +97,13 @@ export const CATEGORIES: Category[] = [
   "스토킹",
   "디지털성범죄",
   "명예훼손·모욕",
+  "가사·가족",
+  "상속",
+  "채무자구제",
+  "금융사기",
+  "학교폭력",
+  "산업재해",
+  "행정",
+  "의료분쟁",
+  "조세",
 ];
