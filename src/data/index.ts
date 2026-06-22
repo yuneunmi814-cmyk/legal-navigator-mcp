@@ -23,6 +23,9 @@ import * as industrialAccident from "./industrial_accident.js";
 import * as administrative from "./administrative.js";
 import * as medicalTax from "./medical_tax.js";
 import * as housingRepair from "./housing_repair.js";
+import * as contract from "./contract.js";
+import * as realestate from "./realestate.js";
+import * as immigration from "./immigration.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 
@@ -50,6 +53,9 @@ const domains = [
   administrative,
   medicalTax,
   housingRepair,
+  contract,
+  realestate,
+  immigration,
 ];
 
 export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));
@@ -106,4 +112,7 @@ export const CATEGORIES: Category[] = [
   "행정",
   "의료분쟁",
   "조세",
+  "계약",
+  "부동산매매",
+  "출입국",
 ];

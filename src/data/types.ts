@@ -23,7 +23,10 @@ export type Category =
   | "산업재해"
   | "행정"
   | "의료분쟁"
-  | "조세";
+  | "조세"
+  | "계약"
+  | "부동산매매"
+  | "출입국";
 
 export interface Procedure {
   category: Category;
