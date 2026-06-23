@@ -19,6 +19,7 @@ import {
   DEADLINES,
   SUPPORT_PROGRAMS,
   HOTLINES,
+  APPLICATION_GUIDE,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
@@ -514,7 +515,13 @@ export function createServer(): McpServer {
     async ({ keyword }) => {
       const kw = keyword?.trim();
       const hot = HOTLINES.map((h) => `  ${h.번호} — ${h.기관} (${h.용도})`).join("\n");
-      const detail = (p: (typeof SUPPORT_PROGRAMS)[number]) => `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`;
+      const detail = (p: (typeof SUPPORT_PROGRAMS)[number]) => {
+        const base = `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`;
+        const g = APPLICATION_GUIDE[p.명칭];
+        if (!g) return base;
+        const steps = g.절차.map((s, i) => `${i + 1}) ${s}`).join("  ");
+        return `${base}\n  📝 신청절차: ${steps}\n  📎 준비서류: ${g.준비물.join(" · ")}`;
+      };
       const 꼬리 = `\n\n※ 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
       if (!kw) {
         // 키워드 없으면 전체 색인(명칭 + 대표 키워드) + 핫라인
