@@ -20,6 +20,8 @@ import {
   SUPPORT_PROGRAMS,
   HOTLINES,
   APPLICATION_GUIDE,
+  DOCUMENT_GUIDE,
+  DOC_TIPS,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
@@ -37,6 +39,7 @@ const SERVER_INSTRUCTIONS =
   "이 서버는 한국 생활법률 36개 분야 168개 주제(노동·임대차·상가·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력·성범죄·스토킹·가사/상속·채무조정·금융사기·산재·행정·의료·조세·계약·부동산·출입국·보험·지식재산·학대·고용보험·통신/개인정보·군·선거·환경·반려동물 등)에 대한 " +
   "법률 정보·대응 절차·표준 서식·금액 계산·법령/판례 안내를 제공하는 정보 도구입니다. " +
   "권장 흐름: ① 사용자가 상황을 일상어로 설명하면 search_topics(자연어)로 주제 키를 찾고, 주제명을 알면 list_topics로 확인 → ② 그 키로 get_procedure·get_checklist·get_form_template·get_precedent 호출 → ③ 판례·법령 인용을 확인할 땐 verify_citation, 최근 법 개정·시행일은 law_updates로 검증. " +
+  "필요에 따라 triage(빠른 진단)·calculate_deadline(기한)·calculate_court_cost(소송비용)·calculate_amount(금액)로 계산하고, find_legal_aid로 무료 변호사·구제 제도와 신청 방법을, how_to_get_document로 준비서류 발급 방법을 안내하세요. " +
   "중요(declaw): 이 도구는 개별 법률 자문이 아닙니다. 특정 사건의 법적 결론(승소·유무죄 등)을 단정하지 말고 정보 제공에 그치며, " +
   "표준서식은 사용자가 제공한 사실로 공란을 채우는 수준까지만 돕고 법적 주장·전략 작성은 하지 마세요. 없는 판례·법령은 지어내지 말고, 중대·복잡·기한임박 사안은 변호사·공인노무사·대한법률구조공단(132) 상담을 권하세요.";
 
@@ -537,6 +540,39 @@ export function createServer(): McpServer {
       const shown = matched.slice(0, 8);
       const more = matched.length > 8 ? `\n\n(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)` : "";
       const text = `🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
+      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+    },
+  );
+
+  // 증빙서류 발급 안내 — 준비서류를 '어디서 어떻게' 떼는지(발급처·온라인·수수료·팁) + 절약 꿀팁.
+  server.registerTool(
+    "how_to_get_document",
+    {
+      title: "증빙서류 발급 안내",
+      description: `Explains where and how to obtain Korean civil documents needed for filings (residence/family/property registry/income/tax/medical records, bank/debt records, etc.): issuing office, online URL, fee, and practical tips — plus document-prep shortcuts. Information only. Service: ${SVC}.`,
+      inputSchema: {
+        document: z.string().optional().describe("서류명/키워드(예: 등기부등본, 가족관계증명서, 소득금액증명, 진단서, 부채증명, 전입세대확인서). 비우면 전체 목록 + 준비 꿀팁"),
+      },
+      annotations: { title: "증빙서류 발급 안내", ...READONLY },
+    },
+    async ({ document }) => {
+      const kw = document?.trim();
+      const tips = DOC_TIPS.map((t) => `  • ${t}`).join("\n");
+      const detail = (k: string) => {
+        const g = DOCUMENT_GUIDE[k];
+        return `📄 ${k}\n  · 발급처: ${g.발급처}\n  · 온라인: ${g.온라인}\n  · 수수료: ${g.수수료}\n  · 팁: ${g.팁}`;
+      };
+      if (!kw) {
+        const idx = Object.keys(DOCUMENT_GUIDE).map((k) => `  · ${k}`).join("\n");
+        const text = `📑 증빙서류 발급 안내 (서류명으로 검색하세요)\n\n${idx}\n\n★ 서류 준비 꿀팁\n${tips}`;
+        return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      }
+      const matched = Object.keys(DOCUMENT_GUIDE).filter((k) => k.includes(kw) || DOCUMENT_GUIDE[k].별칭.some((a) => a.includes(kw) || kw.includes(a)));
+      if (!matched.length) {
+        const text = `'${kw}' 서류 발급 안내가 목록에 없습니다. 대부분의 행정서류는 정부24(gov.kr), 부동산 등기는 인터넷등기소(iros.go.kr), 세금 관련은 홈택스(hometax.go.kr)에서 발급됩니다.\n\n★ 서류 준비 꿀팁\n${tips}`;
+        return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      }
+      const text = `🗂️ '${kw}' 서류 발급 안내\n\n${matched.slice(0, 5).map(detail).join("\n\n")}\n\n★ 서류 준비 꿀팁\n${tips}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );

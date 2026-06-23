@@ -43,6 +43,8 @@ export { CITATION_STATUS, LAW_TIMELINE, SEARCH_SYNONYMS } from "./legal_updates.
 export type { CitationNote, LawChange, SynonymEntry } from "./legal_updates.js";
 export { DEADLINES, SUPPORT_PROGRAMS, HOTLINES, APPLICATION_GUIDE } from "./selfhelp.js";
 export type { DeadlineRule, SupportProgram, ApplyGuide } from "./selfhelp.js";
+export { DOCUMENT_GUIDE, DOC_TIPS } from "./documents.js";
+export type { DocGuide } from "./documents.js";
 
 const domains = [
   labor,
