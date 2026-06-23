@@ -39,6 +39,8 @@ import * as environment from "./environment.js";
 import * as companionAnimal from "./companion_animal.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
+export { CITATION_STATUS, LAW_TIMELINE, SEARCH_SYNONYMS } from "./legal_updates.js";
+export type { CitationNote, LawChange, SynonymEntry } from "./legal_updates.js";
 
 const domains = [
   labor,
