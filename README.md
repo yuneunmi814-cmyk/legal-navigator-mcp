@@ -18,7 +18,7 @@ npm run typecheck
 npm run build && npm start
 ```
 
-## 도구 (14종)
+## 도구 (15종)
 
 PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 description(서비스명 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
 
@@ -37,7 +37,8 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 | `calculate_amount` | 금액 계산기 | 체불임금·퇴직금·주휴수당·지연이자 개략 계산 |
 | `calculate_court_cost` | 소송비용 계산기 | 인지대(인지법 구간식·전자소송 감액·심급 배수)+송달료 개략 |
 | `calculate_deadline` | 기한·소멸시효 계산기 | 기준일+법정기간→마감일·D-day, 기산점·중단/예외 경고 |
-| `find_legal_aid` | 무료 법률지원·구제 연결 | **53개 주제별 무료 변호사·전담기관** 라우팅 — 피해자 국선변호사(성폭력·아동·스토킹)·한국여성변호사회·해바라기/디성센터·법률구조공단(132)·소송구조·범죄피해구조금·대지급금·분야별 분쟁조정(의료·금융·소비자·개인정보·환경·저작권·통신)·전세피해센터·양육비이행관리원·핫라인 16 |
+| `find_legal_aid` | 무료 법률지원·구제 연결 | **53개 주제별 무료 변호사·전담기관** 라우팅 + **신청절차·준비서류**(APPLICATION_GUIDE 25) — 피해자 국선변호사(성폭력·아동·스토킹)·한국여성변호사회·해바라기/디성센터·법률구조공단(132)·소송구조·범죄피해구조금·대지급금·분야별 분쟁조정·전세피해센터·양육비이행관리원·핫라인 16 |
+| `how_to_get_document` | 증빙서류 발급 안내 | 준비서류를 **어디서·어떻게**(발급처·온라인 URL·수수료·팁) — 등기부·가족관계·소득증명·진단서·부채증명 등 16종 + 절약 꿀팁(행정정보 공동이용 동의 등) |
 
 모든 응답에 면책 고지(출처 원문 링크 + 전문가/법률구조공단 132 에스컬레이션)가 자동으로 붙는다.
 
@@ -54,14 +55,14 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
   → get_procedure(절차·기한) · get_checklist(서류) · get_form_template(빈 서식)
   → get_precedent(판례) · verify_citation(인용 진위) · law_updates(시점법)
   → calculate_amount(금액) · calculate_court_cost(소송비용) · calculate_deadline(기한)
-  → find_legal_aid(무료 변호사·구제금 연결)
+  → find_legal_aid(무료 변호사·구제금 연결 + 신청절차·준비서류) · how_to_get_document(준비서류 떼는 법)
 ```
 
 ## PlayMCP 규격 준수 체크 (개발가이드 2026.06.12)
 
 - ✅ Streamable HTTP · Remote · **Stateless(no session)**
 - ✅ 프로토콜 2025-06-18 (허용 범위 2025-03-26 ~ 2025-11-25)
-- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 14개(권장 3~10 상회 — 응집된 법률 어시스턴트)
+- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 15개(권장 3~10 상회 — 응집된 법률 어시스턴트)
 - ✅ annotations(title·readOnlyHint·destructiveHint·openWorldHint·idempotentHint) 전부 지정
 - ✅ description 영문 + 서비스명 병기, 1024자 이내
 - ✅ 이름에 'kakao' 미포함
