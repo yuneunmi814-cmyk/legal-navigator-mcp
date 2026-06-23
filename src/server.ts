@@ -16,12 +16,17 @@ import {
   CITATION_STATUS,
   LAW_TIMELINE,
   SEARCH_SYNONYMS,
+  DEADLINES,
+  SUPPORT_PROGRAMS,
+  HOTLINES,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
   calcSeverance,
   calcWeeklyHolidayPay,
   calcDelayInterest,
+  calcCourtCost,
+  calcDeadline,
 } from "./calc.js";
 
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
@@ -435,6 +440,90 @@ export function createServer(): McpServer {
         `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
       );
       return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
+    },
+  );
+
+  // 소송비용 계산기 — 민사 인지대·송달료(전자소송 감액·심급 배수 포함). 공시 산식 기반.
+  server.registerTool(
+    "calculate_court_cost",
+    {
+      title: "소송비용 계산기 (인지대·송달료)",
+      description: `Estimates Korean civil court filing costs (court stamp fee + service fee) from the claim amount, number of parties, track, and whether it is e-litigation. Based on published statutory formulas. Estimate only. Service: ${SVC}.`,
+      inputSchema: {
+        claim_amount: z.number().describe("소가(청구금액, 원). 금전청구는 청구액"),
+        parties: z.number().int().min(2).describe("당사자 수(원고 수 + 피고 수, 최소 2)"),
+        track: z.enum(["소액", "단독", "합의", "지급명령", "조정", "항소", "상고", "보전"]).describe("절차 종류(소액=3천만↓ / 단독 / 합의 / 지급명령 / 조정 / 항소 / 상고 / 보전=가압류·가처분)"),
+        e_litigation: z.boolean().optional().describe("전자소송 여부(true면 인지대 10% 감액). 기본 false"),
+      },
+      annotations: { title: "소송비용 계산기", ...READONLY },
+    },
+    async ({ claim_amount, parties, track, e_litigation }) => {
+      const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
+      const text = `🧮 소송비용(개략)\n\n결과: ${r.결과}\n계산식: ${r.계산식}\n\n비고: ${r.비고}`;
+      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+    },
+  );
+
+  // 기한/소멸시효 계산기 — 기준일 + 법정기간 → 마감일·남은일수. 기산점·중단/예외 경고 포함.
+  server.registerTool(
+    "calculate_deadline",
+    {
+      title: "기한·소멸시효 계산기",
+      description: `Computes the deadline date and days remaining for a Korean legal time limit (statute of limitations, exclusion period, or appeal/objection period) from a start date. Returns the due date, D-day, the accrual point, and tolling/exception cautions. Information only — confirm the accrual point per your facts. Service: ${SVC}.`,
+      inputSchema: {
+        start_date: z.string().describe("기산 기준일 (YYYY-MM-DD). 예: 해고일, 사고일, 송달받은 날"),
+        deadline_type: z.enum(Object.keys(DEADLINES) as [string, ...string[]]).describe("기한 종류(예: 부당해고_구제신청, 불법행위_손해배상시효, 민사_항소, 상속포기_한정승인 등)"),
+      },
+      annotations: { title: "기한·소멸시효 계산기", ...READONLY },
+    },
+    async ({ start_date, deadline_type }) => {
+      const rule = DEADLINES[deadline_type];
+      const r = calcDeadline(start_date, rule.기간);
+      if (!r) {
+        return { content: [{ type: "text", text: withDisclaimer(`날짜 형식이 올바르지 않습니다. 기준일을 YYYY-MM-DD 형식(예: 2026-06-23)으로 입력하세요.`) }] };
+      }
+      const 기간표시 = rule.기간.년 ? `${rule.기간.년}년` : rule.기간.월 ? `${rule.기간.월}개월` : `${rule.기간.일}일`;
+      const status = r.남은일수 < 0 ? `⛔ 기한 경과 (${-r.남은일수}일 지남)` : r.남은일수 === 0 ? "⚠️ 오늘이 마감일" : `⏳ D-${r.남은일수} (${r.남은일수}일 남음)`;
+      const text = [
+        `⏰ 기한 계산: ${deadline_type}`,
+        ``,
+        `기준일 ${start_date} + ${기간표시}`,
+        `→ 마감일: ${r.마감일}`,
+        `→ ${status}`,
+        ``,
+        `기산점: ${rule.기산}`,
+        `주의: ${rule.경고}`,
+        ``,
+        `※ 기산점·중단(청구·압류·승인)·정지 사유에 따라 실제 기한이 달라질 수 있으니 반드시 확인하세요.`,
+      ].join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+    },
+  );
+
+  // 무료 법률지원·구제 연결 — 무료상담/소송대리/소송구조/구제금/핫라인 라우팅(자격 단정 아님).
+  server.registerTool(
+    "find_legal_aid",
+    {
+      title: "무료 법률지원·구제 연결",
+      description: `Routes the user to Korean free legal-help and victim-relief programs (free counsel, free representation, court-fee waiver, crime-victim relief, unpaid-wage state payout) with eligibility criteria and contacts, plus a hotline directory. Routing and information only — it does not decide eligibility. Service: ${SVC}.`,
+      inputSchema: {
+        keyword: z.string().optional().describe("상황·필요(예: 무료변호사, 체불, 범죄피해, 소송비용, 상담). 비우면 전체"),
+      },
+      annotations: { title: "무료 법률지원·구제 연결", ...READONLY },
+    },
+    async ({ keyword }) => {
+      const kw = keyword?.trim();
+      const progs = kw
+        ? SUPPORT_PROGRAMS.filter((p) => p.명칭.includes(kw) || p.대상.includes(kw) || p.내용.includes(kw) || p.키워드.some((k) => k.includes(kw) || kw.includes(k)))
+        : SUPPORT_PROGRAMS;
+      const list = progs.length ? progs : SUPPORT_PROGRAMS;
+      const body = list
+        .map((p) => `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`)
+        .join("\n\n");
+      const hot = HOTLINES.map((h) => `  ${h.번호} — ${h.기관} (${h.용도})`).join("\n");
+      const head = kw && progs.length ? `🤝 '${kw}' 관련 무료 법률지원·구제` : "🤝 무료 법률지원·구제 프로그램";
+      const text = `${head}\n\n${body}\n\n📞 핫라인\n${hot}\n\n※ 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
+      return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
 

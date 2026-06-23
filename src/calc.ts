@@ -51,3 +51,42 @@ export function calcDelayInterest(미지급액: number, 지연일수: number): C
     비고: "근로기준법 제37조의 지연이자(연 20%)는 '퇴직한' 근로자의 미지급 임금·퇴직금에 적용됩니다. 재직 중 미지급분은 이율이 다릅니다.",
   };
 }
+
+// 민사 소송비용(인지대+송달료) 개략 — 인지법·송달료 예규(2025-06-01, 1회 5,500원) 기준.
+const 송달료횟수: Record<string, number> = { 소액: 10, 단독: 15, 합의: 15, 항소: 12, 상고: 8, 지급명령: 6, 조정: 5, 보전: 3 };
+export function calcCourtCost(소가: number, 당사자수: number, 절차: string, 전자소송: boolean): CalcResult {
+  let 인지: number;
+  if (소가 < 10_000_000) 인지 = 소가 * 0.005;
+  else if (소가 < 100_000_000) 인지 = 소가 * 0.0045 + 5_000;
+  else if (소가 < 1_000_000_000) 인지 = 소가 * 0.004 + 55_000;
+  else 인지 = 소가 * 0.0035 + 555_000;
+  const 배수 = 절차 === "항소" ? 1.5 : 절차 === "상고" ? 2 : 1;
+  인지 *= 배수;
+  if (전자소송) 인지 *= 0.9;
+  인지 = Math.floor(Math.round(인지) / 100) * 100; // 원 단위 반올림 후 끝수 100원 절사(부동소수점 보정)
+  if (인지 < 1000) 인지 = 1000; // 최소 인지액
+  const 횟수 = 송달료횟수[절차] ?? 15;
+  const 송달 = 당사자수 * 5500 * 횟수;
+  const 합계 = 인지 + 송달;
+  return {
+    결과: `인지대 ${won(인지)} + 송달료 ${won(송달)} = 합계 ${won(합계)}`,
+    계산식: `인지대: 소가 ${won(소가)} 구간식${배수 !== 1 ? ` ×${배수}(${절차})` : ""}${전자소송 ? " ×0.9(전자소송)" : ""} → ${won(인지)} / 송달료: 당사자 ${당사자수}명 × 5,500원 × ${횟수}회(${절차}) = ${won(송달)}`,
+    비고: "개략값입니다. 소가 산정 방식·절차별 송달 횟수는 사건마다 달라질 수 있어 전자소송(ecfs.scourt.go.kr) 자동계산으로 확인하세요. 저소득·수급자는 법원 소송구조로 면제·유예가 가능합니다.",
+  };
+}
+
+// 기한 계산 — 기준일에 기간을 더해 마감일·남은일수를 산출(날짜 산술).
+export function calcDeadline(기준일: string, 기간: { 일?: number; 월?: number; 년?: number }): { 마감일: string; 남은일수: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(기준일.trim());
+  if (!m) return null;
+  const end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(end.getTime())) return null;
+  if (기간.년) end.setFullYear(end.getFullYear() + 기간.년);
+  if (기간.월) end.setMonth(end.getMonth() + 기간.월);
+  if (기간.일) end.setDate(end.getDate() + 기간.일);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const 남은일수 = Math.round((end.getTime() - today.getTime()) / 86_400_000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return { 마감일: `${end.getFullYear()}-${p(end.getMonth() + 1)}-${p(end.getDate())}`, 남은일수 };
+}

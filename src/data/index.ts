@@ -41,6 +41,8 @@ import * as companionAnimal from "./companion_animal.js";
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 export { CITATION_STATUS, LAW_TIMELINE, SEARCH_SYNONYMS } from "./legal_updates.js";
 export type { CitationNote, LawChange, SynonymEntry } from "./legal_updates.js";
+export { DEADLINES, SUPPORT_PROGRAMS, HOTLINES } from "./selfhelp.js";
+export type { DeadlineRule, SupportProgram } from "./selfhelp.js";
 
 const domains = [
   labor,
