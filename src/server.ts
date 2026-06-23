@@ -64,6 +64,33 @@ function 절차텍스트(key: string): string {
   ].join("\n");
 }
 
+// 자연어 질의 → 관련 주제 키 랭킹(동의어군 + 메타데이터 가중). search_topics·triage 공용.
+function rankTopics(query: string): string[] {
+  const Q = query.replace(/\s+/g, " ").trim();
+  const nQ = Q.replace(/\s/g, "");
+  const words = [...new Set(Q.split(/\s+/).filter((w) => w.length >= 2))];
+  const score = new Map<string, number>();
+  const add = (k: string, n: number) => {
+    if (PROCEDURES[k]) score.set(k, (score.get(k) ?? 0) + n);
+  };
+  for (const syn of SEARCH_SYNONYMS) {
+    if (syn.q.some((ph) => nQ.includes(ph.replace(/\s/g, "")) || Q.includes(ph))) {
+      for (const t of syn.topics) add(t, 5);
+    }
+  }
+  for (const k of TOPIC_KEYS) {
+    const p = PROCEDURES[k];
+    if (nQ.includes(k) || k.includes(nQ)) add(k, 6);
+    const hay = `${p.적용대상} ${p.근거법.join(" ")}`;
+    for (const w of words) {
+      if (p.제목.includes(w)) add(k, 4);
+      else if (p.category.includes(w)) add(k, 3);
+      else if (hay.includes(w)) add(k, 2);
+    }
+  }
+  return [...score.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+}
+
 export function createServer(): McpServer {
   const server = new McpServer(
     { name: "legal-navigator", version: "0.3.0", title: "법률 절차 길잡이" },
@@ -280,33 +307,11 @@ export function createServer(): McpServer {
       annotations: { title: "자연어 주제 검색", ...READONLY },
     },
     async ({ query }) => {
-      const Q = query.replace(/\s+/g, " ").trim();
-      const nQ = Q.replace(/\s/g, "");
-      const words = [...new Set(Q.split(/\s+/).filter((w) => w.length >= 2))];
-      const score = new Map<string, number>();
-      const add = (k: string, n: number) => {
-        if (PROCEDURES[k]) score.set(k, (score.get(k) ?? 0) + n);
-      };
-      for (const syn of SEARCH_SYNONYMS) {
-        if (syn.q.some((ph) => nQ.includes(ph.replace(/\s/g, "")) || Q.includes(ph))) {
-          for (const t of syn.topics) add(t, 5);
-        }
-      }
-      for (const k of TOPIC_KEYS) {
-        const p = PROCEDURES[k];
-        if (nQ.includes(k) || k.includes(nQ)) add(k, 6);
-        const hay = `${p.적용대상} ${p.근거법.join(" ")}`;
-        for (const w of words) {
-          if (p.제목.includes(w)) add(k, 4);
-          else if (p.category.includes(w)) add(k, 3);
-          else if (hay.includes(w)) add(k, 2);
-        }
-      }
-      const ranked = [...score.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+      const ranked = rankTopics(query).slice(0, 12);
       if (!ranked.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${query}'에 맞는 주제를 바로 찾지 못했습니다. list_topics로 전체 목록(36개 분야)을 확인하거나, 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
       }
-      const body = ranked.map(([k]) => `  - ${k} [${PROCEDURES[k].category}] : ${PROCEDURES[k].제목}`).join("\n");
+      const body = ranked.map((k) => `  - ${k} [${PROCEDURES[k].category}] : ${PROCEDURES[k].제목}`).join("\n");
       return { content: [{ type: "text", text: withDisclaimer(`🔎 '${query}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
     },
   );
@@ -384,6 +389,52 @@ export function createServer(): McpServer {
       }
       const body = list.map((c) => `• ${c.법령} — ${c.변경}\n  시행/적용: ${c.시행일}\n  ${c.요지}`).join("\n\n");
       return { content: [{ type: "text", text: withDisclaimer(`🕒 최근 법령·판례 변경${kw ? ` (검색: ${kw})` : ""}\n\n${body}\n\n※ 사건 발생 시점에 적용되는 법이 다를 수 있습니다. 정확한 시행일·경과규정은 law.go.kr에서 확인하세요.`) }] };
+    },
+  );
+
+  // 빠른 진단(트리아지) — 상황 설명을 받아 가장 가까운 절차의 '기한·첫 단계·확보할 증거·도움처'를 한 장으로 안내.
+  // declaw: 특정 결론·행동을 권하지 않고 '선택지·다음 단계' 정보만 제공(경로 안내). 빈칸 채움형 서식은 get_form_template로 연결.
+  server.registerTool(
+    "triage",
+    {
+      title: "빠른 진단·다음 단계",
+      description: `Triage a free-text everyday-law situation: returns the closest topic's key deadline, the first action steps, the evidence to secure now, and where to get help, plus other candidate topics to confirm. Path-guidance and information only — does NOT give a verdict or recommend a specific legal action. Service: ${SVC}.`,
+      inputSchema: {
+        situation: z.string().describe("처한 상황을 일상어로 설명 (예: 전세 만기인데 집주인이 보증금을 안 줘요 / 어제 보이스피싱으로 500만원 보냈어요 / 직장 상사가 계속 폭언해요)"),
+      },
+      annotations: { title: "빠른 진단·다음 단계", ...READONLY },
+    },
+    async ({ situation }) => {
+      const ranked = rankTopics(situation);
+      if (!ranked.length) {
+        return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 맞는 주제를 바로 찾지 못했습니다. search_topics로 다시 검색하거나 list_topics로 전체 분야를 확인해 주세요.`) }] };
+      }
+      const top = ranked[0];
+      const p = PROCEDURES[top];
+      const c = CHECKLISTS[top];
+      const steps = p.단계.slice(0, 3).map((s) => `  ${s}`).join("\n");
+      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `  - ${s}`).join("\n");
+      const others = ranked.slice(1, 5).map((k) => `  · ${k} [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
+      const hasPrec = (PRECEDENTS[top]?.length ?? 0) > 0;
+      const parts = [
+        `🧭 빠른 진단: '${situation}'`,
+        `※ 특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다.`,
+        ``,
+        `▶ 가장 가까운 주제: ${top} [${p.category}] ${p.제목}`,
+        ``,
+        `⏰ 기한(놓치면 권리 소멸 위험): ${p.기한}`,
+        ``,
+        `✅ 지금 할 일(첫 단계)`,
+        steps,
+      ];
+      if (evid) parts.push(``, `📎 먼저 확보할 증거`, evid);
+      parts.push(``, `📞 접수·도움받을 곳: ${p.온라인접수}`);
+      if (others) parts.push(``, `※ 상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:`, others);
+      parts.push(
+        ``,
+        `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
+      );
+      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
     },
   );
 
