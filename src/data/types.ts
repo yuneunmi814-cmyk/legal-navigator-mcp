@@ -61,6 +61,7 @@ export interface FormTemplate {
   용도: string;
   본문: string;
   작성요령: string[];
+  공식양식?: string; // 공식 표준서식(별지서식 등) 받는 곳. 있으면 응답 상단에 노출.
 }
 
 // 실재가 검증된 판례만 수록(사건번호 확인). 검증 못한 것은 절대 넣지 않음.

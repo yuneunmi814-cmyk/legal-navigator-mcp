@@ -100,7 +100,7 @@ function rankTopics(query: string): string[] {
   return [...score.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
 }
 
-export function createServer(): McpServer {
+export function createServer(baseUrl?: string): McpServer {
   const server = new McpServer(
     { name: "legal-navigator", version: "0.3.0", title: "법률 절차 길잡이" },
     { instructions: SERVER_INSTRUCTIONS },
@@ -180,17 +180,18 @@ export function createServer(): McpServer {
       if (!f) {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
-      const text = [
-        `📝 ${f.제목}`,
-        `용도: ${f.용도}`,
-        "",
-        "─── 서식 시작 ───",
-        f.본문,
-        "─── 서식 끝 ───",
-        "",
-        "작성요령",
-        ...f.작성요령.map((s) => `  - ${s}`),
-      ].join("\n");
+      const head = [`📝 ${f.제목}`, `용도: ${f.용도}`];
+      if (f.공식양식) head.push(`📄 공식 양식 받는 곳: ${f.공식양식}`);
+      const tail = ["작성요령", ...f.작성요령.map((s) => `  - ${s}`)];
+      if (baseUrl) {
+        tail.push(
+          "",
+          `📎 파일로 저장·공유: ${baseUrl}/forms/${encodeURIComponent(form)}.txt`,
+          "  링크를 누르면 이 서식이 .txt 파일로 저장됩니다 — 구글 드라이브·카카오톡 '나에게 보내기'·메일 어디로든 공유하세요." +
+            (f.공식양식 ? " 단, 관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요." : ""),
+        );
+      }
+      const text = [...head, "", "─── 서식 시작 ───", f.본문, "─── 서식 끝 ───", "", ...tail].join("\n");
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -591,8 +592,46 @@ app.get("/healthz", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// 요청에서 공개 베이스 URL 도출(프록시 뒤에서도 정확하도록 X-Forwarded-* 우선, PUBLIC_BASE_URL로 강제 가능).
+function getBaseUrl(req: express.Request): string {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, "");
+  const xfproto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
+  const xfhost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
+  const proto = xfproto || req.protocol || "http";
+  const host = xfhost || req.headers.host;
+  return host ? `${proto}://${host}` : "";
+}
+
+// 서식 파일 다운로드 — get_form_template 응답의 '📎 파일로 저장·공유' 링크 대상. 읽기전용·무상태·인메모리.
+app.get("/forms/:key", (req, res) => {
+  const key = decodeURIComponent(req.params.key).replace(/\.txt$/i, "");
+  const f = FORMS[key];
+  if (!f) {
+    res.status(404).type("text/plain; charset=utf-8").send("서식을 찾을 수 없습니다. get_form_template의 서식 키를 확인하세요.");
+    return;
+  }
+  const lines = [f.제목, `용도: ${f.용도}`];
+  if (f.공식양식) lines.push(`공식 양식 받는 곳: ${f.공식양식}`);
+  lines.push(
+    "",
+    "─── 서식 시작 ───",
+    f.본문,
+    "─── 서식 끝 ───",
+    "",
+    "[작성요령]",
+    ...f.작성요령.map((s) => `- ${s}`),
+    "",
+    "────────────────────",
+    "※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요.",
+  );
+  const filename = `${f.제목.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "_")}.txt`;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="legal-form.txt"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.send("\uFEFF" + lines.join("\n")); // BOM: Windows 메모장 UTF-8 호환
+});
+
 app.post("/mcp", async (req, res) => {
-  const server = createServer();
+  const server = createServer(getBaseUrl(req));
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
