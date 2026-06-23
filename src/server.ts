@@ -513,16 +513,23 @@ export function createServer(): McpServer {
     },
     async ({ keyword }) => {
       const kw = keyword?.trim();
-      const progs = kw
-        ? SUPPORT_PROGRAMS.filter((p) => p.명칭.includes(kw) || p.대상.includes(kw) || p.내용.includes(kw) || p.키워드.some((k) => k.includes(kw) || kw.includes(k)))
-        : SUPPORT_PROGRAMS;
-      const list = progs.length ? progs : SUPPORT_PROGRAMS;
-      const body = list
-        .map((p) => `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`)
-        .join("\n\n");
       const hot = HOTLINES.map((h) => `  ${h.번호} — ${h.기관} (${h.용도})`).join("\n");
-      const head = kw && progs.length ? `🤝 '${kw}' 관련 무료 법률지원·구제` : "🤝 무료 법률지원·구제 프로그램";
-      const text = `${head}\n\n${body}\n\n📞 핫라인\n${hot}\n\n※ 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
+      const detail = (p: (typeof SUPPORT_PROGRAMS)[number]) => `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`;
+      const 꼬리 = `\n\n※ 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
+      if (!kw) {
+        // 키워드 없으면 전체 색인(명칭 + 대표 키워드) + 핫라인
+        const idx = SUPPORT_PROGRAMS.map((p) => `  · ${p.명칭} [${p.키워드.slice(0, 3).join("·")}]`).join("\n");
+        const text = `📑 무료 법률지원·구제 프로그램 ${SUPPORT_PROGRAMS.length}개\n상황 키워드로 검색하세요 — 예: 성폭력 / 전세사기 / 의료사고 / 체불 / 장애인 / 채무 / 양육비 / 통신\n\n${idx}\n\n📞 24시간·대표 핫라인\n${hot}${꼬리}`;
+        return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      }
+      const matched = SUPPORT_PROGRAMS.filter((p) => p.명칭.includes(kw) || p.대상.includes(kw) || p.내용.includes(kw) || p.키워드.some((k) => k.includes(kw) || kw.includes(k)));
+      if (!matched.length) {
+        const text = `'${kw}'에 딱 맞는 프로그램을 못 찾았습니다. 우선 아래로 문의하세요:\n\n${detail(SUPPORT_PROGRAMS[0])}\n\n다른 키워드(예: 성폭력·전세사기·의료사고·체불·장애인·채무)로 다시 검색하거나, 비우면 전체 목록을 봅니다.\n\n📞 핫라인\n${hot}${꼬리}`;
+        return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      }
+      const shown = matched.slice(0, 8);
+      const more = matched.length > 8 ? `\n\n(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)` : "";
+      const text = `🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
