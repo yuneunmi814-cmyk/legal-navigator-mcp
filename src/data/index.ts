@@ -26,6 +26,17 @@ import * as housingRepair from "./housing_repair.js";
 import * as contract from "./contract.js";
 import * as realestate from "./realestate.js";
 import * as immigration from "./immigration.js";
+import * as insurance from "./insurance.js";
+import * as ip from "./ip.js";
+import * as abuse from "./abuse.js";
+import * as employmentInsurance from "./employment_insurance.js";
+import * as apartment from "./apartment.js";
+import * as commercialLease from "./commercial_lease.js";
+import * as telecomPrivacy from "./telecom_privacy.js";
+import * as military from "./military.js";
+import * as election from "./election.js";
+import * as environment from "./environment.js";
+import * as companionAnimal from "./companion_animal.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 
@@ -56,6 +67,17 @@ const domains = [
   contract,
   realestate,
   immigration,
+  insurance,
+  ip,
+  abuse,
+  employmentInsurance,
+  apartment,
+  commercialLease,
+  telecomPrivacy,
+  military,
+  election,
+  environment,
+  companionAnimal,
 ];
 
 export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));
@@ -115,4 +137,15 @@ export const CATEGORIES: Category[] = [
   "계약",
   "부동산매매",
   "출입국",
+  "보험",
+  "지식재산",
+  "아동·노인학대",
+  "고용보험",
+  "공동주택",
+  "상가임대차",
+  "통신·개인정보",
+  "군·병역",
+  "선거",
+  "환경",
+  "반려동물",
 ];
