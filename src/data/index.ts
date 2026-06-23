@@ -37,6 +37,7 @@ import * as military from "./military.js";
 import * as election from "./election.js";
 import * as environment from "./environment.js";
 import * as companionAnimal from "./companion_animal.js";
+import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 export { CITATION_STATUS, LAW_TIMELINE, SEARCH_SYNONYMS } from "./legal_updates.js";
@@ -84,6 +85,7 @@ const domains = [
   election,
   environment,
   companionAnimal,
+  applyForms,
 ];
 
 export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));

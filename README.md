@@ -29,7 +29,7 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 | `list_topics` | 주제 목록 | 분야별 주제 키·제목 목록(카테고리 필터) |
 | `get_procedure` | 절차 안내 | 유형별 공식 대응 절차·관할기관·기한·접수처·근거 법령 |
 | `get_checklist` | 필요 서류·증거 | 모아둘 증거 + 접수용 준비서류 체크리스트 |
-| `get_form_template` | 표준 서식 | 진정서·내용증명·신청서 빈 서식 + 작성요령 (자동작성 아님, 빈칸 채움형) |
+| `get_form_template` | 표준 서식 | 진정서·내용증명·고소장·지급명령·가압류 등 + **무료지원·구제 신청서 9종**(소송구조·재산관계진술서·범죄피해구조금·간이대지급금·분쟁조정·디성센터 삭제지원·양육비이행·전세사기 결정·채무조정) 빈칸 채움 골격 + 작성요령·공식양식 출처 (자동작성 아님) |
 | `get_precedent` | 판례 조회 | 검증된 사건번호·요지(키워드/주제 검색) — **187건, 실재 판례만** |
 | `verify_citation` | 인용 검증 | 사건번호·법령조문 실재 대조 + 유효성 경고(폐기·하급심·헌법불합치·법개정). 없으면 지어내지 않고 law.go.kr/casenote 링크 |
 | `law_updates` | 시점법 | 최근 법령·판례 변경과 시행일(사건 시점에 적용되는 법 확인) |
@@ -99,5 +99,6 @@ npm run build && PORT=8080 node dist/server.js  # 컨테이너 CMD와 동일
 - [x] 법령 공식 deep-link grounding (`get_statute`)
 - [x] 자연어 검색·트리아지(`search_topics`·`triage`)
 - [x] 인용 검증·시점법(`verify_citation`·`law_updates`) — 환각 차단
+- [x] 무료지원·구제 신청서 빈칸 채움 골격 9종(`src/data/apply_forms.ts`) — declaw 경계(맞춤 작문 아님) 유지, 공식양식 출처·작성요령 동봉
 - [~] 법제처 국가법령정보 Open API 라이브(`src/lawapi.ts`, `LAW_OC` 키 필요·선택, 응답속도 위해 핫패스 미사용)
-- [ ] 가이드형 서식 작성 인터뷰(빈칸 채움 한정, declaw 경계 유지)
+- [ ] 가이드형 서식 작성 인터뷰(대화로 빈칸 한 칸씩 채우기, declaw 경계 유지)
