@@ -18,7 +18,7 @@ npm run typecheck
 npm run build && npm start
 ```
 
-## 도구 (11종)
+## 도구 (14종)
 
 PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 description(서비스명 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
 
@@ -35,6 +35,9 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 | `law_updates` | 시점법 | 최근 법령·판례 변경과 시행일(사건 시점에 적용되는 법 확인) |
 | `get_statute` | 법령 요지 | 핵심 법조문 요지 + 국가법령정보센터 공식 deep-link |
 | `calculate_amount` | 금액 계산기 | 체불임금·퇴직금·주휴수당·지연이자 개략 계산 |
+| `calculate_court_cost` | 소송비용 계산기 | 인지대(인지법 구간식·전자소송 감액·심급 배수)+송달료 개략 |
+| `calculate_deadline` | 기한·소멸시효 계산기 | 기준일+법정기간→마감일·D-day, 기산점·중단/예외 경고 |
+| `find_legal_aid` | 무료 법률지원·구제 연결 | 법률구조공단(132)·무료소송대리·소송구조·범죄피해구조금·대지급금·핫라인 라우팅 |
 
 모든 응답에 면책 고지(출처 원문 링크 + 전문가/법률구조공단 132 에스컬레이션)가 자동으로 붙는다.
 
@@ -49,14 +52,16 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 ```
 사용자 상황(자연어) → triage / search_topics 로 주제 식별
   → get_procedure(절차·기한) · get_checklist(서류) · get_form_template(빈 서식)
-  → get_precedent(판례) · verify_citation(인용 진위) · law_updates(시점법) · calculate_amount(금액)
+  → get_precedent(판례) · verify_citation(인용 진위) · law_updates(시점법)
+  → calculate_amount(금액) · calculate_court_cost(소송비용) · calculate_deadline(기한)
+  → find_legal_aid(무료 변호사·구제금 연결)
 ```
 
 ## PlayMCP 규격 준수 체크 (개발가이드 2026.06.12)
 
 - ✅ Streamable HTTP · Remote · **Stateless(no session)**
 - ✅ 프로토콜 2025-06-18 (허용 범위 2025-03-26 ~ 2025-11-25)
-- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 11개(권장 3~10 상회 — 기능 응집)
+- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 14개(권장 3~10 상회 — 응집된 법률 어시스턴트)
 - ✅ annotations(title·readOnlyHint·destructiveHint·openWorldHint·idempotentHint) 전부 지정
 - ✅ description 영문 + 서비스명 병기, 1024자 이내
 - ✅ 이름에 'kakao' 미포함
