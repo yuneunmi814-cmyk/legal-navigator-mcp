@@ -645,8 +645,12 @@ function getBaseUrl(req: express.Request): string {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, "");
   const xfproto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
   const xfhost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
-  const proto = xfproto || req.protocol || "http";
-  const host = xfhost || req.headers.host;
+  const host = xfhost || req.headers.host || "";
+  // ★프록시가 x-forwarded-proto를 주지 않으면(예: kakaocloud) 로컬은 http, 배포 도메인은 https로 간주
+  //   — https 채팅창에서 http 링크는 혼합콘텐츠로 차단돼 서식 다운로드가 막히므로.
+  const hostname = host.split(":")[0].toLowerCase();
+  const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname);
+  const proto = xfproto || (isLocal ? req.protocol || "http" : "https");
   return host ? `${proto}://${host}` : "";
 }
 
