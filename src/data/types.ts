@@ -47,7 +47,10 @@ export type Category =
   | "복지·취약가구"
   | "농어업인"
   | "노인·고령"
-  | "정신건강";
+  | "정신건강"
+  | "범죄피해자"
+  | "자살예방·유족"
+  | "재난·안전";
 
 export interface Procedure {
   category: Category;

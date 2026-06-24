@@ -240,3 +240,29 @@ describe("노인·고령·정신건강 주제·연결", () => {
     expect(t).toContain("2014헌가9");
   });
 });
+
+describe("피해·위기(범죄피해자·자살·재난) 주제·연결", () => {
+  it("자살위기 → 위기번호(109·112·119)·정보지원만", async () => {
+    const t = await callText("get_procedure", { topic: "자살위기_도움받기" });
+    expect(t).toContain("109");
+    expect(t).toContain("112");
+  });
+  it("자살유족 → 상속포기/한정승인 연계·보험 단정 안 함", async () => {
+    const t = await callText("get_procedure", { topic: "자살유족_지원" });
+    expect(t).toContain("상속포기");
+    expect(t).toContain("약관");
+  });
+  it("범죄피해자 지원 → 스마일센터·구조금 별도", async () => {
+    const t = await callText("get_procedure", { topic: "범죄피해자_지원" });
+    expect(t).toContain("스마일센터");
+  });
+  it("재난 → 풍수해≠시민안전≠농작물 보험 구분", async () => {
+    const t = await callText("get_procedure", { topic: "풍수해_시민안전보험" });
+    expect(t).toContain("시민안전보험");
+    expect(t).toContain("농작물재해보험");
+  });
+  it("find_legal_aid '자살' → 위기상담 라우팅", async () => {
+    const t = await callText("find_legal_aid", { keyword: "자살" });
+    expect(t).toContain("자살예방");
+  });
+});
