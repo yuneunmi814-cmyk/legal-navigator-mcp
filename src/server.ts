@@ -103,7 +103,7 @@ function rankTopics(query: string): string[] {
 
 export function createServer(baseUrl?: string): McpServer {
   const server = new McpServer(
-    { name: "legal-navigator", version: "0.3.0", title: "법률 절차 길잡이" },
+    { name: "legal-navigator", version: "0.4.0", title: "법률 절차 길잡이" },
     { instructions: SERVER_INSTRUCTIONS },
   );
 
@@ -172,7 +172,7 @@ export function createServer(baseUrl?: string): McpServer {
     "get_form_template",
     {
       title: "표준 서식 제공",
-      description: `Provides a blank standard document template (complaint/내용증명/신청서/소장/고소장/합의서 etc.) with [blank] fields and writing tips. Fill blanks only with facts the user provides; do NOT draft legal arguments. Service: ${SVC}.`,
+      description: `Provides a blank standard document template (complaint, certified mail, application form, lawsuit, criminal complaint, settlement, support-application forms, etc.) with [blank] fields, writing tips, the official-form source, and a .txt download link. Fill blanks only with facts the user provides; do NOT draft legal arguments. Service: ${SVC}.`,
       inputSchema: { form: z.enum(FORM_KEYS).describe("서식 키. get_procedure/list_topics에서 안내된 서식명을 사용") },
       annotations: { title: "표준 서식 제공", ...READONLY },
     },
@@ -586,7 +586,7 @@ export function createServer(baseUrl?: string): McpServer {
     "explain_term",
     {
       title: "법률용어 풀이",
-      description: `Explains Korean legal terms in plain language and maps everyday words to legal terms (e.g., 떼인 돈→대여금, 빨간딱지→압류). Returns definitions and easily-confused distinctions. Definition/information only, not legal advice. Service: ${SVC}.`,
+      description: `Explains Korean legal terms in plain language and maps everyday/colloquial words to their legal terms. Returns definitions and the distinction between easily-confused terms (e.g., dismissal on procedural grounds vs on the merits). Definition/information only, not legal advice. Service: ${SVC}.`,
       inputSchema: {
         term: z.string().describe("뜻이 궁금한 단어(법률용어 또는 일상어). 예: 각하, 가압류, 공시송달, 통상임금, 떼인 돈, 빨간딱지"),
       },

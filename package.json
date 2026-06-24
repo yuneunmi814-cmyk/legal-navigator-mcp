@@ -1,6 +1,6 @@
 {
   "name": "legal-navigator-mcp",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "법률 절차 길잡이 — 일반인을 위한 생활법률 정보·절차·표준서식 안내 MCP 서버 (법률자문 아님)",
