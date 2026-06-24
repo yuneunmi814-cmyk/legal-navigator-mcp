@@ -50,7 +50,10 @@ export type Category =
   | "정신건강"
   | "범죄피해자"
   | "자살예방·유족"
-  | "재난·안전";
+  | "재난·안전"
+  | "소상공인"
+  | "출소자·갱생보호"
+  | "위기임신·보호출산";
 
 export interface Procedure {
   category: Category;

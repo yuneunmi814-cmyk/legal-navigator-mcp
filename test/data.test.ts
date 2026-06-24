@@ -68,10 +68,23 @@ describe("데이터 정합성", () => {
     expect(bad.map((s) => `${s.법령} ${s.조문}`)).toEqual([]);
   });
 
+  it("신규 취약·위기 주제·서식·분야가 등록되어 있다(신청 절차+신청서 한 동선)", () => {
+    for (const k of ["소상공인_폐업재기", "노란우산공제_폐업", "출소자_갱생보호", "위기임신_보호출산"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["노란우산_공제금청구서", "갱생보호_신청서", "행정심판_청구서", "정보공개_청구서", "의료분쟁_조정신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+    for (const c of ["소상공인", "출소자·갱생보호", "위기임신·보호출산"] as const) {
+      expect(CATEGORIES).toContain(c);
+    }
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(203);
-    expect(CATEGORIES.length).toBe(49);
-    expect(FORM_KEYS.length).toBe(77);
+    expect(TOPIC_KEYS.length).toBe(207);
+    expect(CATEGORIES.length).toBe(52);
+    expect(FORM_KEYS.length).toBe(82);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });

@@ -41,6 +41,7 @@ import * as migrant from "./migrant.js";
 import * as vulnerable from "./vulnerable.js";
 import * as welfare from "./welfare.js";
 import * as crisis from "./crisis.js";
+import * as support2 from "./support2.js";
 import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
@@ -95,6 +96,7 @@ const domains = [
   vulnerable,
   welfare,
   crisis,
+  support2,
   applyForms,
 ];
 
@@ -195,4 +197,7 @@ export const CATEGORIES: Category[] = [
   "범죄피해자",
   "자살예방·유족",
   "재난·안전",
+  "소상공인",
+  "출소자·갱생보호",
+  "위기임신·보호출산",
 ];
