@@ -5,6 +5,7 @@ import {
   FORM_KEYS,
   TOPIC_KEYS,
   PRECEDENTS,
+  STATUTES,
   GLOSSARY,
   CATEGORIES,
   TOPICS,
@@ -47,11 +48,31 @@ describe("데이터 정합성", () => {
     expect(dup).toEqual([]);
   });
 
+  it("할루시네이션 검증에서 제거된 사건번호가 다시 들어오지 않는다", () => {
+    const all = Object.values(PRECEDENTS).flat().map((p) => p.사건번호);
+    for (const bad of ["99다41618", "2013므2243", "2024다33556", "분쟁조정 결정사례(공개 사례)"]) {
+      expect(all).not.toContain(bad);
+    }
+  });
+
+  it("모든 판례 사건번호가 형식상 유효(법원 부호 포함)", () => {
+    const all = Object.values(PRECEDENTS).flat();
+    // 한국 사건번호: 연도(2~4자리) + 부호(가~힣) + 번호. 헌재는 'YYYY헌X' 형태.
+    const valid = /(\d{2,4}\s?[가-힣]{1,3}\s?\d|헌[가-힣])/;
+    const bad = all.filter((p) => !valid.test(p.사건번호));
+    expect(bad.map((p) => p.사건번호)).toEqual([]);
+  });
+
+  it("모든 법령 조문이 '제N조' 형식이다(라벨 표기 금지)", () => {
+    const bad = STATUTES.filter((s) => !/^제\d+조/.test(s.조문));
+    expect(bad.map((s) => `${s.법령} ${s.조문}`)).toEqual([]);
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
     expect(TOPIC_KEYS.length).toBe(203);
     expect(CATEGORIES.length).toBe(49);
     expect(FORM_KEYS.length).toBe(77);
     expect(GLOSSARY.length).toBe(125);
-    expect(Object.values(PRECEDENTS).flat().length).toBe(197);
+    expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
 });
