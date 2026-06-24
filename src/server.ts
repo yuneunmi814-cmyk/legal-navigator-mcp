@@ -22,6 +22,7 @@ import {
   APPLICATION_GUIDE,
   DOCUMENT_GUIDE,
   DOC_TIPS,
+  GLOSSARY,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
@@ -39,7 +40,7 @@ const SERVER_INSTRUCTIONS =
   "이 서버는 한국 생활법률 36개 분야 168개 주제(노동·임대차·상가·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력·성범죄·스토킹·가사/상속·채무조정·금융사기·산재·행정·의료·조세·계약·부동산·출입국·보험·지식재산·학대·고용보험·통신/개인정보·군·선거·환경·반려동물 등)에 대한 " +
   "법률 정보·대응 절차·표준 서식·금액 계산·법령/판례 안내를 제공하는 정보 도구입니다. " +
   "권장 흐름: ① 사용자가 상황을 일상어로 설명하면 search_topics(자연어)로 주제 키를 찾고, 주제명을 알면 list_topics로 확인 → ② 그 키로 get_procedure·get_checklist·get_form_template·get_precedent 호출 → ③ 판례·법령 인용을 확인할 땐 verify_citation, 최근 법 개정·시행일은 law_updates로 검증. " +
-  "필요에 따라 triage(빠른 진단)·calculate_deadline(기한)·calculate_court_cost(소송비용)·calculate_amount(금액)로 계산하고, find_legal_aid로 무료 변호사·구제 제도와 신청 방법을, how_to_get_document로 준비서류 발급 방법을 안내하세요. " +
+  "필요에 따라 triage(빠른 진단)·calculate_deadline(기한)·calculate_court_cost(소송비용)·calculate_amount(금액)로 계산하고, find_legal_aid로 무료 변호사·구제 제도와 신청 방법을, how_to_get_document로 준비서류 발급 방법을 안내하세요. 사용자가 모르는 법률용어(각하·가압류·공시송달 등)나 일상어(떼인 돈·빨간딱지)가 나오면 explain_term으로 뜻을 풀이하세요. " +
   "중요(declaw): 이 도구는 개별 법률 자문이 아닙니다. 특정 사건의 법적 결론(승소·유무죄 등)을 단정하지 말고 정보 제공에 그치며, " +
   "표준서식은 사용자가 제공한 사실로 공란을 채우는 수준까지만 돕고 법적 주장·전략 작성은 하지 마세요. 없는 판례·법령은 지어내지 말고, 중대·복잡·기한임박 사안은 변호사·공인노무사·대한법률구조공단(132) 상담을 권하세요.";
 
@@ -219,7 +220,9 @@ export function createServer(baseUrl?: string): McpServer {
         return { content: [{ type: "text", text: withDisclaimer(`'${keyword}'에 해당하는 등록 판례를 찾지 못했습니다. (등록된 판례만 조회되며, 없는 판례는 지어내지 않습니다.)`) }] };
       }
       const body = matched.map((p) => `• ${p.법원} ${p.사건번호}\n  ${p.요지}`).join("\n\n");
-      return { content: [{ type: "text", text: withDisclaimer(`⚖️ 판례 (검색: ${keyword})\n\n${body}\n\n원문 확인: https://www.law.go.kr 또는 https://casenote.kr`) }] };
+      const caseNos = [...new Set(matched.map((p) => p.사건번호.replace(/\s|\(.*?\)/g, "").split(",")[0]).filter(Boolean))].slice(0, 5);
+      const caseLinks = caseNos.map((no) => `  - ${no}: https://casenote.kr/search/?q=${encodeURIComponent(no)}`).join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(`⚖️ 판례 (검색: ${keyword})\n\n${body}\n\n원문(사건번호로 바로 검색):\n${caseLinks}\n또는 국가법령정보센터 https://www.law.go.kr · CaseNote https://casenote.kr`) }] };
     },
   );
 
@@ -300,7 +303,7 @@ export function createServer(baseUrl?: string): McpServer {
       const body = list.map((s) => `• ${s.법령} ${s.조문} — ${s.요지}`).join("\n");
       const laws = [...new Set(list.map((s) => s.법령))];
       const links = laws.map((n) => `  - ${n}: https://www.law.go.kr/법령/${encodeURIComponent(n)}`).join("\n");
-      const text = `⚖️ 법령 요지${keyword ? ` (검색: ${keyword})` : ""}\n\n${body}\n\n원문(국가법령정보센터):\n${links}`;
+      const text = `⚖️ 법령 요지${keyword ? ` (검색: ${keyword})` : ""}\n\n${body}\n\n원문(국가법령정보센터):\n${links}\n\n※ 조문 전문·신구조문·관련 판례 등 더 깊은 원문은 국가법령정보센터(law.go.kr)·찾기쉬운 생활법령정보(easylaw.go.kr)에서 확인하세요.`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -575,6 +578,44 @@ export function createServer(baseUrl?: string): McpServer {
       }
       const text = `🗂️ '${kw}' 서류 발급 안내\n\n${matched.slice(0, 5).map(detail).join("\n\n")}\n\n★ 서류 준비 꿀팁\n${tips}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
+    },
+  );
+
+  // 법률용어 풀이 — 일상어↔법률어 + 자주 보는 법정용어 뜻(정의만, declaw). 큐레이션·인메모리·키 불요.
+  server.registerTool(
+    "explain_term",
+    {
+      title: "법률용어 풀이",
+      description: `Explains Korean legal terms in plain language and maps everyday words to legal terms (e.g., 떼인 돈→대여금, 빨간딱지→압류). Returns definitions and easily-confused distinctions. Definition/information only, not legal advice. Service: ${SVC}.`,
+      inputSchema: {
+        term: z.string().describe("뜻이 궁금한 단어(법률용어 또는 일상어). 예: 각하, 가압류, 공시송달, 통상임금, 떼인 돈, 빨간딱지"),
+      },
+      annotations: { title: "법률용어 풀이", ...READONLY },
+    },
+    async ({ term }) => {
+      const kw = term.trim();
+      const nkw = kw.replace(/\s/g, "");
+      const matched = GLOSSARY.filter((t) => {
+        const u = t.용어.replace(/\s/g, "");
+        if (u.includes(nkw) || nkw.includes(u)) return true;
+        return (t.별칭 ?? []).some((a) => {
+          const na = a.replace(/\s/g, "");
+          return na.length >= 2 && (na.includes(nkw) || nkw.includes(na));
+        });
+      }).slice(0, 6);
+      if (!matched.length) {
+        return { content: [{ type: "text", text: withDisclaimer(`'${kw}'은(는) 용어사전에 없습니다. 비슷한 말로 다시 찾거나, 상황 설명이면 search_topics("${kw}")로 관련 절차를 찾아보세요.\n공식 용어: 찾기쉬운 생활법령정보(https://www.easylaw.go.kr) · 국가법령정보센터 법령용어(https://www.law.go.kr)`) }] };
+      }
+      const body = matched
+        .map((t) => {
+          const lines = [`📖 ${t.용어} [${t.분류}]`, `   ${t.풀이}`];
+          if (t.헷갈림) lines.push(`   ⚖ 구별: ${t.헷갈림}`);
+          if (t.별칭?.length) lines.push(`   (다른 말: ${t.별칭.join(", ")})`);
+          return lines.join("\n");
+        })
+        .join("\n\n");
+      const tail = `\n\n→ 관련 절차는 search_topics("${kw}"), 더 깊은 원문은 국가법령정보센터(law.go.kr) 법령용어·생활법령(easylaw.go.kr).`;
+      return { content: [{ type: "text", text: withDisclaimer(`🔎 '${kw}' 뜻풀이 (${matched.length}건)\n\n${body}${tail}`) }] };
     },
   );
 

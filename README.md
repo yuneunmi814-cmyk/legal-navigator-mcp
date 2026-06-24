@@ -18,7 +18,7 @@ npm run typecheck
 npm run build && npm start
 ```
 
-## 도구 (15종)
+## 도구 (16종)
 
 PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 description(서비스명 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
 
@@ -30,7 +30,7 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 | `get_procedure` | 절차 안내 | 유형별 공식 대응 절차·관할기관·기한·접수처·근거 법령 |
 | `get_checklist` | 필요 서류·증거 | 모아둘 증거 + 접수용 준비서류 체크리스트 |
 | `get_form_template` | 표준 서식 | 진정서·내용증명·고소장·지급명령·가압류 등 + **무료지원·구제 신청서 9종**(소송구조·재산관계진술서·범죄피해구조금·간이대지급금·분쟁조정·디성센터 삭제지원·양육비이행·전세사기 결정·채무조정) 빈칸 채움 골격 + 작성요령·**공식 양식 받는 곳** + **`.txt` 파일 다운로드 링크**(드라이브·카톡 '나에게 보내기'로 공유) (자동작성 아님) |
-| `get_precedent` | 판례 조회 | 검증된 사건번호·요지(키워드/주제 검색) — **187건, 실재 판례만** |
+| `get_precedent` | 판례 조회 | 검증된 사건번호·요지(키워드/주제 검색) — **191건, 실재 판례만** + 사건번호별 casenote 딥링크 |
 | `verify_citation` | 인용 검증 | 사건번호·법령조문 실재 대조 + 유효성 경고(폐기·하급심·헌법불합치·법개정). 없으면 지어내지 않고 law.go.kr/casenote 링크 |
 | `law_updates` | 시점법 | 최근 법령·판례 변경과 시행일(사건 시점에 적용되는 법 확인) |
 | `get_statute` | 법령 요지 | 핵심 법조문 요지 + 국가법령정보센터 공식 deep-link |
@@ -39,14 +39,16 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 | `calculate_deadline` | 기한·소멸시효 계산기 | 기준일+법정기간→마감일·D-day, 기산점·중단/예외 경고 |
 | `find_legal_aid` | 무료 법률지원·구제 연결 | **53개 주제별 무료 변호사·전담기관** 라우팅 + **신청절차·준비서류**(APPLICATION_GUIDE 25) — 피해자 국선변호사(성폭력·아동·스토킹)·한국여성변호사회·해바라기/디성센터·법률구조공단(132)·소송구조·범죄피해구조금·대지급금·분야별 분쟁조정·전세피해센터·양육비이행관리원·핫라인 16 |
 | `how_to_get_document` | 증빙서류 발급 안내 | 준비서류를 **어디서·어떻게**(발급처·온라인 URL·수수료·팁) — 등기부·가족관계·소득증명·진단서·부채증명 등 16종 + 절약 꿀팁(행정정보 공동이용 동의 등) |
+| `explain_term` | 법률용어 풀이 | **일상어↔법률어 + 자주 보는 법정용어 뜻 125개**(각하/기각·가압류/가처분·통상임금/평균임금·대항력/우선변제·선고유예/집행유예 등 헷갈리는 쌍 구별 / 떼인 돈→대여금·빨간딱지→압류). 정의만(declaw), 인메모리·키 불요 |
 
 모든 응답에 면책 고지(출처 원문 링크 + 전문가/법률구조공단 132 에스컬레이션)가 자동으로 붙는다.
 
 ### 데이터 규모
 
 - **168개 주제** / 36개 분야 — `src/data/*.ts`(분야별 분리) → `index.ts` 병합
-- **판례 187건**(고유 178, 판례 보유 주제 146/168, 2020년 이후 69건). 각 사건번호는 law.go.kr·casenote.kr 판결문 실열람 검증분만 수록 — **미검증·없는 판례는 지어내지 않음**
-- 법령 요지 191건 · 시점법 타임라인 12건 · 인용 유효성 플래그 14건(`src/data/legal_updates.ts`)
+- **판례 191건**(고유 181, 판례 보유 주제 150/168, 2020년 이후 70건). 각 사건번호는 law.go.kr·casenote.kr 판결문 실열람 검증분만 수록 — **미검증·없는 판례는 지어내지 않음**
+- **법률용어 125개**(`src/data/glossary.ts`, 9개 분류 — easylaw.go.kr·law.go.kr·대법원·헌재 본문 검증, 형제자매 유류분 위헌 등 최신 반영)
+- 표준서식 72종(무료지원 신청서 9종 포함) · 법령 요지 191건 · 시점법 타임라인 12건 · 인용 유효성 플래그 14건
 
 ## 권장 사용 흐름
 
@@ -56,13 +58,14 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
   → get_precedent(판례) · verify_citation(인용 진위) · law_updates(시점법)
   → calculate_amount(금액) · calculate_court_cost(소송비용) · calculate_deadline(기한)
   → find_legal_aid(무료 변호사·구제금 연결 + 신청절차·준비서류) · how_to_get_document(준비서류 떼는 법)
+  → 모르는 용어가 나오면 explain_term(법률용어 풀이 — 각하·가압류·통상임금, 떼인 돈→대여금)
 ```
 
 ## PlayMCP 규격 준수 체크 (개발가이드 2026.06.12)
 
 - ✅ Streamable HTTP · Remote · **Stateless(no session)**
 - ✅ 프로토콜 2025-06-18 (허용 범위 2025-03-26 ~ 2025-11-25)
-- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 15개(권장 3~10 상회 — 응집된 법률 어시스턴트)
+- ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 16개(권장 3~10 상회 — 응집된 법률 어시스턴트)
 - ✅ annotations(title·readOnlyHint·destructiveHint·openWorldHint·idempotentHint) 전부 지정
 - ✅ description 영문 + 서비스명 병기, 1024자 이내
 - ✅ 이름에 'kakao' 미포함
@@ -95,11 +98,13 @@ npm run build && PORT=8080 node dist/server.js  # 컨테이너 CMD와 동일
 ## 로드맵
 
 - [x] 생활법률 전 분야 확장 — 36개 분야 168개 주제
-- [x] 검증된 판례 DB(`get_precedent`) — 187건, law.go.kr/casenote 실열람 검증
+- [x] 검증된 판례 DB(`get_precedent`) — 191건, law.go.kr/casenote 실열람 검증
 - [x] 법령 공식 deep-link grounding (`get_statute`)
 - [x] 자연어 검색·트리아지(`search_topics`·`triage`)
 - [x] 인용 검증·시점법(`verify_citation`·`law_updates`) — 환각 차단
 - [x] 무료지원·구제 신청서 빈칸 채움 골격 9종(`src/data/apply_forms.ts`) — declaw 경계(맞춤 작문 아님) 유지, 공식양식 출처·작성요령 동봉
 - [x] 서식 파일 내보내기 — `GET /forms/:key.txt`(읽기전용·무상태) + `get_form_template` 응답의 `📎 파일로 저장·공유` 링크. 받은 `.txt`를 구글 드라이브·카카오톡 '나에게 보내기'·메일로 공유. 링크 호스트는 요청에서 도출(`X-Forwarded-*`/`PUBLIC_BASE_URL`)
+- [x] 법률용어 풀이 사전(`src/data/glossary.ts`, 125개·9분류) — 일상어↔법률어 + 헷갈리는 쌍 구별, easylaw·law.go.kr·대법원·헌재 검증. `explain_term` 도구
+- [x] 원문 연결 강화 — `get_precedent` 사건번호별 casenote 딥링크, `get_statute`에 더 깊은 원문(조문 전문·신구조문) 안내
 - [~] 법제처 국가법령정보 Open API 라이브(`src/lawapi.ts`, `LAW_OC` 키 필요·선택, 응답속도 위해 핫패스 미사용)
 - [ ] 가이드형 서식 작성 인터뷰(대화로 빈칸 한 칸씩 채우기, declaw 경계 유지)
