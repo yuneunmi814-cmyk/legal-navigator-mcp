@@ -124,3 +124,29 @@ describe("외국인·이주민(취약계층) 주제·연결", () => {
     expect(t).toContain("통보의무");
   });
 });
+
+describe("취약계층(청소년·장애인·북한이탈주민) 주제·연결", () => {
+  it("청소년 알바 → 정정값 '가족관계기록사항' + 야간 동의/인가", async () => {
+    const t = await callText("get_procedure", { topic: "청소년_아르바이트" });
+    expect(t).toContain("가족관계기록사항");
+    expect(t).toContain("인가");
+  });
+  it("미성년자 계약취소 → '현존이익'만 반환", async () => {
+    const t = await callText("get_procedure", { topic: "미성년자_계약취소" });
+    expect(t).toContain("현존이익");
+  });
+  it("장애인 차별구제 → 3단계(인권위→법무부→법원)", async () => {
+    const t = await callText("get_procedure", { topic: "장애인_차별구제" });
+    expect(t).toContain("국가인권위");
+    expect(t).toContain("법무부");
+  });
+  it("장애인 고용차별 → '3배 배상' 오정보 정정(현행법에 없음) + 형사처벌 명시", async () => {
+    const t = await callText("get_procedure", { topic: "장애인_고용차별" });
+    expect(t).toContain("형사처벌");
+    expect(t).toContain("현행법에 없"); // '손해 3배 징벌배상 조항은 현행법에 없음' 정정
+  });
+  it("find_legal_aid '탈북' → 남북하나재단", async () => {
+    const t = await callText("find_legal_aid", { keyword: "탈북" });
+    expect(t).toContain("남북하나재단");
+  });
+});

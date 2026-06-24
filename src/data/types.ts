@@ -38,7 +38,10 @@ export type Category =
   | "선거"
   | "환경"
   | "반려동물"
-  | "외국인·이주민";
+  | "외국인·이주민"
+  | "청소년·미성년"
+  | "장애인"
+  | "북한이탈주민";
 
 export interface Procedure {
   category: Category;
