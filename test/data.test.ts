@@ -105,10 +105,20 @@ describe("데이터 정합성", () => {
     }
   });
 
+  it("권리구제·기록정리 주제·서식이 등록되어 있다", () => {
+    for (const k of ["운전면허_행정처분구제", "형실효_범죄경력", "국가배상신청", "안심상속_재산조회"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["운전면허_이의신청서", "범죄경력회보서_발급신청서", "국가배상_신청서", "개인회생_개시신청서", "안심상속_재산조회신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(216);
+    expect(TOPIC_KEYS.length).toBe(220);
     expect(CATEGORIES.length).toBe(55);
-    expect(FORM_KEYS.length).toBe(90);
+    expect(FORM_KEYS.length).toBe(95);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });

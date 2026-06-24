@@ -44,6 +44,7 @@ import * as crisis from "./crisis.js";
 import * as support2 from "./support2.js";
 import * as support3 from "./support3.js";
 import * as support4 from "./support4.js";
+import * as support5 from "./support5.js";
 import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
@@ -101,6 +102,7 @@ const domains = [
   support2,
   support3,
   support4,
+  support5,
   applyForms,
 ];
 
