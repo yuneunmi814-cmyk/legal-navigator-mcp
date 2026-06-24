@@ -48,10 +48,10 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(183);
-    expect(CATEGORIES.length).toBe(40);
+    expect(TOPIC_KEYS.length).toBe(188);
+    expect(CATEGORIES.length).toBe(42);
     expect(FORM_KEYS.length).toBe(72);
     expect(GLOSSARY.length).toBe(125);
-    expect(Object.values(PRECEDENTS).flat().length).toBe(195);
+    expect(Object.values(PRECEDENTS).flat().length).toBe(196);
   });
 });

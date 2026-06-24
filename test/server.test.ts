@@ -150,3 +150,31 @@ describe("취약계층(청소년·장애인·북한이탈주민) 주제·연결"
     expect(t).toContain("남북하나재단");
   });
 });
+
+describe("취약직군(플랫폼·자립준비청년·보훈) 주제·연결", () => {
+  it("플랫폼 산재 → 전속성 폐지·근로복지공단", async () => {
+    const t = await callText("get_procedure", { topic: "플랫폼특수고용_산재" });
+    expect(t).toContain("전속성");
+    expect(t).toContain("근로복지공단");
+  });
+  it("플랫폼 보수·계약 → 근로자성 인정 전제(과잉 단정 방지)", async () => {
+    const t = await callText("get_procedure", { topic: "플랫폼특수고용_보수계약" });
+    expect(t).toContain("근로자성");
+  });
+  it("자립준비청년 → 24/25세 정직 표기", async () => {
+    const t = await callText("get_procedure", { topic: "자립준비청년_자립지원" });
+    expect(t).toContain("25세");
+  });
+  it("국가유공자 → 보훈심사위원회 단계", async () => {
+    const t = await callText("get_procedure", { topic: "국가유공자_등록보훈" });
+    expect(t).toContain("보훈심사위원회");
+  });
+  it("get_precedent '타다' → 대법원 2024두32973", async () => {
+    const t = await callText("get_precedent", { keyword: "타다" });
+    expect(t).toContain("2024두32973");
+  });
+  it("find_legal_aid '배달' → 플랫폼·특수고용 노동상담", async () => {
+    const t = await callText("find_legal_aid", { keyword: "배달" });
+    expect(t).toContain("플랫폼·특수고용 노동상담");
+  });
+});

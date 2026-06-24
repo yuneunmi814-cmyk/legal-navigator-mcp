@@ -41,7 +41,9 @@ export type Category =
   | "외국인·이주민"
   | "청소년·미성년"
   | "장애인"
-  | "북한이탈주민";
+  | "북한이탈주민"
+  | "플랫폼·특수고용"
+  | "국가유공자·보훈";
 
 export interface Procedure {
   category: Category;
