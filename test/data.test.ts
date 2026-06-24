@@ -81,10 +81,21 @@ describe("데이터 정합성", () => {
     }
   });
 
+  it("사회보장 급여 신청 주제·서식·분야가 등록되어 있다(혼자 신청하기)", () => {
+    for (const k of ["장애인_등록활동지원", "국민연금_유족장애연금", "근로자녀장려금", "재난적의료비_본인부담상한"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["장애인등록_신청서", "국민연금_급여청구서", "근로자녀장려금_신청서", "재난적의료비_지원신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+    expect(CATEGORIES).toContain("공적연금·사회보험");
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(207);
-    expect(CATEGORIES.length).toBe(52);
-    expect(FORM_KEYS.length).toBe(82);
+    expect(TOPIC_KEYS.length).toBe(211);
+    expect(CATEGORIES.length).toBe(53);
+    expect(FORM_KEYS.length).toBe(86);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });

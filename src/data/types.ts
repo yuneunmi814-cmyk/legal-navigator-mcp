@@ -53,7 +53,8 @@ export type Category =
   | "재난·안전"
   | "소상공인"
   | "출소자·갱생보호"
-  | "위기임신·보호출산";
+  | "위기임신·보호출산"
+  | "공적연금·사회보험";
 
 export interface Procedure {
   category: Category;
