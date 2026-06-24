@@ -115,10 +115,20 @@ describe("데이터 정합성", () => {
     }
   });
 
+  it("의료·돌봄·주거·금융 급여 주제·서식이 등록되어 있다", () => {
+    for (const k of ["중증질환_산정특례", "장애인연금_장애수당", "청년월세_주거지원", "난임부부_시술비지원", "숨은돈_찾기"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["산정특례_등록신청서", "청년월세_지원신청서", "난임시술비_지원신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(220);
+    expect(TOPIC_KEYS.length).toBe(225);
     expect(CATEGORIES.length).toBe(55);
-    expect(FORM_KEYS.length).toBe(95);
+    expect(FORM_KEYS.length).toBe(98);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
