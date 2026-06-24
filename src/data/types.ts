@@ -45,7 +45,9 @@ export type Category =
   | "플랫폼·특수고용"
   | "국가유공자·보훈"
   | "복지·취약가구"
-  | "농어업인";
+  | "농어업인"
+  | "노인·고령"
+  | "정신건강";
 
 export interface Procedure {
   category: Category;

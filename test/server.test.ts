@@ -213,3 +213,30 @@ describe("복지·취약가구·농어업인 주제·신청서", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("노인·고령·정신건강 주제·연결", () => {
+  it("성년후견 → 후견등기부(≠가족관계등록부) 명시", async () => {
+    const t = await callText("get_procedure", { topic: "성년후견" });
+    expect(t).toContain("후견등기부");
+    expect(t).toContain("가족관계등록부");
+  });
+  it("기초연금 → 생일 1개월 전·소급 안 됨", async () => {
+    const t = await callText("get_procedure", { topic: "기초연금_신청" });
+    expect(t).toContain("1개월 전");
+    expect(t).toContain("소급");
+  });
+  it("비자의입원 → 보호의무자 2명 + 입원적합성심사", async () => {
+    const t = await callText("get_procedure", { topic: "정신질환_비자의입원_심사" });
+    expect(t).toContain("보호의무자");
+    expect(t).toContain("입원적합성심사");
+  });
+  it("정신질환자 권리 → 격리·강박(제75조)·국가인권위", async () => {
+    const t = await callText("get_procedure", { topic: "정신질환자_권리" });
+    expect(t).toContain("격리");
+    expect(t).toContain("국가인권위");
+  });
+  it("get_precedent '보호입원' → 헌재 2014헌가9", async () => {
+    const t = await callText("get_precedent", { keyword: "보호입원" });
+    expect(t).toContain("2014헌가9");
+  });
+});
