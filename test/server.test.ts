@@ -107,3 +107,20 @@ describe("핵심 동작", () => {
     expect(await res.json()).toEqual({ status: "ok" });
   });
 });
+
+describe("외국인·이주민(취약계층) 주제·연결", () => {
+  it("find_legal_aid '이주여성' → 다누리콜센터 1577-1366", async () => {
+    const t = await callText("find_legal_aid", { keyword: "이주여성" });
+    expect(t).toContain("다누리콜센터");
+    expect(t).toContain("1577-1366");
+  });
+  it("get_procedure 외국인 산재 → 미등록 포함·근로복지공단", async () => {
+    const t = await callText("get_procedure", { topic: "외국인근로자_산업재해" });
+    expect(t).toContain("미등록");
+    expect(t).toContain("근로복지공단");
+  });
+  it("get_procedure 외국인 임금체불 → 통보의무 면제 안내", async () => {
+    const t = await callText("get_procedure", { topic: "외국인근로자_임금체불" });
+    expect(t).toContain("통보의무");
+  });
+});

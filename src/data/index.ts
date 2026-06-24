@@ -37,6 +37,7 @@ import * as military from "./military.js";
 import * as election from "./election.js";
 import * as environment from "./environment.js";
 import * as companionAnimal from "./companion_animal.js";
+import * as migrant from "./migrant.js";
 import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
@@ -87,6 +88,7 @@ const domains = [
   election,
   environment,
   companionAnimal,
+  migrant,
   applyForms,
 ];
 
@@ -174,4 +176,5 @@ export const CATEGORIES: Category[] = [
   "선거",
   "환경",
   "반려동물",
+  "외국인·이주민",
 ];

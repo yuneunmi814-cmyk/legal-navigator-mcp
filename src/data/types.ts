@@ -37,7 +37,8 @@ export type Category =
   | "군·병역"
   | "선거"
   | "환경"
-  | "반려동물";
+  | "반려동물"
+  | "외국인·이주민";
 
 export interface Procedure {
   category: Category;
