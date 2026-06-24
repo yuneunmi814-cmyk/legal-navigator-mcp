@@ -178,3 +178,38 @@ describe("취약직군(플랫폼·자립준비청년·보훈) 주제·연결", (
     expect(t).toContain("플랫폼·특수고용 노동상담");
   });
 });
+
+describe("복지·취약가구·농어업인 주제·신청서", () => {
+  it("기초생활 → 생계급여 부양의무자 2021 폐지", async () => {
+    const t = await callText("get_procedure", { topic: "기초생활보장_수급신청" });
+    expect(t).toContain("부양의무자");
+    expect(t).toContain("2021");
+  });
+  it("긴급복지 → 선지원 후처리", async () => {
+    const t = await callText("get_procedure", { topic: "긴급복지지원" });
+    expect(t).toContain("선지원");
+  });
+  it("농지연금 → 포털 fbo.or.kr(정정) + 채무 비소구", async () => {
+    const t = await callText("get_procedure", { topic: "농지연금" });
+    expect(t).toContain("fbo.or.kr");
+    expect(t).toContain("비소구");
+  });
+  it("농작물재해보험 → 보험≠재난지원 구분", async () => {
+    const t = await callText("get_procedure", { topic: "농작물재해보험" });
+    expect(t).toContain("재난지원");
+  });
+  it("신청서: 사회보장급여_신청서 — 현행 명칭 정정 + 다운로드 링크", async () => {
+    const t = await callText("get_form_template", { form: "사회보장급여_신청서" });
+    expect(t).toContain("사회보장급여 신청(변경)서");
+    expect(t).toContain("파일로 저장·공유");
+  });
+  it("신청서: 외국인_사업장변경신청서 — 1개월 기한·2단계(출입국) 경고", async () => {
+    const t = await callText("get_form_template", { form: "외국인_사업장변경신청서" });
+    expect(t).toContain("1개월");
+    expect(t).toContain("출입국");
+  });
+  it("신청서 다운로드 /forms/자립수당_지급신청서.txt → 200", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("자립수당_지급신청서")}.txt`);
+    expect(res.status).toBe(200);
+  });
+});

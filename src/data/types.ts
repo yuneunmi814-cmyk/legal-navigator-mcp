@@ -43,7 +43,9 @@ export type Category =
   | "장애인"
   | "북한이탈주민"
   | "플랫폼·특수고용"
-  | "국가유공자·보훈";
+  | "국가유공자·보훈"
+  | "복지·취약가구"
+  | "농어업인";
 
 export interface Procedure {
   category: Category;
