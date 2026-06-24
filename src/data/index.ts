@@ -46,6 +46,7 @@ import * as support3 from "./support3.js";
 import * as support4 from "./support4.js";
 import * as support5 from "./support5.js";
 import * as support6 from "./support6.js";
+import * as support7 from "./support7.js";
 import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
@@ -105,6 +106,7 @@ const domains = [
   support4,
   support5,
   support6,
+  support7,
   applyForms,
 ];
 
@@ -211,4 +213,5 @@ export const CATEGORIES: Category[] = [
   "공적연금·사회보험",
   "육아·보육",
   "주거복지",
+  "교육·학자금",
 ];

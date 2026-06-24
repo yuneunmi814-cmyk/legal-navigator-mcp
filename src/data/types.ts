@@ -56,7 +56,8 @@ export type Category =
   | "위기임신·보호출산"
   | "공적연금·사회보험"
   | "육아·보육"
-  | "주거복지";
+  | "주거복지"
+  | "교육·학자금";
 
 export interface Procedure {
   category: Category;

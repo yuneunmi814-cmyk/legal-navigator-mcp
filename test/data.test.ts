@@ -125,10 +125,21 @@ describe("데이터 정합성", () => {
     }
   });
 
+  it("노동·교육·복지·육아 급여 주제·서식·분야가 등록되어 있다", () => {
+    for (const k of ["직장내성희롱", "국가장학금_학자금대출", "에너지바우처_요금감면", "출산전후_바우처의료비"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["성희롱_신고진정서", "국가장학금_신청서", "에너지바우처_신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+    expect(CATEGORIES).toContain("교육·학자금");
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(225);
-    expect(CATEGORIES.length).toBe(55);
-    expect(FORM_KEYS.length).toBe(98);
+    expect(TOPIC_KEYS.length).toBe(229);
+    expect(CATEGORIES.length).toBe(56);
+    expect(FORM_KEYS.length).toBe(101);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
