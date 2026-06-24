@@ -136,10 +136,20 @@ describe("데이터 정합성", () => {
     expect(CATEGORIES).toContain("교육·학자금");
   });
 
+  it("고용·금융·청소년·육아 주제·서식이 등록되어 있다", () => {
+    for (const k of ["국민내일배움카드", "청년자산형성", "소년보호사건", "돌봄_산후조리바우처"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["내일배움카드_발급신청서", "소년보호_보조인선임서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(229);
+    expect(TOPIC_KEYS.length).toBe(233);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(101);
+    expect(FORM_KEYS.length).toBe(103);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
