@@ -92,10 +92,23 @@ describe("데이터 정합성", () => {
     expect(CATEGORIES).toContain("공적연금·사회보험");
   });
 
+  it("생활밀착 급여·민원 주제·서식·분야가 등록되어 있다", () => {
+    for (const k of ["국민취업지원제도", "노인장기요양_등급신청", "개명_성본변경", "주거급여_공공임대", "아동수당_부모급여"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    for (const f of ["육아휴직_급여신청서", "구직급여_수급자격신청서", "장기요양인정_신청서", "개명허가_신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
+    for (const c of ["육아·보육", "주거복지"] as const) {
+      expect(CATEGORIES).toContain(c);
+    }
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(211);
-    expect(CATEGORIES.length).toBe(53);
-    expect(FORM_KEYS.length).toBe(86);
+    expect(TOPIC_KEYS.length).toBe(216);
+    expect(CATEGORIES.length).toBe(55);
+    expect(FORM_KEYS.length).toBe(90);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });

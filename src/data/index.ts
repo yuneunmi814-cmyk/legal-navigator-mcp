@@ -43,6 +43,7 @@ import * as welfare from "./welfare.js";
 import * as crisis from "./crisis.js";
 import * as support2 from "./support2.js";
 import * as support3 from "./support3.js";
+import * as support4 from "./support4.js";
 import * as applyForms from "./apply_forms.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
@@ -99,6 +100,7 @@ const domains = [
   crisis,
   support2,
   support3,
+  support4,
   applyForms,
 ];
 
@@ -203,4 +205,6 @@ export const CATEGORIES: Category[] = [
   "출소자·갱생보호",
   "위기임신·보호출산",
   "공적연금·사회보험",
+  "육아·보육",
+  "주거복지",
 ];
