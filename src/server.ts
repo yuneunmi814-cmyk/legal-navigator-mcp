@@ -233,15 +233,15 @@ export function createServer(baseUrl?: string): McpServer {
       description: `Estimates Korean labor amounts: unpaid wages, severance pay, weekly holiday allowance, or delay interest. Provide the numbers matching the chosen item. Estimates only. Service: ${SVC}.`,
       inputSchema: {
         item: z.enum(항목값).describe("체불임금 | 퇴직금 | 주휴수당 | 지연이자"),
-        monthly_wage: z.number().optional().describe("[체불임금] 월 정상 임금(원)"),
-        unpaid_months: z.number().optional().describe("[체불임금] 미지급 개월 수"),
-        other_unpaid: z.number().optional().describe("[체불임금] 기타 미지급액(원)"),
-        daily_avg_wage: z.number().optional().describe("[퇴직금] 1일 평균임금(원)"),
-        tenure_days: z.number().optional().describe("[퇴직금] 총 재직일수"),
-        weekly_hours: z.number().optional().describe("[주휴수당] 1주 소정근로시간"),
-        hourly_wage: z.number().optional().describe("[주휴수당] 시급(원)"),
-        principal: z.number().optional().describe("[지연이자] 미지급 원금(원)"),
-        delay_days: z.number().optional().describe("[지연이자] 지연 일수"),
+        monthly_wage: z.number().finite().nonnegative().optional().describe("[체불임금] 월 정상 임금(원)"),
+        unpaid_months: z.number().finite().nonnegative().optional().describe("[체불임금] 미지급 개월 수"),
+        other_unpaid: z.number().finite().nonnegative().optional().describe("[체불임금] 기타 미지급액(원)"),
+        daily_avg_wage: z.number().finite().nonnegative().optional().describe("[퇴직금] 1일 평균임금(원)"),
+        tenure_days: z.number().finite().nonnegative().optional().describe("[퇴직금] 총 재직일수"),
+        weekly_hours: z.number().finite().nonnegative().optional().describe("[주휴수당] 1주 소정근로시간"),
+        hourly_wage: z.number().finite().nonnegative().optional().describe("[주휴수당] 시급(원)"),
+        principal: z.number().finite().nonnegative().optional().describe("[지연이자] 미지급 원금(원)"),
+        delay_days: z.number().finite().nonnegative().optional().describe("[지연이자] 지연 일수"),
       },
       annotations: { title: "금액 계산기", ...READONLY },
     },
@@ -270,7 +270,7 @@ export function createServer(baseUrl?: string): McpServer {
             break;
         }
       } catch (e) {
-        return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
+        return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
       }
       const text = [
         `🧮 ${a.item} 계산 결과`,
@@ -361,7 +361,10 @@ export function createServer(baseUrl?: string): McpServer {
         const joN = joMatch[0].replace(/\s/g, "");
         for (const s of STATUTES) {
           const lawTokens = s.법령.replace(/\s/g, "");
-          const nameHit = [...lawTokens].some((_, i) => raw.replace(/\s/g, "").includes(lawTokens.slice(i, i + 2)) && lawTokens.length >= 2);
+          // 법령명을 2글자 윈도우로만 대조(끝의 1글자 '법' 단독 매칭이 다른 법의 동일 조문을 거짓 확인시키던 버그 수정).
+          const nameHit =
+            lawTokens.length >= 2 &&
+            Array.from({ length: lawTokens.length - 1 }, (_, i) => lawTokens.slice(i, i + 2)).some((bi) => nq.includes(bi));
           if (s.조문.replace(/\s/g, "") === joN && (nameHit || !/\d{2,4}[가-힣]/.test(nq))) {
             lines.push(`✅ [법령·수록확인] ${s.법령} ${s.조문} — ${s.요지}`);
           }
@@ -458,7 +461,7 @@ export function createServer(baseUrl?: string): McpServer {
       title: "소송비용 계산기 (인지대·송달료)",
       description: `Estimates Korean civil court filing costs (court stamp fee + service fee) from the claim amount, number of parties, track, and whether it is e-litigation. Based on published statutory formulas. Estimate only. Service: ${SVC}.`,
       inputSchema: {
-        claim_amount: z.number().describe("소가(청구금액, 원). 금전청구는 청구액"),
+        claim_amount: z.number().finite().nonnegative().describe("소가(청구금액, 원). 금전청구는 청구액"),
         parties: z.number().int().min(2).describe("당사자 수(원고 수 + 피고 수, 최소 2)"),
         track: z.enum(["소액", "단독", "합의", "지급명령", "조정", "항소", "상고", "보전"]).describe("절차 종류(소액=3천만↓ / 단독 / 합의 / 지급명령 / 조정 / 항소 / 상고 / 보전=가압류·가처분)"),
         e_litigation: z.boolean().optional().describe("전자소송 여부(true면 인지대 10% 감액). 기본 false"),
@@ -595,12 +598,16 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ term }) => {
       const kw = term.trim();
       const nkw = kw.replace(/\s/g, "");
+      if (nkw.length < 2) {
+        return { content: [{ type: "text", text: withDisclaimer(`'${kw}'은(는) 너무 짧아 검색이 어렵습니다. 두 글자 이상으로 입력해 주세요(예: 각하, 압류, 통상임금).`) }] };
+      }
       const matched = GLOSSARY.filter((t) => {
         const u = t.용어.replace(/\s/g, "");
         if (u.includes(nkw) || nkw.includes(u)) return true;
+        // 별칭은 '질의가 별칭을 포함(또는 동일)'할 때만 — '대법원'이 별칭 '대법원 상고'에 부분일치해 상고로 오매칭되던 문제 방지.
         return (t.별칭 ?? []).some((a) => {
           const na = a.replace(/\s/g, "");
-          return na.length >= 2 && (na.includes(nkw) || nkw.includes(na));
+          return na.length >= 2 && nkw.includes(na);
         });
       }).slice(0, 6);
       if (!matched.length) {
@@ -622,7 +629,7 @@ export function createServer(baseUrl?: string): McpServer {
   return server;
 }
 
-const app = express();
+export const app = express();
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -645,7 +652,7 @@ function getBaseUrl(req: express.Request): string {
 
 // 서식 파일 다운로드 — get_form_template 응답의 '📎 파일로 저장·공유' 링크 대상. 읽기전용·무상태·인메모리.
 app.get("/forms/:key", (req, res) => {
-  const key = decodeURIComponent(req.params.key).replace(/\.txt$/i, "");
+  const key = req.params.key.replace(/\.txt$/i, ""); // Express 5가 params를 이미 디코드(이중 디코딩 금지)
   const f = FORMS[key];
   if (!f) {
     res.status(404).type("text/plain; charset=utf-8").send("서식을 찾을 수 없습니다. get_form_template의 서식 키를 확인하세요.");
@@ -705,6 +712,9 @@ app.get("/mcp", (_req, res) => {
 });
 
 const PORT = Number(process.env.PORT ?? 4100);
-app.listen(PORT, () => {
-  console.error(`법률 절차 길잡이 MCP listening on http://localhost:${PORT}/mcp`);
-});
+// 테스트(NODE_ENV=test)에서는 자동 listen을 막아, 테스트가 임의 포트로 app을 직접 띄울 수 있게 한다.
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.error(`법률 절차 길잡이 MCP listening on http://localhost:${PORT}/mcp`);
+  });
+}

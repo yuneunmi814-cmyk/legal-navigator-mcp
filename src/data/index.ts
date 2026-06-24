@@ -90,10 +90,26 @@ const domains = [
   applyForms,
 ];
 
-export const PROCEDURES: Record<string, Procedure> = Object.assign({}, ...domains.map((d) => d.procedures));
-export const CHECKLISTS: Record<string, Checklist> = Object.assign({}, ...domains.map((d) => d.checklists));
-export const FORMS: Record<string, FormTemplate> = Object.assign({}, ...domains.map((d) => d.forms));
-export const PRECEDENTS: Record<string, Precedent[]> = Object.assign({}, ...domains.map((d) => d.precedents));
+// 38개 도메인 모듈 병합 시 키가 겹치면 한 주제가 조용히 사라지므로, 충돌을 즉시 throw로 드러낸다(부팅 실패=조기 발견).
+function mergeStrict<T>(maps: Record<string, T>[], label: string): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const m of maps) {
+    for (const k of Object.keys(m)) {
+      if (k in out) throw new Error(`[index] ${label} 중복 키 '${k}' — 도메인 간 키 충돌은 데이터를 덮어써 사라지게 합니다.`);
+      out[k] = m[k];
+    }
+  }
+  return out;
+}
+export const PROCEDURES: Record<string, Procedure> = mergeStrict(domains.map((d) => d.procedures), "PROCEDURES");
+export const CHECKLISTS: Record<string, Checklist> = mergeStrict(domains.map((d) => d.checklists), "CHECKLISTS");
+export const FORMS: Record<string, FormTemplate> = mergeStrict(domains.map((d) => d.forms), "FORMS");
+// 판례는 같은 주제 키에 여러 도메인이 기여할 수 있어 충돌 시 배열을 합친다(덮어쓰기 대신 concat).
+export const PRECEDENTS: Record<string, Precedent[]> = (() => {
+  const out: Record<string, Precedent[]> = {};
+  for (const d of domains) for (const [k, arr] of Object.entries(d.precedents)) out[k] = (out[k] ?? []).concat(arr);
+  return out;
+})();
 
 // 법령 요지 — 법령+조문 기준 중복 제거
 const statuteSeen = new Set<string>();

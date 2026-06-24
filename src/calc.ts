@@ -79,8 +79,10 @@ export function calcCourtCost(소가: number, 당사자수: number, 절차: stri
 export function calcDeadline(기준일: string, 기간: { 일?: number; 월?: number; 년?: number }): { 마감일: string; 남은일수: number } | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(기준일.trim());
   if (!m) return null;
-  const end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  if (isNaN(end.getTime())) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const end = new Date(y, mo - 1, d);
+  // JS Date는 불가능한 날짜(2026-02-31 등)를 조용히 다음 달로 롤오버하므로, 입력 그대로인지 검증.
+  if (end.getFullYear() !== y || end.getMonth() !== mo - 1 || end.getDate() !== d) return null;
   if (기간.년) end.setFullYear(end.getFullYear() + 기간.년);
   if (기간.월) end.setMonth(end.getMonth() + 기간.월);
   if (기간.일) end.setDate(end.getDate() + 기간.일);
