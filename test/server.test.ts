@@ -127,6 +127,38 @@ describe("핵심 동작", () => {
   });
 });
 
+describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("search_topics '가족한테 빌려준 돈 떼였어요' → 대여 주제로 진단", async () => {
+    const t = await callText("search_topics", { query: "가족한테 빌려준 돈 떼였어요" });
+    expect(t).toMatch(/대여금미반환|차용증없음입증/);
+  });
+  it("search_topics '떼인 돈' → 대여 주제로 진단", async () => {
+    const t = await callText("search_topics", { query: "떼인 돈 어떻게 받아요" });
+    expect(t).toMatch(/대여금미반환|차용증없음입증/);
+  });
+  it("get_procedure 차용증없음입증 → 가족 증여추정·채무승인 안내", async () => {
+    const t = await callText("get_procedure", { topic: "차용증없음입증" });
+    expect(t).toContain("증여"); // 가족 간 증여로 볼 여지 경고
+    expect(t).toContain("채무"); // 채무승인 → 시효중단
+  });
+  it("get_form_template 금전소비대차계약서(차용증) → 이자제한법 안내 + 빈칸", async () => {
+    const t = await callText("get_form_template", { form: "금전소비대차계약서" });
+    expect(t).toContain("이자제한법");
+    expect(t).toContain("[성명]");
+  });
+  it("get_form_template 채무변제확인서(사후 차용증) → 민법 제168조 채무승인", async () => {
+    const t = await callText("get_form_template", { form: "채무변제확인서" });
+    expect(t).toContain("제168조");
+  });
+  it("신규 서식 시각화 미리보기 200 · 체크박스/빈칸 렌더", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("채무변제확인서")}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('role="checkbox"'); // ☐ 렌더
+    expect(html).toContain('contenteditable="true"'); // [빈칸] 렌더
+  });
+});
+
 describe("외국인·이주민(취약계층) 주제·연결", () => {
   it("find_legal_aid '이주여성' → 다누리콜센터 1577-1366", async () => {
     const t = await callText("find_legal_aid", { keyword: "이주여성" });

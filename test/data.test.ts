@@ -149,8 +149,14 @@ describe("데이터 정합성", () => {
   it("규모 스냅샷(회귀 감지)", () => {
     expect(TOPIC_KEYS.length).toBe(233);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(103);
+    expect(FORM_KEYS.length).toBe(105);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
+  });
+
+  it("차용증·채무확인서 서식(가족·지인 간 대여) 등록", () => {
+    for (const f of ["금전소비대차계약서", "채무변제확인서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
   });
 });
