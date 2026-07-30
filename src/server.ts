@@ -187,9 +187,10 @@ export function createServer(baseUrl?: string): McpServer {
       if (baseUrl) {
         tail.push(
           "",
-          `📎 파일로 저장·공유: ${baseUrl}/forms/${encodeURIComponent(form)}.txt`,
-          "  링크를 누르면 이 서식이 .txt 파일로 저장됩니다 — 구글 드라이브·카카오톡 '나에게 보내기'·메일 어디로든 공유하세요." +
-            (f.공식양식 ? " 단, 관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요." : ""),
+          `🖊️ 빈칸 바로 채우기(모바일 미리보기·인쇄/PDF 저장): ${baseUrl}/forms/${encodeURIComponent(form)}`,
+          "  링크를 누르면 이 서식이 문서 화면으로 열립니다 — [빈칸]을 탭해 본인 정보를 직접 입력하고 인쇄·PDF로 저장하세요.",
+          `📎 텍스트 파일로 저장·공유: ${baseUrl}/forms/${encodeURIComponent(form)}.txt` +
+            (f.공식양식 ? " (관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성)" : ""),
         );
       }
       const text = [...head, "", "─── 서식 시작 ───", f.본문, "─── 서식 끝 ───", "", ...tail].join("\n");
@@ -654,12 +655,150 @@ function getBaseUrl(req: express.Request): string {
   return host ? `${proto}://${host}` : "";
 }
 
-// 서식 파일 다운로드 — get_form_template 응답의 '📎 파일로 저장·공유' 링크 대상. 읽기전용·무상태·인메모리.
+const htmlEscape = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// 서식 본문을 '탭해서 채우는' 문서로 변환.
+//  · 줄머리 대괄호(예 [신청인]·[재산내역]) → 섹션 라벨(굵게, 입력 불가)
+//  · 그 외 대괄호([성명]·[______]·[   ]) → 채울 빈칸 입력 필드
+//  · ☐ → 탭 토글 체크박스.  (사용자가 본인 사실만 입력 — AI 대필 아님)
+function 본문HTML(bodyRaw: string): string {
+  let s = htmlEscape(bodyRaw);
+  // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
+  s = s.replace(/(^|\n)([ \t]*)\[([^\]]+)\]/g, (m, br: string, sp: string, inner: string) => {
+    if (/^[_\s]*$/.test(inner)) return m; // 실제 빈칸이면 라벨로 만들지 않음
+    return `${br}${sp}<span class="lbl">${inner}</span>`;
+  });
+  // 2) 체크박스
+  s = s
+    .replace(/[☐□]/g, '<span class="cbx" role="checkbox" aria-checked="false" tabindex="0">☐</span>')
+    .replace(/[☑☒]/g, '<span class="cbx" role="checkbox" aria-checked="true" tabindex="0">☑</span>');
+  // 3) 남은 대괄호 → 입력 필드
+  s = s.replace(/\[([^\]]*)\]/g, (_m, innerRaw: string) => {
+    const inner = String(innerRaw); // 이미 htmlEscape됨 → 텍스트/속성값 모두 안전
+    const isBlank = /^[_\s]*$/.test(inner);
+    const ph = isBlank ? "" : inner;
+    const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
+    const minw = Math.min(Math.max(width, 4), 28);
+    return `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
+  });
+  return s;
+}
+
+// 서식 시각화 미리보기 — 모바일(카카오톡 인앱)에서 빈칸을 직접 채우고 인쇄/PDF로 저장. 자족적 HTML(외부 의존 0).
+function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string): string {
+  const txtHref = `${baseUrl || ""}/forms/${encodeURIComponent(key)}.txt`;
+  const title = htmlEscape(f.제목);
+  const purpose = htmlEscape(f.용도);
+  const official = f.공식양식 ? htmlEscape(f.공식양식) : "";
+  const tips = f.작성요령.map((t) => `<li>${htmlEscape(t)}</li>`).join("");
+  const body = 본문HTML(f.본문);
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} · 법률 절차 길잡이</title>
+<style>
+:root{--bg:#eceef2;--paper:#fff;--ink:#1c2230;--ink2:#5a6172;--line:#e3e6ec;--accent:#1f6feb;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#b6bccb;--tip-bg:#f5f8ff;--foot:#8892a4;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;--fld:#2a2410;--fld-line:#6f5a1f;--fld-ink:#e7c877;--ph:#6b7488;--tip-bg:#141b2b;--foot:#7a8398;}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.62;-webkit-text-size-adjust:100%;}
+.bar{position:sticky;top:0;z-index:5;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+.bar .sp{flex:1}
+.btn{font:inherit;font-size:14px;font-weight:700;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:9px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none;}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:transparent;}
+.btn:active{transform:translateY(1px)}
+.wrap{max-width:760px;margin:0 auto;padding:18px 14px 60px;}
+.hd{margin:6px 2px 14px}
+.hd h1{font-size:clamp(19px,4.6vw,26px);margin:0 0 8px;letter-spacing:-.01em;line-height:1.25;text-wrap:balance;}
+.hd .use{font-size:13.5px;color:var(--ink2);margin:0}
+.official{margin:12px 0 0;font-size:13px;background:var(--tip-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2)}
+.official b{color:var(--ink)}
+.hint{display:flex;gap:8px;align-items:center;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2)}
+.hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700}
+.doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);white-space:pre-wrap;word-break:break-word;font-size:15px;line-height:1.95;}
+.fld{display:inline-block;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
+.fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
+.fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
+.lbl{font-weight:800;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--ink);padding:1px 8px;border-radius:6px;letter-spacing:-.01em;}
+.cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.15em;line-height:1;padding:0 2px;color:var(--accent);vertical-align:-.05em}
+.cbx:focus{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.tips{margin:22px 0 0;background:var(--tip-bg);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.tips h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:7px}
+.tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
+.foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
+.foot a{color:var(--foot)}
+@media print{
+  body{background:#fff;color:#000}
+  .bar,.hint,.tips,.foot{display:none!important}
+  .wrap{max-width:none;padding:0}
+  .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:12pt}
+  .fld{background:transparent;border-bottom:1px solid #000;color:#000}
+  .fld:empty::before{content:""}
+  .lbl{background:transparent;padding:0}
+  .cbx{color:#000}
+  .official{background:transparent}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<div class="bar">
+  <button class="btn pri" id="printBtn" type="button">🖨️ 인쇄 · PDF로 저장</button>
+  <a class="btn" href="${txtHref}">⬇️ 텍스트 파일</a>
+  <span class="sp"></span>
+  <button class="btn" id="resetBtn" type="button">↺ 빈칸 비우기</button>
+</div>
+<div class="wrap">
+  <div class="hd">
+    <h1>${title}</h1>
+    <p class="use">${purpose}</p>
+    ${official ? `<p class="official">📄 <b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
+  </div>
+  <div class="hint"><span class="k">[빈칸]</span> 을 탭해 본인 정보를 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하세요.</div>
+  <div class="doc" id="doc">${body}</div>
+  <div class="tips">
+    <h2>✍️ 작성요령</h2>
+    <ol>${tips}</ol>
+  </div>
+  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 화면에만 있으며 서버에 저장·전송되지 않습니다. 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
+</div>
+<script>
+(function(){
+  var doc=document.getElementById("doc");
+  doc.querySelectorAll(".cbx").forEach(function(c){
+    function tog(){var on=c.getAttribute("aria-checked")==="true";c.setAttribute("aria-checked",String(!on));c.textContent=on?"☐":"☑";}
+    c.addEventListener("click",tog);
+    c.addEventListener("keydown",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();tog();}});
+  });
+  document.getElementById("printBtn").addEventListener("click",function(){window.print();});
+  document.getElementById("resetBtn").addEventListener("click",function(){
+    doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
+    doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});
+  });
+})();
+</script>
+</body></html>`;
+}
+
+// 서식 라우트 — 확장자 없음/.html은 시각화 미리보기(빈칸 채움), .txt는 파일 다운로드. 읽기전용·무상태·인메모리.
 app.get("/forms/:key", (req, res) => {
-  const key = req.params.key.replace(/\.txt$/i, ""); // Express 5가 params를 이미 디코드(이중 디코딩 금지)
+  const raw = req.params.key; // Express 5가 params를 이미 디코드(이중 디코딩 금지)
+  const m = /\.(txt|html?)$/i.exec(raw);
+  const ext = m ? m[1].toLowerCase() : "";
+  const key = m ? raw.slice(0, m.index) : raw;
   const f = FORMS[key];
   if (!f) {
-    res.status(404).type("text/plain; charset=utf-8").send("서식을 찾을 수 없습니다. get_form_template의 서식 키를 확인하세요.");
+    if (ext === "txt") {
+      res.status(404).type("text/plain; charset=utf-8").send("서식을 찾을 수 없습니다. get_form_template의 서식 키를 확인하세요.");
+    } else {
+      res
+        .status(404)
+        .type("text/html; charset=utf-8")
+        .send('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>서식을 찾을 수 없습니다</h2><p>get_form_template의 서식 키를 확인하세요.</p></body>');
+    }
+    return;
+  }
+  if (ext !== "txt") {
+    // 확장자 없음 / .html → 시각화 미리보기
+    res.type("text/html; charset=utf-8").send(renderFormHtml(key, f, getBaseUrl(req)));
     return;
   }
   const lines = [f.제목, `용도: ${f.용도}`];

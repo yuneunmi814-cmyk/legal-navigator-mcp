@@ -91,16 +91,35 @@ describe("핵심 동작", () => {
     const t = await callText("get_procedure", { topic: TOPIC_KEYS[0] });
     expect(t).toContain("개별 법률 자문이 아닙니다");
   });
-  it("get_form_template에 공식양식·다운로드 링크 + /forms 다운로드 200", async () => {
+  it("get_form_template에 미리보기·다운로드 링크 + /forms 다운로드 200", async () => {
     const t = await callText("get_form_template", { form: FORM_KEYS[0] });
-    expect(t).toContain("파일로 저장·공유");
+    expect(t).toContain("빈칸 바로 채우기");
+    expect(t).toContain("텍스트 파일로 저장");
     const res = await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}.txt`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
   });
-  it("없는 서식 다운로드는 404", async () => {
-    const res = await fetch(`${base}/forms/없는서식키.txt`);
-    expect(res.status).toBe(404);
+  it("서식 시각화 미리보기 /forms/:key → 200 text/html · 빈칸/체크박스 렌더", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('contenteditable="true"'); // [빈칸] → 입력 필드
+    expect(html).toContain("인쇄 · PDF로 저장");
+    expect(html).toContain("개별 법률 자문이 아닙니다"); // 면책 유지
+  });
+  it("서식 미리보기는 사용자 입력값을 서버에 저장하지 않는다(무상태·정적)", async () => {
+    const a = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
+    const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
+    expect(a).toBe(b); // 동일 요청 → 동일 응답(상태 없음)
+  });
+  it("없는 서식: .txt→404, 미리보기→404 html", async () => {
+    const txt = await fetch(`${base}/forms/없는서식키.txt`);
+    expect(txt.status).toBe(404);
+    const html = await fetch(`${base}/forms/없는서식키`);
+    expect(html.status).toBe(404);
+    expect(html.headers.get("content-type")).toContain("text/html");
   });
   it("healthz OK", async () => {
     const res = await fetch(`${base}/healthz`);
