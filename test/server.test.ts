@@ -160,15 +160,15 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
 });
 
 describe("위젯 프로토타입 (ChatKit 스펙·미리보기)", () => {
-  it("위젯 JSON: /widgets/form?json=1 → Card 루트·버튼 URL·copyText", async () => {
+  it("위젯 JSON: /widgets/form?json=1 → Card 루트·버튼 URL·copy_text", async () => {
     const res = await fetch(`${base}/widgets/form?key=${encodeURIComponent("금전소비대차계약서")}&json=1`);
     expect(res.status).toBe(200);
     const w = await res.json();
     expect(w.widget.type).toBe("Card");
     const buttons = w.widget.children.filter((c: any) => c.type === "Button");
     expect(buttons.length).toBeGreaterThanOrEqual(2);
-    expect(buttons[0].onClickAction.payload.url).toContain("/forms/");
-    expect(w.copyText).toContain("금전소비대차계약서");
+    expect(buttons[0].onClickAction.payload.target.url).toContain("/forms/"); // 카카오 확정 스펙: payload.target.url
+    expect(w.copy_text).toContain("금전소비대차계약서");
   });
   it("위젯 JSON: /widgets/triage → 기한 Badge 포함", async () => {
     const res = await fetch(`${base}/widgets/triage?q=${encodeURIComponent("월급을 3개월째 못 받았어요")}&json=1`);

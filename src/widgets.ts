@@ -1,10 +1,12 @@
-// 카카오 툴즈 위젯 프로토타입 — OpenAI ChatKit 위젯 스펙 기반(워크숍: "ChatKit 스펙 거의 그대로 + 카카오 추가 스펙").
-// 참조: github.com/openai/chatkit-js packages/chatkit/types/widgets.d.ts
-// ⚠️ 봉투(envelope) 형태(widget 래핑·copyText·pcUrl)는 카카오 개발가이드 수령 후 확정 — 현재는 워크숍 구두 안내 기반 잠정.
-// 기존 16개 툴 응답에는 아직 연결하지 않음(가이드 확정 전 안전).
+// 카카오 툴즈 위젯 — OpenAI ChatKit 위젯 스펙 + 카카오 전용 스펙(개발가이드 v1.0.0 확정 반영).
+// 참조: github.com/openai/chatkit-js packages/chatkit/types/widgets.d.ts + [AGENTIC PLAYER 10] Kakao Tools 개발 가이드 §3.
+// 카카오 확정 스펙: ① 전체를 `widget` 프로퍼티로 감싸기 ② 카톡 공유용은 `copy_text`(간단 Markdown)
+// ③ status 프로퍼티 사용 금지(카카오가 로고·서비스명 표기에 사용) ④ 버튼 URL은 onClickAction.payload.target.url(+선택 pcUrl)
+// ⑤ tools/call 응답은 text content에 JSON.stringify({widget, copy_text, name}) 형태.
 
 // ── ChatKit 위젯 타입(사용하는 부분집합만) ─────────────────────────────
-export type ActionConfig = { type: string; payload?: Record<string, unknown> };
+// 가이드 샘플 기준: onClickAction은 payload.target.url(+pcUrl)만으로 동작(type 생략).
+export type ActionConfig = { type?: string; payload?: Record<string, unknown> };
 
 export interface Title { type: "Title"; value: string; size?: "sm" | "md" | "lg" }
 export interface Caption { type: "Caption"; value: string }
@@ -35,16 +37,16 @@ export interface Card {
 }
 export type WidgetRoot = Card;
 
-// 카카오 잠정 봉투 — 워크숍: 전체를 'widget'으로 감싸고, 카톡 공유용 copyText 필드 제공(선택).
+// 카카오 확정 봉투(개발가이드 §3) — 전체를 'widget'으로 감싸고, 카톡 공유용은 copy_text(간단 Markdown).
 export interface KakaoWidget {
   widget: WidgetRoot;
-  copyText?: string;
+  copy_text?: string;
+  name?: string; // 별첨 예시의 응답 name 필드(도구 식별)
 }
 
-// 버튼 URL 액션 — 카카오 스펙상 외부 웹/PC 대체 URL 지원(pcUrl은 선택). 가이드 확정 전 잠정 이름.
+// 버튼 URL 액션 — 카카오 확정 스펙: onClickAction.payload.target.url (+선택 pcUrl, PC 카카오톡용 대체 URL).
 const openUrl = (url: string, pcUrl?: string): ActionConfig => ({
-  type: "open_url",
-  payload: pcUrl ? { url, pcUrl } : { url },
+  payload: { target: pcUrl ? { url, pcUrl } : { url } },
 });
 
 const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -75,7 +77,7 @@ export function buildFormWidget(
   ];
   return {
     widget: { type: "Card", size: "md", children },
-    copyText: `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF 저장까지: ${previewUrl}\n— 법률 절차 길잡이`,
+    copy_text: `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF 저장까지: ${previewUrl}\n— 법률 절차 길잡이`,
   };
 }
 
@@ -111,7 +113,7 @@ export function buildTriageWidget(
   ];
   return {
     widget: { type: "Card", size: "md", children },
-    copyText: `[${topic.category}] ${topic.제목}\n⏰ ${topic.기한}\n무료상담: 대한법률구조공단 132 — 법률 절차 길잡이`,
+    copy_text: `[${topic.category}] ${topic.제목}\n⏰ ${topic.기한}\n무료상담: 대한법률구조공단 132 — 법률 절차 길잡이`,
   };
 }
 
@@ -127,7 +129,7 @@ export function buildCalcWidget(item: string, r: { 결과: string; 계산식: st
   ];
   return {
     widget: { type: "Card", size: "sm", children },
-    copyText: `${item}: ${r.결과} (${r.계산식}) — 법률 절차 길잡이`,
+    copy_text: `${item}: ${r.결과} (${r.계산식}) — 법률 절차 길잡이`,
   };
 }
 
@@ -148,7 +150,8 @@ function nodeHtml(c: WidgetComponent): string {
     case "Markdown": return `<div class="w-text">${esc(c.value)}</div>`;
     case "Badge": return `<span class="w-badge" style="background:${BADGE_BG[c.color ?? "secondary"] ?? BADGE_BG.secondary}">${esc(c.label)}</span>`;
     case "Button": {
-      const url = String((c.onClickAction.payload as { url?: string } | undefined)?.url ?? "#");
+      const target = (c.onClickAction.payload as { target?: { url?: string } } | undefined)?.target;
+      const url = String(target?.url ?? "#");
       return `<a class="w-btn ${c.style === "primary" ? "pri" : "sec"}" href="${esc(url)}">${esc(c.label)}</a>`;
     }
     case "Divider": return `<hr class="w-div">`;
@@ -188,6 +191,6 @@ body{margin:0;background:#aebdcb;font-family:"Apple SD Gothic Neo",Pretendard,sa
   <div class="bubble-q">${esc(heading)}</div>
   <div class="w-card">${card.children.map(nodeHtml).join("")}</div>
 </div>
-${kw.copyText ? `<div class="copy"><b>📤 카톡 공유 시 copyText:</b>${esc(kw.copyText)}</div>` : ""}
+${kw.copy_text ? `<div class="copy"><b>📤 카톡 공유 시 copy_text:</b>${esc(kw.copy_text)}</div>` : ""}
 </body></html>`;
 }
