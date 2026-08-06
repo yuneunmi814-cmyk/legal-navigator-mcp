@@ -32,6 +32,7 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml } from "./widgets.js";
 
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
 const SVC = "법률 절차 길잡이(Legal Navigator)";
@@ -871,6 +872,46 @@ app.get("/forms/:key", (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="legal-form.txt"; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.send("\uFEFF" + lines.join("\n")); // BOM: Windows 메모장 UTF-8 호환
+});
+
+// 위젯 프로토타입 미리보기 — 카카오 툴즈 위젯(ChatKit 스펙)의 로컬 근사 렌더. 읽기전용·무상태.
+// /widgets/form?key=서식키 · /widgets/triage?q=상황 · /widgets/calc — ?json=1이면 위젯 JSON 원본.
+app.get("/widgets/:kind", (req, res) => {
+  const kind = req.params.kind;
+  const baseUrl = getBaseUrl(req);
+  let built: ReturnType<typeof buildFormWidget> | null = null;
+  let heading = "";
+  if (kind === "form") {
+    const key = (req.query.key as string) || "금전소비대차계약서";
+    const f = FORMS[key];
+    if (!f) {
+      res.status(404).type("text/plain; charset=utf-8").send("서식 키를 확인하세요 (?key=서식키)");
+      return;
+    }
+    built = buildFormWidget(key, f, baseUrl);
+    heading = "차용증 양식 좀 만들어줘";
+  } else if (kind === "triage") {
+    const q = (req.query.q as string) || "월급을 3개월째 못 받았어요";
+    const top = rankTopics(q)[0];
+    if (!top) {
+      res.status(404).type("text/plain; charset=utf-8").send("진단할 수 없는 상황입니다 (?q=상황설명)");
+      return;
+    }
+    const p = PROCEDURES[top];
+    built = buildTriageWidget(q, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수 });
+    heading = q;
+  } else if (kind === "calc") {
+    built = buildCalcWidget("퇴직금", calcSeverance(100_000, 1095)); // 일평균 10만원(월 300), 3년 재직
+    heading = "월급 300에 3년 일했는데 퇴직금 얼마예요?";
+  } else {
+    res.status(404).type("text/plain; charset=utf-8").send("지원: /widgets/form · /widgets/triage · /widgets/calc");
+    return;
+  }
+  if (req.query.json) {
+    res.json(built);
+    return;
+  }
+  res.type("text/html; charset=utf-8").send(renderWidgetHtml(built, heading));
 });
 
 app.post("/mcp", async (req, res) => {

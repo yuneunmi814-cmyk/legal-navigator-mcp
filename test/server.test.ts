@@ -159,6 +159,38 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   });
 });
 
+describe("위젯 프로토타입 (ChatKit 스펙·미리보기)", () => {
+  it("위젯 JSON: /widgets/form?json=1 → Card 루트·버튼 URL·copyText", async () => {
+    const res = await fetch(`${base}/widgets/form?key=${encodeURIComponent("금전소비대차계약서")}&json=1`);
+    expect(res.status).toBe(200);
+    const w = await res.json();
+    expect(w.widget.type).toBe("Card");
+    const buttons = w.widget.children.filter((c: any) => c.type === "Button");
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    expect(buttons[0].onClickAction.payload.url).toContain("/forms/");
+    expect(w.copyText).toContain("금전소비대차계약서");
+  });
+  it("위젯 JSON: /widgets/triage → 기한 Badge 포함", async () => {
+    const res = await fetch(`${base}/widgets/triage?q=${encodeURIComponent("월급을 3개월째 못 받았어요")}&json=1`);
+    const w = await res.json();
+    const flat = JSON.stringify(w.widget);
+    expect(flat).toContain("Badge");
+    expect(flat).toContain("⏰");
+  });
+  it("위젯 미리보기 HTML: /widgets/calc → 200 text/html·카드 렌더", async () => {
+    const res = await fetch(`${base}/widgets/calc`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain("w-card");
+    expect(html).toContain("퇴직금");
+  });
+  it("없는 종류·없는 서식은 404", async () => {
+    expect((await fetch(`${base}/widgets/nope`)).status).toBe(404);
+    expect((await fetch(`${base}/widgets/form?key=없는서식`)).status).toBe(404);
+  });
+});
+
 describe("외국인·이주민(취약계층) 주제·연결", () => {
   it("find_legal_aid '이주여성' → 다누리콜센터 1577-1366", async () => {
     const t = await callText("find_legal_aid", { keyword: "이주여성" });
