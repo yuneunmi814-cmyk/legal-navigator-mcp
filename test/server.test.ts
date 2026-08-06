@@ -197,6 +197,18 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     expect(() => JSON.parse(t)).toThrow(); // JSON 아님 = 텍스트 유지
     expect(t).toContain("개별 법률 자문이 아닙니다");
   });
+  it("[회귀] 프록시가 x-forwarded-proto:http를 보내도 배포 도메인 버튼 URL은 https", async () => {
+    // kakaocloud 프록시 내부 홉 재현: 비로컬 호스트 + http 프로토 헤더 → 그래도 https여야 함(80포트 무응답·혼합콘텐츠)
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { ...HEADERS, "x-forwarded-proto": "http", "x-forwarded-host": "legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_form_template", arguments: { form: "금전소비대차계약서" } } }),
+    });
+    const t = (await res.json()).result.content[0].text;
+    const j = JSON.parse(t);
+    const btn = j.widget.children.find((c: any) => c.type === "Button");
+    expect(btn.onClickAction.payload.target.url).toMatch(/^https:\/\/legal-navigator-kakaotools/);
+  });
 });
 
 describe("위젯 프로토타입 (ChatKit 스펙·미리보기)", () => {

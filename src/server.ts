@@ -736,11 +736,12 @@ function getBaseUrl(req: express.Request): string {
   const xfproto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
   const xfhost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
   const host = xfhost || req.headers.host || "";
-  // ★프록시가 x-forwarded-proto를 주지 않으면(예: kakaocloud) 로컬은 http, 배포 도메인은 https로 간주
-  //   — https 채팅창에서 http 링크는 혼합콘텐츠로 차단돼 서식 다운로드가 막히므로.
+  // ★배포 도메인은 무조건 https — kakaocloud 프록시가 내부 홉에서 x-forwarded-proto: http를 보내와도
+  //   신뢰하면 안 됨(도메인의 80포트는 응답조차 없어 링크가 죽고, https 채팅창에선 혼합콘텐츠 차단).
+  //   로컬(localhost 등)에서만 실제 프로토콜을 따른다.
   const hostname = host.split(":")[0].toLowerCase();
   const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname);
-  const proto = xfproto || (isLocal ? req.protocol || "http" : "https");
+  const proto = isLocal ? xfproto || req.protocol || "http" : "https";
   return host ? `${proto}://${host}` : "";
 }
 
