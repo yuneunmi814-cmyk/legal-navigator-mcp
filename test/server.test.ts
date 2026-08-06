@@ -87,6 +87,11 @@ describe("회귀: 2차 코드리뷰가 잡은 버그", () => {
 });
 
 describe("핵심 동작", () => {
+  it("triage 텍스트 응답에 접수처·근거 법령이 함께 나온다 (문제 상황 → 관련 법 + 제출 방법)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    expect(t).toContain("접수·도움받을 곳");
+    expect(t).toContain("근거 법령");
+  });
   it("모든 응답에 면책 고지가 붙는다", async () => {
     const t = await callText("get_procedure", { topic: TOPIC_KEYS[0] });
     expect(t).toContain("개별 법률 자문이 아닙니다");
@@ -179,6 +184,7 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     expect(j.name).toBe("triage");
     expect(JSON.stringify(j.widget)).toContain("⏰");
     expect(j.copy_text).toContain("132");
+    expect(j.copy_text).toContain("⚖️");
   });
   it("calculate_amount → 계산 카드", async () => {
     const t = await callText("calculate_amount", { item: "퇴직금", daily_avg_wage: 100000, tenure_days: 1095 });

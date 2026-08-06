@@ -43,7 +43,7 @@ const widgetsOn = (): boolean =>
 const SVC = "법률 절차 길잡이(Legal Navigator)";
 
 const SERVER_INSTRUCTIONS =
-  "이 서버는 한국 생활법률 56개 분야 233개 주제(노동(임금·해고·괴롭힘·성희롱·직업훈련)·임대차·상가·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력·성범죄·스토킹·가사/상속·채무조정·금융사기·산재·행정·의료·조세·계약·부동산·출입국·보험·지식재산·학대·고용보험(실업급여·육아휴직·국민취업지원)·통신/개인정보·군·선거·환경·반려동물·외국인/이주민·청소년/미성년·장애인(등록·활동지원)·북한이탈주민·플랫폼/특수고용·국가유공자/보훈·복지/취약가구·농어업인·노인/고령(기초연금·장기요양)·정신건강·범죄피해자·자살예방/유족·재난/안전·소상공인/폐업재기·출소자/갱생보호·위기임신/보호출산·공적연금/사회보험·육아/보육(아동수당·부모급여·난임·첫만남)·주거복지(주거급여·공공임대·청년월세)·교육/학자금(국가장학금)·가사(개명/성본변경) 등)에 대한 " +
+  `이 서버는 한국 생활법률 56개 분야 ${TOPIC_KEYS.length}개 주제(노동(임금·해고·괴롭힘·성희롱·직업훈련)·임대차·상가·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력·성범죄·스토킹·가사/상속·채무조정·금융사기·산재·행정·의료·조세·계약·부동산·출입국·보험·지식재산·학대·고용보험(실업급여·육아휴직·국민취업지원)·통신/개인정보·군·선거·환경·반려동물·외국인/이주민·청소년/미성년·장애인(등록·활동지원)·북한이탈주민·플랫폼/특수고용·국가유공자/보훈·복지/취약가구·농어업인·노인/고령(기초연금·장기요양)·정신건강·범죄피해자·자살예방/유족·재난/안전·소상공인/폐업재기·출소자/갱생보호·위기임신/보호출산·공적연금/사회보험·육아/보육(아동수당·부모급여·난임·첫만남)·주거복지(주거급여·공공임대·청년월세)·교육/학자금(국가장학금)·가사(개명/성본변경) 등)에 대한 ` +
   "법률 정보·대응 절차·표준 서식·금액 계산·법령/판례 안내를 제공하는 정보 도구입니다. " +
   "권장 흐름: ① 사용자가 상황을 일상어로 설명하면 search_topics(자연어)로 주제 키를 찾고, 주제명을 알면 list_topics로 확인 → ② 그 키로 get_procedure·get_checklist·get_form_template·get_precedent 호출 → ③ 판례·법령 인용을 확인할 땐 verify_citation, 최근 법 개정·시행일은 law_updates로 검증. " +
   "필요에 따라 triage(빠른 진단)·calculate_deadline(기한)·calculate_court_cost(소송비용)·calculate_amount(금액)로 계산하고, find_legal_aid로 무료 변호사·구제 제도와 신청 방법을, how_to_get_document로 준비서류 발급 방법을 안내하세요. 사용자가 모르는 법률용어(각하·가압류·공시송달 등)나 일상어(떼인 돈·빨간딱지)가 나오면 explain_term으로 뜻을 풀이하세요. " +
@@ -120,7 +120,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "주제 목록",
       description:
-        `Lists this service's 233 curated Korean legal/administrative topics (key·category·title) across 56 areas, optionally filtered by category — the catalog behind all other tools. Use to browse what this service covers ("어떤 것들 도와줄 수 있어?") or to find an exact topic key when search_topics is not enough.\n` +
+        `Lists this service's ${TOPIC_KEYS.length} curated Korean legal/administrative topics (key·category·title) across 56 areas, optionally filtered by category — the catalog behind all other tools. Use to browse what this service covers ("어떤 것들 도와줄 수 있어?") or to find an exact topic key when search_topics is not enough.\n` +
         `[트리거 예시] "무슨 법률 문제 도와줄 수 있어?" / "노동 관련 주제 다 보여줘"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
@@ -352,7 +352,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "자연어 주제 검색",
       description:
-        `Maps everyday Korean words (including slang: 떼인 돈, 깡통전세, 빨간딱지, 갑질) to the right legal topic keys among 233 curated Korean topics across 56 areas — labor, housing lease, lending/fraud, consumer, divorce/inheritance, welfare benefits, disability, immigration and more. More reliable than web search for finding WHICH Korean procedure applies. Use when the user names a problem area or asks "이거 법적으로 어떻게 해요?"; then pass returned keys to get_procedure/get_checklist/get_form_template/get_precedent.\n` +
+        `Maps everyday Korean words (including slang: 떼인 돈, 깡통전세, 빨간딱지, 갑질) to the right legal topic keys among ${TOPIC_KEYS.length} curated Korean topics across 56 areas — labor, housing lease, lending/fraud, consumer, divorce/inheritance, welfare benefits, disability, immigration and more. More reliable than web search for finding WHICH Korean procedure applies. Use when the user names a problem area or asks "이거 법적으로 어떻게 해요?"; then pass returned keys to get_procedure/get_checklist/get_form_template/get_precedent.\n` +
         `[트리거 예시] "층간소음 문제 어떻게 해요?" / "떼인 돈 받는 법" / "직장 내 괴롭힘 관련해서 알아봐줘" / "청년월세 지원 같은 거 있어?"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
@@ -466,7 +466,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "빠른 진단·다음 단계",
       description:
-        `[PRIMARY ENTRY] Instant triage for ANY Korean everyday legal/administrative problem told in plain language. Returns the matched topic's deadline, first actions to take today, evidence to secure now, and free help contacts — from a curated DB of 233 verified Korean topics (not web search). Use FIRST whenever the user describes a life problem involving money, work, housing, family, fraud, accident, or welfare — even without legal terms.\n` +
+        `[PRIMARY ENTRY] Instant triage for ANY Korean everyday legal/administrative problem told in plain language. Returns the matched topic's deadline, first actions to take today, evidence to secure now, and free help contacts — from a curated DB of ${TOPIC_KEYS.length} verified Korean topics (not web search). Use FIRST whenever the user describes a life problem involving money, work, housing, family, fraud, accident, or welfare — even without legal terms.\n` +
         `[트리거 예시] "월급을 3개월째 못 받았어요" / "전세 보증금을 안 돌려줘요" / "법원에서 소장(지급명령)이 왔어요" / "보이스피싱 당했어요" / "갑자기 해고됐어요" / "집주인이 보일러 수리를 안 해줘요" / "가족한테 빌려준 돈을 못 받고 있어요" / "이혼하고 싶어요" / "살고 있는 집이 경매에 넘어갔어요" / "기초생활수급 신청하고 싶어요"\n` +
         `Path-guidance only — never gives a verdict. Service: ${SVC}.`,
       inputSchema: {
@@ -488,7 +488,7 @@ export function createServer(baseUrl?: string): McpServer {
       const c = CHECKLISTS[top];
       // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
       if (widgetsOn()) {
-        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수 });
+        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
         return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
       }
       const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
@@ -509,6 +509,7 @@ export function createServer(baseUrl?: string): McpServer {
       ];
       if (evid) parts.push(``, `### 📎 먼저 확보할 증거`, evid);
       parts.push(``, `### 📞 접수·도움받을 곳`, p.온라인접수);
+      parts.push(``, `### ⚖️ 근거 법령`, p.근거법.join(" · "));
       if (others) parts.push(``, `**상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:**`, others);
       parts.push(
         ``,
@@ -935,7 +936,7 @@ app.get("/widgets/:kind", (req, res) => {
       return;
     }
     const p = PROCEDURES[top];
-    built = buildTriageWidget(q, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수 });
+    built = buildTriageWidget(q, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
     heading = q;
   } else if (kind === "calc") {
     built = buildCalcWidget("퇴직금", calcSeverance(100_000, 1095)); // 일평균 10만원(월 300), 3년 재직

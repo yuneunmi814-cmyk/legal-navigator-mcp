@@ -89,7 +89,7 @@ export function buildFormWidget(
 // ── 2) 진단 카드 — triage용: 주제·기한 경고·첫 단계 3개·접수처 버튼 ──
 export function buildTriageWidget(
   situation: string,
-  topic: { key: string; category: string; 제목: string; 기한: string; 단계: string[]; 온라인접수: string },
+  topic: { key: string; category: string; 제목: string; 기한: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
 ): KakaoWidget {
   // 접수처 자유 텍스트에서 첫 URL/도메인 추출(있으면 버튼 제공)
   const m = topic.온라인접수.match(/https?:\/\/[^\s)”"']+|[a-z0-9.-]+\.(?:go\.kr|or\.kr|kr|com)[^\s)”"']*/i);
@@ -114,11 +114,14 @@ export function buildTriageWidget(
     ...(url
       ? [{ type: "Button", label: "🏛️ 접수처 바로가기", onClickAction: openUrl(url), style: "primary", block: true } as Button]
       : []),
+    ...(topic.근거법?.length
+      ? [{ type: "Caption", value: trunc(`⚖️ ${topic.근거법.join(" · ")}`, 70) } as Caption]
+      : []),
     { type: "Caption", value: "결론 아님·경로 안내 · 무료상담 132 · 법률 절차 길잡이" },
   ];
   return {
     widget: { type: "Card", size: "md", children },
-    copy_text: `[${topic.category}] ${topic.제목}\n⏰ ${topic.기한}\n무료상담: 대한법률구조공단 132 — 법률 절차 길잡이`,
+    copy_text: `[${topic.category}] ${topic.제목}\n⏰ ${topic.기한}${topic.근거법?.length ? `\n⚖️ ${topic.근거법.join(" · ")}` : ""}\n무료상담: 대한법률구조공단 132 — 법률 절차 길잡이`,
   };
 }
 
