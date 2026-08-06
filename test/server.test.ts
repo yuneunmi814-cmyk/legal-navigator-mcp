@@ -277,6 +277,29 @@ describe("나홀로 송무·법무 패키지 (피고 대응·셀프 법무)", ()
     expect(res.status).toBe(200);
     expect((await res.text())).toContain('contenteditable="true"');
   });
+  it("[Tier2] 약식명령받았을때 → 7일·형종 상향 금지", async () => {
+    const t = await callText("get_procedure", { topic: "약식명령받았을때" });
+    expect(t).toContain("7일");
+    expect(t).toContain("형종 상향");
+  });
+  it("[Tier2] calculate_deadline 약식명령_정식재판청구 → 7일 D-day", async () => {
+    const t = await callText("calculate_deadline", { start_date: "2026-08-01", deadline_type: "약식명령_정식재판청구" });
+    expect(t).toContain("2026-08-08");
+  });
+  it("[Tier2] 상속등기 → 취득세 6개월·단독 신청", async () => {
+    const t = await callText("get_procedure", { topic: "상속등기" });
+    expect(t).toContain("6개월");
+    expect(t).toContain("단독");
+  });
+  it("[Tier2] search_topics '벌금이 나왔어요' → 약식명령받았을때", async () => {
+    const t = await callText("search_topics", { query: "벌금이 나왔어요" });
+    expect(t).toContain("약식명령받았을때");
+  });
+  it("[Tier2] 국선변호인 서식 → 33조·수급자 소명", async () => {
+    const t = await callText("get_form_template", { form: "국선변호인선정청구서" });
+    expect(t).toContain("제33조");
+    expect(t).toContain("수급자");
+  });
 });
 
 describe("외국인·이주민(취약계층) 주제·연결", () => {
