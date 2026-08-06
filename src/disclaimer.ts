@@ -5,5 +5,6 @@ export const DISCLAIMER =
   "기한이 임박했거나 중대·복잡한 사안은 변호사·공인노무사 또는 대한법률구조공단(국번없이 132)에 상담하세요.";
 
 export function withDisclaimer(text: string): string {
-  return `${text}\n\n———\n${DISCLAIMER}`;
+  // 마크다운 수평선 + 인용 블록: 카카오 툴즈 등 LLM이 본문과 고지를 구조적으로 구분하도록.
+  return `${text}\n\n---\n> ${DISCLAIMER}`;
 }

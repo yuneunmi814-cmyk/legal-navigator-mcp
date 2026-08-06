@@ -54,23 +54,25 @@ const READONLY = {
 const 항목값 = ["체불임금", "퇴직금", "주휴수당", "지연이자"] as const;
 const TOPIC_DESC = "주제 키. 카테고리: 노동·주택임대차·돈거래·소비자·교통사고·형사·민사절차. 모르면 list_topics로 목록을 먼저 확인.";
 
+// 응답은 마크다운(카카오 툴즈 가이드: 텍스트 답변은 정제된 마크다운 권장).
 function 절차텍스트(key: string): string {
   const p = PROCEDURES[key];
   return [
-    `📋 [${p.category}] ${p.제목}`,
+    `## 📋 ${p.제목}`,
+    `_분야: ${p.category}_`,
     "",
-    `• 적용대상: ${p.적용대상}`,
-    `• 기한: ${p.기한}`,
-    `• 관할기관: ${p.관할기관}`,
-    `• 접수: ${p.온라인접수}`,
+    `- **적용대상**: ${p.적용대상}`,
+    `- **기한**: ${p.기한}`,
+    `- **관할기관**: ${p.관할기관}`,
+    `- **접수**: ${p.온라인접수}`,
     "",
-    "진행 단계",
-    ...p.단계.map((s) => `  ${s}`),
+    "### 진행 단계",
+    ...p.단계.map((s) => `- ${s}`),
     "",
-    "근거 법령",
-    ...p.근거법.map((s) => `  - ${s}`),
+    "### 근거 법령",
+    ...p.근거법.map((s) => `- ${s}`),
     "",
-    `참고: ${p.비고}`,
+    `> 💡 ${p.비고}`,
   ].join("\n");
 }
 
@@ -125,10 +127,10 @@ export function createServer(baseUrl?: string): McpServer {
       const byCat = new Map<string, string[]>();
       for (const t of list) {
         if (!byCat.has(t.category)) byCat.set(t.category, []);
-        byCat.get(t.category)!.push(`  - ${t.key} : ${t.제목}`);
+        byCat.get(t.category)!.push(`- \`${t.key}\` — ${t.제목}`);
       }
-      const body = [...byCat.entries()].map(([c, items]) => `[${c}]\n${items.join("\n")}`).join("\n\n");
-      return { content: [{ type: "text", text: withDisclaimer(`🗂️ 주제 목록 (${list.length}개)\n\n${body}`) }] };
+      const body = [...byCat.entries()].map(([c, items]) => `### ${c}\n${items.join("\n")}`).join("\n\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## 🗂️ 주제 목록 (${list.length}개)\n\n${body}`) }] };
     },
   );
 
@@ -165,13 +167,13 @@ export function createServer(baseUrl?: string): McpServer {
         return { content: [{ type: "text", text: withDisclaimer(`'${topic}' 주제의 체크리스트가 없습니다. list_topics로 확인하세요.`) }] };
       }
       const text = [
-        `🗂️ ${PROCEDURES[topic]?.제목 ?? topic} — 준비 체크리스트`,
+        `## 🗂️ ${PROCEDURES[topic]?.제목 ?? topic} — 준비 체크리스트`,
         "",
-        "모아둘 증거",
-        ...c.증거.map((s) => `  ☐ ${s}`),
+        "### 모아둘 증거",
+        ...c.증거.map((s) => `- [ ] ${s}`),
         "",
-        "접수용 준비서류",
-        ...c.준비서류.map((s) => `  ☐ ${s}`),
+        "### 접수용 준비서류",
+        ...c.준비서류.map((s) => `- [ ] ${s}`),
       ].join("\n");
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
@@ -193,19 +195,20 @@ export function createServer(baseUrl?: string): McpServer {
       if (!f) {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
-      const head = [`📝 ${f.제목}`, `용도: ${f.용도}`];
-      if (f.공식양식) head.push(`📄 공식 양식 받는 곳: ${f.공식양식}`);
-      const tail = ["작성요령", ...f.작성요령.map((s) => `  - ${s}`)];
+      const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
+      if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
+      const tail = ["### ✍️ 작성요령", ...f.작성요령.map((s) => `- ${s}`)];
       if (baseUrl) {
         tail.push(
           "",
-          `🖊️ 빈칸 바로 채우기(모바일 미리보기·인쇄/PDF 저장): ${baseUrl}/forms/${encodeURIComponent(form)}`,
-          "  링크를 누르면 이 서식이 문서 화면으로 열립니다 — [빈칸]을 탭해 본인 정보를 직접 입력하고 인쇄·PDF로 저장하세요.",
-          `📎 텍스트 파일로 저장·공유: ${baseUrl}/forms/${encodeURIComponent(form)}.txt` +
+          `**🖊️ 빈칸 바로 채우기(모바일 미리보기·인쇄/PDF 저장)**: ${baseUrl}/forms/${encodeURIComponent(form)}`,
+          "링크를 누르면 이 서식이 문서 화면으로 열립니다 — [빈칸]을 탭해 본인 정보를 직접 입력하고 인쇄·PDF로 저장하세요.",
+          `**📎 텍스트 파일로 저장·공유**: ${baseUrl}/forms/${encodeURIComponent(form)}.txt` +
             (f.공식양식 ? " (관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성)" : ""),
         );
       }
-      const text = [...head, "", "─── 서식 시작 ───", f.본문, "─── 서식 끝 ───", "", ...tail].join("\n");
+      // 서식 본문은 코드블록으로 감싸 마크다운 해석(대괄호·번호목록 변형)을 차단하고 원형 유지.
+      const text = [...head, "", "```", f.본문, "```", "", ...tail].join("\n");
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -226,8 +229,8 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ keyword }) => {
       const entries = Object.entries(PRECEDENTS).filter(([, v]) => v.length > 0);
       if (!keyword) {
-        const topics = entries.map(([k]) => `  - ${k} (${PROCEDURES[k]?.제목 ?? ""})`).join("\n");
-        return { content: [{ type: "text", text: withDisclaimer(`⚖️ 판례가 등록된 주제\n\n${topics}\n\n키워드를 넣으면 해당 판례를 보여드립니다.`) }] };
+        const topics = entries.map(([k]) => `- \`${k}\` — ${PROCEDURES[k]?.제목 ?? ""}`).join("\n");
+        return { content: [{ type: "text", text: withDisclaimer(`## ⚖️ 판례가 등록된 주제\n\n${topics}\n\n키워드를 넣으면 해당 판례를 보여드립니다.`) }] };
       }
       const matched = entries
         .filter(([k, v]) => k.includes(keyword) || v.some((p) => p.요지.includes(keyword) || p.사건번호.includes(keyword) || p.법원.includes(keyword)))
@@ -235,10 +238,10 @@ export function createServer(baseUrl?: string): McpServer {
       if (!matched.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${keyword}'에 해당하는 등록 판례를 찾지 못했습니다. (등록된 판례만 조회되며, 없는 판례는 지어내지 않습니다.)`) }] };
       }
-      const body = matched.map((p) => `• ${p.법원} ${p.사건번호}\n  ${p.요지}`).join("\n\n");
+      const body = matched.map((p) => `- **${p.법원} ${p.사건번호}**\n  ${p.요지}`).join("\n");
       const caseNos = [...new Set(matched.map((p) => p.사건번호.replace(/\s|\(.*?\)/g, "").split(",")[0]).filter(Boolean))].slice(0, 5);
-      const caseLinks = caseNos.map((no) => `  - ${no}: https://casenote.kr/search/?q=${encodeURIComponent(no)}`).join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(`⚖️ 판례 (검색: ${keyword})\n\n${body}\n\n원문(사건번호로 바로 검색):\n${caseLinks}\n또는 국가법령정보센터 https://www.law.go.kr · CaseNote https://casenote.kr`) }] };
+      const caseLinks = caseNos.map((no) => `- [${no}](https://casenote.kr/search/?q=${encodeURIComponent(no)})`).join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## ⚖️ 판례 (검색: ${keyword})\n\n${body}\n\n### 원문 (사건번호로 바로 검색)\n${caseLinks}\n\n또는 [국가법령정보센터](https://www.law.go.kr) · [CaseNote](https://casenote.kr)`) }] };
     },
   );
 
@@ -292,11 +295,11 @@ export function createServer(baseUrl?: string): McpServer {
         return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
       }
       const text = [
-        `🧮 ${a.item} 계산 결과`,
+        `## 🧮 ${a.item} 계산 결과`,
         "",
-        `결과: ${r!.결과}`,
-        `계산식: ${r!.계산식}`,
-        r!.비고 ? `비고: ${r!.비고}` : "",
+        `- **결과**: ${r!.결과}`,
+        `- **계산식**: ${r!.계산식}`,
+        r!.비고 ? `- **비고**: ${r!.비고}` : "",
       ]
         .filter(Boolean)
         .join("\n");
@@ -322,10 +325,10 @@ export function createServer(baseUrl?: string): McpServer {
       if (!list.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${keyword}'에 해당하는 조문을 찾지 못했습니다.`) }] };
       }
-      const body = list.map((s) => `• ${s.법령} ${s.조문} — ${s.요지}`).join("\n");
+      const body = list.map((s) => `- **${s.법령} ${s.조문}** — ${s.요지}`).join("\n");
       const laws = [...new Set(list.map((s) => s.법령))];
-      const links = laws.map((n) => `  - ${n}: https://www.law.go.kr/법령/${encodeURIComponent(n)}`).join("\n");
-      const text = `⚖️ 법령 요지${keyword ? ` (검색: ${keyword})` : ""}\n\n${body}\n\n원문(국가법령정보센터):\n${links}\n\n※ 조문 전문·신구조문·관련 판례 등 더 깊은 원문은 국가법령정보센터(law.go.kr)·찾기쉬운 생활법령정보(easylaw.go.kr)에서 확인하세요.`;
+      const links = laws.map((n) => `- [${n}](https://www.law.go.kr/법령/${encodeURIComponent(n)})`).join("\n");
+      const text = `## ⚖️ 법령 요지${keyword ? ` (검색: ${keyword})` : ""}\n\n${body}\n\n### 원문 (국가법령정보센터)\n${links}\n\n> 조문 전문·신구조문·관련 판례 등 더 깊은 원문은 국가법령정보센터(law.go.kr)·찾기쉬운 생활법령정보(easylaw.go.kr)에서 확인하세요.`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -349,8 +352,8 @@ export function createServer(baseUrl?: string): McpServer {
       if (!ranked.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${query}'에 맞는 주제를 바로 찾지 못했습니다. list_topics로 전체 목록(56개 분야)을 확인하거나, 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
       }
-      const body = ranked.map((k) => `  - ${k} [${PROCEDURES[k].category}] : ${PROCEDURES[k].제목}`).join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(`🔎 '${query}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
+      const body = ranked.map((k) => `- \`${k}\` — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${query}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
     },
   );
 
@@ -406,9 +409,9 @@ export function createServer(baseUrl?: string): McpServer {
       }
       if (!lines.length) {
         const enc = encodeURIComponent(raw);
-        return { content: [{ type: "text", text: withDisclaimer(`🔍 '${raw}'은(는) 이 서비스의 검증된 저장소에서 확인되지 않았습니다.\n없는 판례·법령은 지어내지 않으니, 아래에서 직접 확인하세요:\n  - 국가법령정보센터: https://www.law.go.kr/precScListR.do?menuId=1&query=${enc}\n  - CaseNote: https://casenote.kr/search/?q=${enc}`) }] };
+        return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n**이 서비스의 검증된 저장소에서 확인되지 않았습니다.**\n없는 판례·법령은 지어내지 않으니, 아래에서 직접 확인하세요:\n- [국가법령정보센터에서 검색](https://www.law.go.kr/precScListR.do?menuId=1&query=${enc})\n- [CaseNote에서 검색](https://casenote.kr/search/?q=${enc})`) }] };
       }
-      return { content: [{ type: "text", text: withDisclaimer(`🔍 인용 검증: '${raw}'\n\n${lines.join("\n\n")}\n\n원문 확인: https://www.law.go.kr · https://casenote.kr`) }] };
+      return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n${lines.map((l) => `- ${l}`).join("\n")}\n\n원문 확인: [law.go.kr](https://www.law.go.kr) · [casenote.kr](https://casenote.kr)`) }] };
     },
   );
 
@@ -434,8 +437,8 @@ export function createServer(baseUrl?: string): McpServer {
       if (!list.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${kw}' 관련 최근 변경 정보가 없습니다. 다른 키워드로 검색하거나 비우고 전체를 확인하세요.`) }] };
       }
-      const body = list.map((c) => `• ${c.법령} — ${c.변경}\n  시행/적용: ${c.시행일}\n  ${c.요지}`).join("\n\n");
-      return { content: [{ type: "text", text: withDisclaimer(`🕒 최근 법령·판례 변경${kw ? ` (검색: ${kw})` : ""}\n\n${body}\n\n※ 사건 발생 시점에 적용되는 법이 다를 수 있습니다. 정확한 시행일·경과규정은 law.go.kr에서 확인하세요.`) }] };
+      const body = list.map((c) => `- **${c.법령}** — ${c.변경}\n  - 시행/적용: ${c.시행일}\n  - ${c.요지}`).join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## 🕒 최근 법령·판례 변경${kw ? ` (검색: ${kw})` : ""}\n\n${body}\n\n> 사건 발생 시점에 적용되는 법이 다를 수 있습니다. 정확한 시행일·경과규정은 law.go.kr에서 확인하세요.`) }] };
     },
   );
 
@@ -462,24 +465,25 @@ export function createServer(baseUrl?: string): McpServer {
       const top = ranked[0];
       const p = PROCEDURES[top];
       const c = CHECKLISTS[top];
-      const steps = p.단계.slice(0, 3).map((s) => `  ${s}`).join("\n");
-      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `  - ${s}`).join("\n");
-      const others = ranked.slice(1, 5).map((k) => `  · ${k} [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
+      const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
+      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `- ${s}`).join("\n");
+      const others = ranked.slice(1, 5).map((k) => `- ${k} — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
       const hasPrec = (PRECEDENTS[top]?.length ?? 0) > 0;
       const parts = [
-        `🧭 빠른 진단: '${situation}'`,
-        `※ 특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다.`,
+        `## 🧭 빠른 진단: '${situation}'`,
+        `_특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다._`,
         ``,
-        `▶ 가장 가까운 주제: ${top} [${p.category}] ${p.제목}`,
+        `**가장 가까운 주제**: ${top} — [${p.category}] ${p.제목}`,
         ``,
-        `⏰ 기한(놓치면 권리 소멸 위험): ${p.기한}`,
+        `### ⏰ 기한 (놓치면 권리 소멸 위험)`,
+        p.기한,
         ``,
-        `✅ 지금 할 일(첫 단계)`,
+        `### ✅ 지금 할 일 (첫 단계)`,
         steps,
       ];
-      if (evid) parts.push(``, `📎 먼저 확보할 증거`, evid);
-      parts.push(``, `📞 접수·도움받을 곳: ${p.온라인접수}`);
-      if (others) parts.push(``, `※ 상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:`, others);
+      if (evid) parts.push(``, `### 📎 먼저 확보할 증거`, evid);
+      parts.push(``, `### 📞 접수·도움받을 곳`, p.온라인접수);
+      if (others) parts.push(``, `**상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:**`, others);
       parts.push(
         ``,
         `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
@@ -507,7 +511,7 @@ export function createServer(baseUrl?: string): McpServer {
     },
     async ({ claim_amount, parties, track, e_litigation }) => {
       const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
-      const text = `🧮 소송비용(개략)\n\n결과: ${r.결과}\n계산식: ${r.계산식}\n\n비고: ${r.비고}`;
+      const text = `## 🧮 소송비용(개략)\n\n- **결과**: ${r.결과}\n- **계산식**: ${r.계산식}\n\n> 💡 ${r.비고}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -536,16 +540,16 @@ export function createServer(baseUrl?: string): McpServer {
       const 기간표시 = rule.기간.년 ? `${rule.기간.년}년` : rule.기간.월 ? `${rule.기간.월}개월` : `${rule.기간.일}일`;
       const status = r.남은일수 < 0 ? `⛔ 기한 경과 (${-r.남은일수}일 지남)` : r.남은일수 === 0 ? "⚠️ 오늘이 마감일" : `⏳ D-${r.남은일수} (${r.남은일수}일 남음)`;
       const text = [
-        `⏰ 기한 계산: ${deadline_type}`,
+        `## ⏰ 기한 계산: ${deadline_type}`,
         ``,
-        `기준일 ${start_date} + ${기간표시}`,
-        `→ 마감일: ${r.마감일}`,
-        `→ ${status}`,
+        `- **기준일**: ${start_date} + ${기간표시}`,
+        `- **마감일**: ${r.마감일}`,
+        `- **상태**: ${status}`,
         ``,
-        `기산점: ${rule.기산}`,
-        `주의: ${rule.경고}`,
+        `- **기산점**: ${rule.기산}`,
+        `- **주의**: ${rule.경고}`,
         ``,
-        `※ 기산점·중단(청구·압류·승인)·정지 사유에 따라 실제 기한이 달라질 수 있으니 반드시 확인하세요.`,
+        `> 기산점·중단(청구·압류·승인)·정지 사유에 따라 실제 기한이 달라질 수 있으니 반드시 확인하세요.`,
       ].join("\n");
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
@@ -567,29 +571,29 @@ export function createServer(baseUrl?: string): McpServer {
     },
     async ({ keyword }) => {
       const kw = keyword?.trim();
-      const hot = HOTLINES.map((h) => `  ${h.번호} — ${h.기관} (${h.용도})`).join("\n");
+      const hot = HOTLINES.map((h) => `- **${h.번호}** — ${h.기관} (${h.용도})`).join("\n");
       const detail = (p: (typeof SUPPORT_PROGRAMS)[number]) => {
-        const base = `▶ ${p.명칭}\n  · 대상: ${p.대상}\n  · 내용: ${p.내용}\n  · 연락: ${p.연락}`;
+        const base = `### ${p.명칭}\n- **대상**: ${p.대상}\n- **내용**: ${p.내용}\n- **연락**: ${p.연락}`;
         const g = APPLICATION_GUIDE[p.명칭];
         if (!g) return base;
-        const steps = g.절차.map((s, i) => `${i + 1}) ${s}`).join("  ");
-        return `${base}\n  📝 신청절차: ${steps}\n  📎 준비서류: ${g.준비물.join(" · ")}`;
+        const steps = g.절차.map((s, i) => `${i + 1}) ${s}`).join(" ");
+        return `${base}\n- **📝 신청절차**: ${steps}\n- **📎 준비서류**: ${g.준비물.join(" · ")}`;
       };
-      const 꼬리 = `\n\n※ 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
+      const 꼬리 = `\n\n> 위는 제도·기준 안내이며 자격을 확정하지 않습니다. 실제 지원 여부는 해당 기관(특히 대한법률구조공단 132)에서 확인하세요.`;
       if (!kw) {
         // 키워드 없으면 전체 색인(명칭 + 대표 키워드) + 핫라인
-        const idx = SUPPORT_PROGRAMS.map((p) => `  · ${p.명칭} [${p.키워드.slice(0, 3).join("·")}]`).join("\n");
-        const text = `📑 무료 법률지원·구제 프로그램 ${SUPPORT_PROGRAMS.length}개\n상황 키워드로 검색하세요 — 예: 성폭력 / 전세사기 / 의료사고 / 체불 / 장애인 / 채무 / 양육비 / 통신\n\n${idx}\n\n📞 24시간·대표 핫라인\n${hot}${꼬리}`;
+        const idx = SUPPORT_PROGRAMS.map((p) => `- ${p.명칭} [${p.키워드.slice(0, 3).join("·")}]`).join("\n");
+        const text = `## 📑 무료 법률지원·구제 프로그램 ${SUPPORT_PROGRAMS.length}개\n상황 키워드로 검색하세요 — 예: 성폭력 / 전세사기 / 의료사고 / 체불 / 장애인 / 채무 / 양육비 / 통신\n\n${idx}\n\n### 📞 24시간·대표 핫라인\n${hot}${꼬리}`;
         return { content: [{ type: "text", text: withDisclaimer(text) }] };
       }
       const matched = SUPPORT_PROGRAMS.filter((p) => p.명칭.includes(kw) || p.대상.includes(kw) || p.내용.includes(kw) || p.키워드.some((k) => k.includes(kw) || kw.includes(k)));
       if (!matched.length) {
-        const text = `'${kw}'에 딱 맞는 프로그램을 못 찾았습니다. 우선 아래로 문의하세요:\n\n${detail(SUPPORT_PROGRAMS[0])}\n\n다른 키워드(예: 성폭력·전세사기·의료사고·체불·장애인·채무)로 다시 검색하거나, 비우면 전체 목록을 봅니다.\n\n📞 핫라인\n${hot}${꼬리}`;
+        const text = `'${kw}'에 딱 맞는 프로그램을 못 찾았습니다. 우선 아래로 문의하세요:\n\n${detail(SUPPORT_PROGRAMS[0])}\n\n다른 키워드(예: 성폭력·전세사기·의료사고·체불·장애인·채무)로 다시 검색하거나, 비우면 전체 목록을 봅니다.\n\n### 📞 핫라인\n${hot}${꼬리}`;
         return { content: [{ type: "text", text: withDisclaimer(text) }] };
       }
       const shown = matched.slice(0, 8);
-      const more = matched.length > 8 ? `\n\n(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)` : "";
-      const text = `🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
+      const more = matched.length > 8 ? `\n\n_(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)_` : "";
+      const text = `## 🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -610,22 +614,22 @@ export function createServer(baseUrl?: string): McpServer {
     },
     async ({ document }) => {
       const kw = document?.trim();
-      const tips = DOC_TIPS.map((t) => `  • ${t}`).join("\n");
+      const tips = DOC_TIPS.map((t) => `- ${t}`).join("\n");
       const detail = (k: string) => {
         const g = DOCUMENT_GUIDE[k];
-        return `📄 ${k}\n  · 발급처: ${g.발급처}\n  · 온라인: ${g.온라인}\n  · 수수료: ${g.수수료}\n  · 팁: ${g.팁}`;
+        return `### 📄 ${k}\n- **발급처**: ${g.발급처}\n- **온라인**: ${g.온라인}\n- **수수료**: ${g.수수료}\n- **팁**: ${g.팁}`;
       };
       if (!kw) {
-        const idx = Object.keys(DOCUMENT_GUIDE).map((k) => `  · ${k}`).join("\n");
-        const text = `📑 증빙서류 발급 안내 (서류명으로 검색하세요)\n\n${idx}\n\n★ 서류 준비 꿀팁\n${tips}`;
+        const idx = Object.keys(DOCUMENT_GUIDE).map((k) => `- ${k}`).join("\n");
+        const text = `## 📑 증빙서류 발급 안내 (서류명으로 검색하세요)\n\n${idx}\n\n### ★ 서류 준비 꿀팁\n${tips}`;
         return { content: [{ type: "text", text: withDisclaimer(text) }] };
       }
       const matched = Object.keys(DOCUMENT_GUIDE).filter((k) => k.includes(kw) || DOCUMENT_GUIDE[k].별칭.some((a) => a.includes(kw) || kw.includes(a)));
       if (!matched.length) {
-        const text = `'${kw}' 서류 발급 안내가 목록에 없습니다. 대부분의 행정서류는 정부24(gov.kr), 부동산 등기는 인터넷등기소(iros.go.kr), 세금 관련은 홈택스(hometax.go.kr)에서 발급됩니다.\n\n★ 서류 준비 꿀팁\n${tips}`;
+        const text = `'${kw}' 서류 발급 안내가 목록에 없습니다. 대부분의 행정서류는 정부24(gov.kr), 부동산 등기는 인터넷등기소(iros.go.kr), 세금 관련은 홈택스(hometax.go.kr)에서 발급됩니다.\n\n### ★ 서류 준비 꿀팁\n${tips}`;
         return { content: [{ type: "text", text: withDisclaimer(text) }] };
       }
-      const text = `🗂️ '${kw}' 서류 발급 안내\n\n${matched.slice(0, 5).map(detail).join("\n\n")}\n\n★ 서류 준비 꿀팁\n${tips}`;
+      const text = `## 🗂️ '${kw}' 서류 발급 안내\n\n${matched.slice(0, 5).map(detail).join("\n\n")}\n\n### ★ 서류 준비 꿀팁\n${tips}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
   );
@@ -664,14 +668,14 @@ export function createServer(baseUrl?: string): McpServer {
       }
       const body = matched
         .map((t) => {
-          const lines = [`📖 ${t.용어} [${t.분류}]`, `   ${t.풀이}`];
-          if (t.헷갈림) lines.push(`   ⚖ 구별: ${t.헷갈림}`);
-          if (t.별칭?.length) lines.push(`   (다른 말: ${t.별칭.join(", ")})`);
+          const lines = [`### 📖 ${t.용어} _[${t.분류}]_`, t.풀이];
+          if (t.헷갈림) lines.push(`- **⚖ 구별**: ${t.헷갈림}`);
+          if (t.별칭?.length) lines.push(`- **다른 말**: ${t.별칭.join(", ")}`);
           return lines.join("\n");
         })
         .join("\n\n");
       const tail = `\n\n→ 관련 절차는 search_topics("${kw}"), 더 깊은 원문은 국가법령정보센터(law.go.kr) 법령용어·생활법령(easylaw.go.kr).`;
-      return { content: [{ type: "text", text: withDisclaimer(`🔎 '${kw}' 뜻풀이 (${matched.length}건)\n\n${body}${tail}`) }] };
+      return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${kw}' 뜻풀이 (${matched.length}건)\n\n${body}${tail}`) }] };
     },
   );
 
