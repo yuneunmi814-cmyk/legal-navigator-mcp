@@ -51,6 +51,11 @@ const openUrl = (url: string, pcUrl?: string): ActionConfig => ({
 
 const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+// tools/call 위젯 응답 직렬화 — 가이드 별첨: text content에 JSON.stringify({widget, copy_text, name}).
+export function kakaoWidgetText(kw: KakaoWidget): string {
+  return JSON.stringify(kw);
+}
+
 // ── 1) 서식 카드 — get_form_template용: '보이는 문서' 한 장 + 빈칸 채우기/다운로드 버튼 ──
 export function buildFormWidget(
   formKey: string,

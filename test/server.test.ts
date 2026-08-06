@@ -159,6 +159,46 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   });
 });
 
+describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => {
+  beforeAll(() => { process.env.WIDGETS = "on"; });
+  afterAll(() => { delete process.env.WIDGETS; });
+
+  it("get_form_template → {widget, copy_text, name} JSON 카드", async () => {
+    const t = await callText("get_form_template", { form: "금전소비대차계약서" });
+    const j = JSON.parse(t);
+    expect(j.widget.type).toBe("Card");
+    expect(j.name).toBe("get_form_template");
+    expect(j.copy_text).toContain("금전소비대차계약서");
+    const btn = j.widget.children.find((c: any) => c.type === "Button");
+    expect(btn.onClickAction.payload.target.url).toContain("/forms/");
+    expect(t).not.toContain('"status"'); // 카카오 전용 프로퍼티 미사용
+  });
+  it("triage → 진단 카드(기한 배지·name)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    const j = JSON.parse(t);
+    expect(j.name).toBe("triage");
+    expect(JSON.stringify(j.widget)).toContain("⏰");
+    expect(j.copy_text).toContain("132");
+  });
+  it("calculate_amount → 계산 카드", async () => {
+    const t = await callText("calculate_amount", { item: "퇴직금", daily_avg_wage: 100000, tenure_days: 1095 });
+    const j = JSON.parse(t);
+    expect(j.name).toBe("calculate_amount");
+    expect(j.widget.type).toBe("Card");
+  });
+  it("calculate_deadline → 기한 카드(D-day 포함)", async () => {
+    const t = await callText("calculate_deadline", { start_date: "2026-06-23", deadline_type: "상속포기_한정승인" });
+    const j = JSON.parse(t);
+    expect(j.name).toBe("calculate_deadline");
+    expect(JSON.stringify(j.widget)).toMatch(/D-|기한 경과|마감일/);
+  });
+  it("위젯 비대상 툴(get_procedure)은 그대로 마크다운", async () => {
+    const t = await callText("get_procedure", { topic: "임금체불" });
+    expect(() => JSON.parse(t)).toThrow(); // JSON 아님 = 텍스트 유지
+    expect(t).toContain("개별 법률 자문이 아닙니다");
+  });
+});
+
 describe("위젯 프로토타입 (ChatKit 스펙·미리보기)", () => {
   it("위젯 JSON: /widgets/form?json=1 → Card 루트·버튼 URL·copy_text", async () => {
     const res = await fetch(`${base}/widgets/form?key=${encodeURIComponent("금전소비대차계약서")}&json=1`);

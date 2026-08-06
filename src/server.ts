@@ -32,7 +32,12 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
-import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml } from "./widgets.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText } from "./widgets.js";
+
+// 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
+// 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
+const widgetsOn = (): boolean =>
+  process.env.WIDGETS === "on" || (process.env.WIDGETS !== "off" && process.env.NODE_ENV !== "test");
 
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
 const SVC = "법률 절차 길잡이(Legal Navigator)";
@@ -196,6 +201,10 @@ export function createServer(baseUrl?: string): McpServer {
       if (!f) {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
+      // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·txt 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
+      if (widgetsOn() && baseUrl) {
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl), name: "get_form_template" }) }] };
+      }
       const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
       if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
       const tail = ["### ✍️ 작성요령", ...f.작성요령.map((s) => `- ${s}`)];
@@ -294,6 +303,9 @@ export function createServer(baseUrl?: string): McpServer {
         }
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
+      }
+      if (widgetsOn()) {
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount" }) }] };
       }
       const text = [
         `## 🧮 ${a.item} 계산 결과`,
@@ -474,6 +486,11 @@ export function createServer(baseUrl?: string): McpServer {
       const top = ranked[0];
       const p = PROCEDURES[top];
       const c = CHECKLISTS[top];
+      // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
+      if (widgetsOn()) {
+        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수 });
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
+      }
       const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
       const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `- ${s}`).join("\n");
       const others = ranked.slice(1, 5).map((k) => `- ${k} — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
@@ -520,6 +537,9 @@ export function createServer(baseUrl?: string): McpServer {
     },
     async ({ claim_amount, parties, track, e_litigation }) => {
       const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
+      if (widgetsOn()) {
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost" }) }] };
+      }
       const text = `## 🧮 소송비용(개략)\n\n- **결과**: ${r.결과}\n- **계산식**: ${r.계산식}\n\n> 💡 ${r.비고}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
@@ -548,6 +568,14 @@ export function createServer(baseUrl?: string): McpServer {
       }
       const 기간표시 = rule.기간.년 ? `${rule.기간.년}년` : rule.기간.월 ? `${rule.기간.월}개월` : `${rule.기간.일}일`;
       const status = r.남은일수 < 0 ? `⛔ 기한 경과 (${-r.남은일수}일 지남)` : r.남은일수 === 0 ? "⚠️ 오늘이 마감일" : `⏳ D-${r.남은일수} (${r.남은일수}일 남음)`;
+      if (widgetsOn()) {
+        const kw = buildCalcWidget(`⏰ ${deadline_type}`, {
+          결과: `${r.마감일} · ${status}`,
+          계산식: `기준일 ${start_date} + ${기간표시}`,
+          비고: `기산점: ${rule.기산} / ${rule.경고}`,
+        });
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "calculate_deadline" }) }] };
+      }
       const text = [
         `## ⏰ 기한 계산: ${deadline_type}`,
         ``,
