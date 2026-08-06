@@ -49,6 +49,7 @@ import * as support6 from "./support6.js";
 import * as support7 from "./support7.js";
 import * as support8 from "./support8.js";
 import * as applyForms from "./apply_forms.js";
+import * as lawsuitDefense from "./lawsuit_defense.js";
 
 export type { Procedure, Checklist, FormTemplate, Statute, Precedent, Category } from "./types.js";
 export { CITATION_STATUS, LAW_TIMELINE, SEARCH_SYNONYMS } from "./legal_updates.js";
@@ -110,6 +111,7 @@ const domains = [
   support7,
   support8,
   applyForms,
+  lawsuitDefense,
 ];
 
 // 38개 도메인 모듈 병합 시 키가 겹치면 한 주제가 조용히 사라지므로, 충돌을 즉시 throw로 드러낸다(부팅 실패=조기 발견).

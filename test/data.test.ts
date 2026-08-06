@@ -147,11 +147,20 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(233);
+    expect(TOPIC_KEYS.length).toBe(239);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(105);
+    expect(FORM_KEYS.length).toBe(109);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
+  });
+
+  it("나홀로 송무·법무 패키지(피고 대응·셀프 법무) 등록", () => {
+    for (const t of ["소장받았을때", "지급명령받았을때", "변제공탁", "근저당말소등기", "임차인경매대응", "나의사건검색"]) {
+      expect(TOPIC_KEYS).toContain(t);
+    }
+    for (const f of ["민사_답변서", "지급명령_이의신청서", "변제공탁서", "경매_권리신고및배당요구신청서"]) {
+      expect(FORM_KEYS).toContain(f);
+    }
   });
 
   it("차용증·채무확인서 서식(가족·지인 간 대여) 등록", () => {

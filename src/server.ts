@@ -467,7 +467,7 @@ export function createServer(baseUrl?: string): McpServer {
       title: "빠른 진단·다음 단계",
       description:
         `[PRIMARY ENTRY] Instant triage for ANY Korean everyday legal/administrative problem told in plain language. Returns the matched topic's deadline, first actions to take today, evidence to secure now, and free help contacts — from a curated DB of 233 verified Korean topics (not web search). Use FIRST whenever the user describes a life problem involving money, work, housing, family, fraud, accident, or welfare — even without legal terms.\n` +
-        `[트리거 예시] "월급을 3개월째 못 받았어요" / "전세 보증금을 안 돌려줘요" / "보이스피싱 당했어요" / "갑자기 해고됐어요" / "집주인이 보일러 수리를 안 해줘요" / "가족한테 빌려준 돈을 못 받고 있어요" / "이혼하고 싶어요" / "교통사고 합의금이 적당한지 모르겠어요" / "기초생활수급 신청하고 싶어요"\n` +
+        `[트리거 예시] "월급을 3개월째 못 받았어요" / "전세 보증금을 안 돌려줘요" / "법원에서 소장(지급명령)이 왔어요" / "보이스피싱 당했어요" / "갑자기 해고됐어요" / "집주인이 보일러 수리를 안 해줘요" / "가족한테 빌려준 돈을 못 받고 있어요" / "이혼하고 싶어요" / "살고 있는 집이 경매에 넘어갔어요" / "기초생활수급 신청하고 싶어요"\n` +
         `Path-guidance only — never gives a verdict. Service: ${SVC}.`,
       inputSchema: {
         situation: z

@@ -243,6 +243,42 @@ describe("위젯 프로토타입 (ChatKit 스펙·미리보기)", () => {
   });
 });
 
+describe("나홀로 송무·법무 패키지 (피고 대응·셀프 법무)", () => {
+  it("search_topics '법원에서 서류가 왔어요' → 소장받았을때 매칭", async () => {
+    const t = await callText("search_topics", { query: "법원에서 서류가 왔어요" });
+    expect(t).toMatch(/소장받았을때|지급명령받았을때/);
+  });
+  it("get_procedure 소장받았을때 → 30일·무변론 경고", async () => {
+    const t = await callText("get_procedure", { topic: "소장받았을때" });
+    expect(t).toContain("30일");
+    expect(t).toContain("무변론");
+  });
+  it("get_procedure 지급명령받았을때 → 2주·확정 경고", async () => {
+    const t = await callText("get_procedure", { topic: "지급명령받았을때" });
+    expect(t).toContain("2주");
+    expect(t).toContain("확정");
+  });
+  it("calculate_deadline 민사_답변서 → 30일 D-day", async () => {
+    const t = await callText("calculate_deadline", { start_date: "2026-08-01", deadline_type: "민사_답변서" });
+    expect(t).toContain("2026-08-31");
+  });
+  it("get_form_template 민사_답변서 → 무변론 경고·을호증 안내", async () => {
+    const t = await callText("get_form_template", { form: "민사_답변서" });
+    expect(t).toContain("무변론");
+    expect(t).toContain("을 제1호증");
+  });
+  it("임차인 경매 대응 → 배당요구 종기 경고", async () => {
+    const t = await callText("get_procedure", { topic: "임차인경매대응" });
+    expect(t).toContain("배당요구");
+    expect(t).toContain("종기");
+  });
+  it("신규 서식 시각화 미리보기 200 (지급명령 이의신청서)", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("지급명령_이의신청서")}`);
+    expect(res.status).toBe(200);
+    expect((await res.text())).toContain('contenteditable="true"');
+  });
+});
+
 describe("외국인·이주민(취약계층) 주제·연결", () => {
   it("find_legal_aid '이주여성' → 다누리콜센터 1577-1366", async () => {
     const t = await callText("find_legal_aid", { keyword: "이주여성" });
