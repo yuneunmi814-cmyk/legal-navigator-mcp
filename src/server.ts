@@ -30,6 +30,7 @@ import {
   calcWeeklyHolidayPay,
   calcDelayInterest,
   calcSelfCancelRegistryCost,
+  calcInheritanceRegistryCost,
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
@@ -59,7 +60,7 @@ const READONLY = {
   openWorldHint: false,
 };
 
-const 항목값 = ["체불임금", "퇴직금", "주휴수당", "지연이자", "셀프등기절감액"] as const;
+const 항목값 = ["체불임금", "퇴직금", "주휴수당", "지연이자", "셀프등기절감액", "상속등기비용"] as const;
 const TOPIC_DESC = "주제 키. 카테고리: 노동·주택임대차·돈거래·소비자·교통사고·형사·민사절차. 모르면 list_topics로 목록을 먼저 확인.";
 
 // 응답은 마크다운(카카오 툴즈 가이드: 텍스트 답변은 정제된 마크다운 권장).
@@ -264,8 +265,8 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "금액 계산기",
       description:
-        `Calculates Korean legal money amounts deterministically (same input → same answer, no guessing): unpaid wages (체불임금), severance pay (퇴직금), weekly holiday allowance (주휴수당), statutory delay interest (지연이자 연 20%), and self-registry savings for mortgage cancellation (셀프등기절감액 — 근저당 말소를 법무사 없이 직접 할 때 드는 실비와 절감액). Use when the user asks how much they are owed or wants a number computed.\n` +
-        `[트리거 예시] "퇴직금 얼마 받을 수 있어요? 월급 300에 3년 일했어요" / "밀린 월급 지연이자까지 계산해줘" / "주휴수당 계산해줘" / "대출 다 갚았는데 근저당 말소 셀프로 하면 얼마 들어요?" / "근저당 말소 법무사 안 쓰면 얼마 아껴요?"\n` +
+        `Calculates Korean legal money amounts deterministically (same input → same answer, no guessing): unpaid wages (체불임금), severance pay (퇴직금), weekly holiday allowance (주휴수당), statutory delay interest (지연이자 연 20%), and self-registry costs (셀프등기절감액 — 근저당 말소를 법무사 없이 직접 할 때 실비와 절감액 / 상속등기비용 — 상속 부동산 명의이전을 직접 할 때 취득세·수수료 실비와 법무사 보수 절감분). Use when the user asks how much they are owed or wants a number computed.\n` +
+        `[트리거 예시] "퇴직금 얼마 받을 수 있어요? 월급 300에 3년 일했어요" / "밀린 월급 지연이자까지 계산해줘" / "주휴수당 계산해줘" / "대출 다 갚았는데 근저당 말소 셀프로 하면 얼마 들어요?" / "아버지 아파트 상속등기 직접 하면 비용 얼마나 나와요? 공시가 3억이에요"\n` +
         `Estimates only. Service: ${SVC}.`,
       inputSchema: {
         item: z.enum(항목값).describe("체불임금 | 퇴직금 | 주휴수당 | 지연이자 | 셀프등기절감액"),
@@ -278,8 +279,10 @@ export function createServer(baseUrl?: string): McpServer {
         hourly_wage: z.number().finite().nonnegative().optional().describe("[주휴수당] 시급(원)"),
         principal: z.number().finite().nonnegative().optional().describe("[지연이자] 미지급 원금(원)"),
         delay_days: z.number().finite().nonnegative().optional().describe("[지연이자] 지연 일수"),
-        property_count: z.number().int().positive().optional().describe("[셀프등기절감액] 부동산 개수 — 아파트 등 집합건물 1, 단독주택 토지+건물 2 (기본 1)"),
-        e_filing: z.boolean().optional().describe("[셀프등기절감액] 인터넷등기소 전자신청 여부 — true면 수수료 2,000원, false면 방문·e-Form 3,000원 (기본 false)"),
+        property_count: z.number().int().positive().optional().describe("[셀프등기절감액·상속등기비용] 부동산 개수 — 아파트 등 집합건물 1, 단독주택 토지+건물 2 (기본 1)"),
+        e_filing: z.boolean().optional().describe("[셀프등기절감액·상속등기비용] 인터넷등기소 전자신청(e-Form) 여부 — 수수료가 낮아짐 (기본 false)"),
+        assessed_value: z.number().finite().nonnegative().optional().describe("[상속등기비용] 상속 부동산의 시가표준액(공시가격, 원) — 취득세 계산 기준"),
+        farmland: z.boolean().optional().describe("[상속등기비용] 농지 여부 — true면 취득세 2.3%, false면 2.8% (기본 false)"),
       },
       annotations: { title: "금액 계산기", ...READONLY },
     },
@@ -308,6 +311,10 @@ export function createServer(baseUrl?: string): McpServer {
             break;
           case "셀프등기절감액":
             r = calcSelfCancelRegistryCost(a.property_count ?? 1, a.e_filing ?? false);
+            break;
+          case "상속등기비용":
+            need(a.assessed_value != null, "assessed_value(시가표준액)");
+            r = calcInheritanceRegistryCost(a.assessed_value!, a.property_count ?? 1, a.farmland ?? false, a.e_filing ?? false);
             break;
         }
       } catch (e) {

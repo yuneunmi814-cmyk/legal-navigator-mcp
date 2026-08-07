@@ -150,7 +150,7 @@ describe("데이터 정합성", () => {
   it("규모 스냅샷(회귀 감지)", () => {
     expect(TOPIC_KEYS.length).toBe(242);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(112);
+    expect(FORM_KEYS.length).toBe(113);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
@@ -164,11 +164,15 @@ describe("데이터 정합성", () => {
     }
   });
 
-  it("셀프등기 네비게이터(근저당 말소) 등록", () => {
+  it("셀프등기 네비게이터(근저당 말소·상속등기) 등록", () => {
     expect(FORM_KEYS).toContain("근저당권말소등기신청서");
-    const proc = PROCEDURES["근저당말소등기"];
-    expect(proc.단계.join(" ")).toContain("셀프등기절감액");
-    expect(proc.단계.join(" ")).toContain("근저당권말소등기신청서");
+    expect(FORM_KEYS).toContain("상속등기신청서");
+    const 말소 = PROCEDURES["근저당말소등기"];
+    expect(말소.단계.join(" ")).toContain("셀프등기절감액");
+    expect(말소.단계.join(" ")).toContain("근저당권말소등기신청서");
+    const 상속 = PROCEDURES["상속등기"];
+    expect(상속.단계.join(" ")).toContain("상속등기비용");
+    expect(상속.단계.join(" ")).toContain("상속등기신청서");
   });
 
   it("차용증·채무확인서 서식(가족·지인 간 대여) 등록", () => {

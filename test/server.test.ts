@@ -76,6 +76,12 @@ describe("회귀: 2차 코드리뷰가 잡은 버그", () => {
     expect(t).toContain("10,200원");
     expect(t).toContain("절감");
   });
+  it("calculate_amount — 상속등기비용: 공시가 3억 주택 = 8,895,000원, 시가표준액 없으면 거부", async () => {
+    const t = await callText("calculate_amount", { item: "상속등기비용", assessed_value: 300_000_000 });
+    expect(t).toContain("8,895,000원");
+    const miss = await callText("calculate_amount", { item: "상속등기비용" });
+    expect(miss).toContain("입력값이 부족");
+  });
   it("[낮음] explain_term — '대법원'이 '상고'로 오매칭되지 않음", async () => {
     const t = await callText("explain_term", { term: "대법원" });
     expect(t).not.toContain("📖 상고");

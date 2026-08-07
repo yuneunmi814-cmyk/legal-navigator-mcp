@@ -1,6 +1,6 @@
 // 순수 계산 함수 결정성·경계 테스트(서버 부팅 불필요).
 import { describe, it, expect } from "vitest";
-import { calcCourtCost, calcDeadline, calcUnpaidWages, calcSeverance, calcSelfCancelRegistryCost } from "../src/calc.js";
+import { calcCourtCost, calcDeadline, calcUnpaidWages, calcSeverance, calcSelfCancelRegistryCost, calcInheritanceRegistryCost } from "../src/calc.js";
 
 describe("calcCourtCost (인지대·송달료)", () => {
   it("소가 1억·단독·전자소송 → 인지대 409,500원(구간식×0.9, 끝수 절사)", () => {
@@ -42,6 +42,20 @@ describe("calcSelfCancelRegistryCost (셀프등기 절감액 — 근저당 말�
   });
   it("동일 입력 동일 출력", () => {
     expect(calcSelfCancelRegistryCost(1, true)).toEqual(calcSelfCancelRegistryCost(1, true));
+  });
+});
+
+describe("calcInheritanceRegistryCost (셀프 상속등기 비용)", () => {
+  it("공시가 3억·주택 1건·서면 → 취득세 8,400,000 + 교육세 480,000 + 수수료 15,000 = 8,895,000원", () => {
+    const r = calcInheritanceRegistryCost(300_000_000, 1, false, false);
+    expect(r.결과).toContain("8,895,000원");
+    expect(r.결과).toContain("법무사 보수");
+  });
+  it("농지는 2.3%·교육세 0.06% — 공시가 1억·e-Form → 2,300,000 + 60,000 + 13,000", () => {
+    expect(calcInheritanceRegistryCost(100_000_000, 1, true, true).결과).toContain("2,373,000원");
+  });
+  it("동일 입력 동일 출력", () => {
+    expect(calcInheritanceRegistryCost(300_000_000, 2, false, true)).toEqual(calcInheritanceRegistryCost(300_000_000, 2, false, true));
   });
 });
 
