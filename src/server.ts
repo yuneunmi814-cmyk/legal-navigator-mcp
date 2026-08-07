@@ -192,7 +192,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `Provides ready-to-use Korean legal document templates (105 forms: 내용증명, 고소장, 지급명령신청서, 차용증, 채무확인서, 소장, welfare/benefit application forms) with [blank] fields, writing tips, the official-form source, a mobile fill-in preview page (tap blanks, print/PDF), and a .txt download — something web search cannot hand the user. Use when the user needs to WRITE or SEND a document.\n` +
         `[트리거 예시] "내용증명 양식 줘" / "고소장 어떻게 써요?" / "차용증 써야 하는데" / "기초연금 신청서 양식 있어?" / "월급 못 받은 거 내용증명 보내고 싶어요"\n` +
-        `Fill blanks only with facts the user provides; do NOT draft legal arguments. Service: ${SVC}.`,
+        `After the call, help the user draft: fill each [blank] with facts the user ALREADY stated in this conversation, leave unknown blanks as-is, and ask for the missing facts a few at a time. Present the result as a 초안(예시). Never invent facts and do NOT draft legal arguments — the user reviews and finalizes it via the preview link. Service: ${SVC}.`,
       inputSchema: { form: z.enum(FORM_KEYS).describe("서식 키. get_procedure/list_topics에서 안내된 서식명을 사용") },
       annotations: { title: "표준 서식 제공", ...READONLY },
     },
@@ -202,12 +202,13 @@ export function createServer(baseUrl?: string): McpServer {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
       // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·txt 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
+      // for_assistant: 카드에는 본문이 없어 호스트 AI가 초안을 못 만들므로, 렌더러가 무시하는 별도 필드로 본문+지침 동봉.
       if (widgetsOn() && baseUrl) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl), name: "get_form_template" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl), name: "get_form_template", for_assistant: 작성보조지침(f) }) }] };
       }
       const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
       if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
-      const tail = ["### ✍️ 작성요령", ...f.작성요령.map((s) => `- ${s}`)];
+      const tail = ["### ✍️ 작성요령", ...f.작성요령.map((s) => `- ${s}`), "", 작성지침(f)];
       if (baseUrl) {
         tail.push(
           "",
@@ -748,6 +749,53 @@ function getBaseUrl(req: express.Request): string {
 
 const htmlEscape = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// ── 어시스턴트 작성 보조 — 호스트 AI가 대화 맥락으로 [빈칸] 초안을 제안하게 하는 지침 ──
+// 개인정보는 서버로 오지 않고(무상태 유지) 호스트 대화 안에서만 채워진다.
+// 변호사법 경계: 사용자가 말한 사실만 옮겨 적는 '작성 보조'이며 최종 확인·작성은 본인 — 사실 창작·법률 주장 금지.
+
+// 본문에서 채울 항목을 추출(본문HTML과 동일 규칙: 줄머리 대괄호=섹션 라벨 제외, [_/공백]=이름 없는 빈칸)
+function 빈칸항목(bodyRaw: string): { named: string[]; blanks: number } {
+  const named = new Set<string>();
+  let blanks = 0;
+  for (const line of bodyRaw.split("\n")) {
+    let rest = line;
+    const lbl = rest.match(/^[ \t]*\[([^\]]+)\]/);
+    if (lbl && !/^[_\s]*$/.test(lbl[1])) rest = rest.slice(lbl[0].length);
+    for (const m of rest.matchAll(/\[([^\]]*)\]/g)) {
+      if (/^[_\s]*$/.test(m[1])) blanks += 1;
+      else named.add(m[1].trim());
+    }
+  }
+  return { named: [...named], blanks };
+}
+
+function 작성지침(f: { 본문: string }): string {
+  const { named, blanks } = 빈칸항목(f.본문);
+  const items =
+    (named.length ? named.slice(0, 25).join(" · ") : "") +
+    (blanks ? `${named.length ? " " : ""}(이름 없는 빈칸 ${blanks}곳)` : "");
+  return [
+    "### 🤖 어시스턴트 작성 보조 지침",
+    "- 사용자가 이 대화에서 **이미 말한 사실**(이름·날짜·금액·주소 등)이 있으면 해당 [빈칸]을 채운 **초안**을 만들어 보여주세요. 모르는 칸은 [빈칸] 그대로 두고, 필요한 정보를 2~3개씩 질문하세요.",
+    "- 사실을 지어내거나 법률적 주장·문구를 창작하지 마세요 — 사용자가 말한 사실만 옮겨 적습니다.",
+    "- 초안은 '예시'임을 밝히고, 최종 확인·수정·인쇄는 사용자 본인이 미리보기 링크에서 직접 하도록 안내하세요.",
+    ...(items ? [`- **채울 항목**: ${items}`] : []),
+  ].join("\n");
+}
+
+// 위젯 카드에는 서식 본문이 없어 호스트 AI가 초안을 못 만든다 → 본문·작성요령·지침을 for_assistant로 동봉
+function 작성보조지침(f: { 본문: string; 작성요령: string[] }): string {
+  return [
+    작성지침(f),
+    "",
+    "[서식 본문 — 초안 작성용 원문. 위젯 카드가 이미 표시되므로 전문을 다시 출력하지 말고, 채운 초안 또는 질문만 제시]",
+    f.본문,
+    "",
+    "[작성요령]",
+    ...f.작성요령.map((s) => `- ${s}`),
+  ].join("\n");
+}
 
 // 서식 본문을 '탭해서 채우는' 문서로 변환.
 //  · 줄머리 대괄호(예 [신청인]·[재산내역]) → 섹션 라벨(굵게, 입력 불가)

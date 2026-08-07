@@ -42,6 +42,9 @@ export interface KakaoWidget {
   widget: WidgetRoot;
   copy_text?: string;
   name?: string; // 별첨 예시의 응답 name 필드(도구 식별)
+  // 카카오 스펙 외 추가 필드 — 렌더러는 무시하고 호스트 LLM만 읽는 어시스턴트용 지침(서식 초안 작성 보조).
+  // ⚠️ 카카오 가이드 §3에 없는 필드이므로 프리뷰(preview-chatgpt.kakao.com)에서 카드 렌더 정상 여부 필수 확인.
+  for_assistant?: string;
 }
 
 // 버튼 URL 액션 — 카카오 확정 스펙: onClickAction.payload.target.url (+선택 pcUrl, PC 카카오톡용 대체 URL).

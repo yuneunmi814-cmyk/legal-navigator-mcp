@@ -104,6 +104,14 @@ describe("핵심 동작", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
   });
+  it("get_form_template에 어시스턴트 작성 보조 지침(대화 사실로 초안·사실 창작 금지·본인 최종 확인)", async () => {
+    const t = await callText("get_form_template", { form: "금전소비대차계약서" });
+    expect(t).toContain("어시스턴트 작성 보조 지침");
+    expect(t).toContain("이미 말한 사실");
+    expect(t).toContain("지어내거나");
+    expect(t).toContain("채울 항목"); // 본문 [빈칸]에서 추출된 항목 목록
+    expect(t).toContain("성명"); // 줄머리 섹션 라벨이 아닌 실제 입력 칸
+  });
   it("서식 시각화 미리보기 /forms/:key → 200 text/html · 빈칸/체크박스 렌더", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`);
     expect(res.status).toBe(200);
@@ -177,6 +185,14 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     const btn = j.widget.children.find((c: any) => c.type === "Button");
     expect(btn.onClickAction.payload.target.url).toContain("/forms/");
     expect(t).not.toContain('"status"'); // 카카오 전용 프로퍼티 미사용
+  });
+  it("get_form_template 위젯 응답에 for_assistant(지침+서식 본문) 동봉 — 카드만으론 초안 불가하므로", async () => {
+    const t = await callText("get_form_template", { form: "금전소비대차계약서" });
+    const j = JSON.parse(t);
+    expect(j.for_assistant).toContain("어시스턴트 작성 보조 지침");
+    expect(j.for_assistant).toContain("서식 본문"); // 호스트 AI가 초안을 만들 원문
+    expect(j.for_assistant).toContain("[성명]");
+    expect(j.widget.type).toBe("Card"); // 봉투 구조는 그대로
   });
   it("triage → 진단 카드(기한 배지·name)", async () => {
     const t = await callText("triage", { situation: "임금체불 3개월" });
