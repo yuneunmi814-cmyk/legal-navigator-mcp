@@ -1,6 +1,6 @@
 // 순수 계산 함수 결정성·경계 테스트(서버 부팅 불필요).
 import { describe, it, expect } from "vitest";
-import { calcCourtCost, calcDeadline, calcUnpaidWages, calcSeverance } from "../src/calc.js";
+import { calcCourtCost, calcDeadline, calcUnpaidWages, calcSeverance, calcSelfCancelRegistryCost } from "../src/calc.js";
 
 describe("calcCourtCost (인지대·송달료)", () => {
   it("소가 1억·단독·전자소송 → 인지대 409,500원(구간식×0.9, 끝수 절사)", () => {
@@ -28,6 +28,20 @@ describe("calcDeadline (기한·날짜 검증)", () => {
     expect(calcDeadline("2026/06/10", { 일: 14 })).toBeNull();
     expect(calcDeadline("abc", { 일: 14 })).toBeNull();
     expect(calcDeadline("2026-13-01", { 일: 1 })).toBeNull();
+  });
+});
+
+describe("calcSelfCancelRegistryCost (셀프등기 절감액 — 근저당 말소)", () => {
+  it("집합건물 1건·방문 → 실비 10,200원 (7,200+3,000)", () => {
+    const r = calcSelfCancelRegistryCost(1, false);
+    expect(r.결과).toContain("10,200원");
+    expect(r.결과).toContain("절감");
+  });
+  it("단독주택 토지+건물 2건·전자신청 → 실비 18,400원 (7,200×2 + 2,000×2)", () => {
+    expect(calcSelfCancelRegistryCost(2, true).결과).toContain("18,400원");
+  });
+  it("동일 입력 동일 출력", () => {
+    expect(calcSelfCancelRegistryCost(1, true)).toEqual(calcSelfCancelRegistryCost(1, true));
   });
 });
 

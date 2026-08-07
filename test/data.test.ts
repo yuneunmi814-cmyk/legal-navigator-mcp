@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CHECKLISTS,
+  PROCEDURES,
   FORM_KEYS,
   TOPIC_KEYS,
   PRECEDENTS,
@@ -149,7 +150,7 @@ describe("데이터 정합성", () => {
   it("규모 스냅샷(회귀 감지)", () => {
     expect(TOPIC_KEYS.length).toBe(242);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(111);
+    expect(FORM_KEYS.length).toBe(112);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
@@ -161,6 +162,13 @@ describe("데이터 정합성", () => {
     for (const f of ["민사_답변서", "지급명령_이의신청서", "변제공탁서", "경매_권리신고및배당요구신청서", "정식재판청구서", "국선변호인선정청구서"]) {
       expect(FORM_KEYS).toContain(f);
     }
+  });
+
+  it("셀프등기 네비게이터(근저당 말소) 등록", () => {
+    expect(FORM_KEYS).toContain("근저당권말소등기신청서");
+    const proc = PROCEDURES["근저당말소등기"];
+    expect(proc.단계.join(" ")).toContain("셀프등기절감액");
+    expect(proc.단계.join(" ")).toContain("근저당권말소등기신청서");
   });
 
   it("차용증·채무확인서 서식(가족·지인 간 대여) 등록", () => {

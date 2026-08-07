@@ -71,6 +71,11 @@ describe("회귀: 2차 코드리뷰가 잡은 버그", () => {
     const t = await callText("calculate_amount", { item: "체불임금", monthly_wage: -100, unpaid_months: 1 });
     expect(t.toLowerCase()).toContain("invalid");
   });
+  it("calculate_amount — 셀프등기절감액(근저당 말소): 기본값 1건·방문 = 실비 10,200원", async () => {
+    const t = await callText("calculate_amount", { item: "셀프등기절감액" });
+    expect(t).toContain("10,200원");
+    expect(t).toContain("절감");
+  });
   it("[낮음] explain_term — '대법원'이 '상고'로 오매칭되지 않음", async () => {
     const t = await callText("explain_term", { term: "대법원" });
     expect(t).not.toContain("📖 상고");
