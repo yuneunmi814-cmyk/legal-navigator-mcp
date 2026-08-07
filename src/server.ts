@@ -265,7 +265,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "금액 계산기",
       description:
-        `Calculates Korean legal money amounts deterministically (same input → same answer, no guessing): unpaid wages (체불임금), severance pay (퇴직금), weekly holiday allowance (주휴수당), statutory delay interest (지연이자 연 20%), and self-registry costs (셀프등기절감액 — 근저당 말소를 법무사 없이 직접 할 때 실비와 절감액 / 상속등기비용 — 상속 부동산 명의이전을 직접 할 때 취득세·수수료 실비와 법무사 보수 절감분). Use when the user asks how much they are owed or wants a number computed.\n` +
+        `Calculates Korean legal money amounts deterministically (same input → same answer, no guessing): unpaid wages (체불임금), severance pay (퇴직금), weekly holiday allowance (주휴수당), statutory delay interest (지연이자 연 20%), and self-registry costs (셀프등기절감액 — 근저당·전세권 말소를 법무사 없이 직접 할 때 실비와 절감액 / 상속등기비용 — 상속 부동산 명의이전을 직접 할 때 취득세·수수료 실비와 법무사 보수 절감분). Use when the user asks how much they are owed or wants a number computed.\n` +
         `[트리거 예시] "퇴직금 얼마 받을 수 있어요? 월급 300에 3년 일했어요" / "밀린 월급 지연이자까지 계산해줘" / "주휴수당 계산해줘" / "대출 다 갚았는데 근저당 말소 셀프로 하면 얼마 들어요?" / "아버지 아파트 상속등기 직접 하면 비용 얼마나 나와요? 공시가 3억이에요"\n` +
         `Estimates only. Service: ${SVC}.`,
       inputSchema: {

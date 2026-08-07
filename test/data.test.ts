@@ -148,9 +148,9 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(242);
+    expect(TOPIC_KEYS.length).toBe(243);
     expect(CATEGORIES.length).toBe(56);
-    expect(FORM_KEYS.length).toBe(113);
+    expect(FORM_KEYS.length).toBe(114);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
@@ -173,6 +173,12 @@ describe("데이터 정합성", () => {
     const 상속 = PROCEDURES["상속등기"];
     expect(상속.단계.join(" ")).toContain("상속등기비용");
     expect(상속.단계.join(" ")).toContain("상속등기신청서");
+    expect(TOPIC_KEYS).toContain("전세권임차권말소");
+    expect(FORM_KEYS).toContain("전세권말소등기신청서");
+    const 말소2 = PROCEDURES["전세권임차권말소"];
+    expect(말소2.단계.join(" ")).toContain("셀프등기절감액");
+    expect(말소2.단계.join(" ")).toContain("전세권말소등기신청서");
+    expect(말소2.단계.join(" ")).toContain("취소");
   });
 
   it("차용증·채무확인서 서식(가족·지인 간 대여) 등록", () => {
