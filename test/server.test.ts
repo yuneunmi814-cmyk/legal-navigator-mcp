@@ -36,9 +36,9 @@ async function rawCallText(body: string): Promise<string> {
 }
 
 describe("도구 목록·PlayMCP 규격", () => {
-  it("16개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
+  it("15개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
     const tools = (await rpc("tools/list", {})).result.tools;
-    expect(tools.length).toBe(16);
+    expect(tools.length).toBe(15);
     for (const t of tools) {
       expect(t.description.length).toBeLessThanOrEqual(1024);
       for (const a of ["readOnlyHint", "destructiveHint", "openWorldHint", "idempotentHint"]) expect(t.annotations).toHaveProperty(a);
@@ -152,6 +152,16 @@ describe("핵심 동작", () => {
 });
 
 describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("search_topics query 없이 호출 → 전체 주제 목록 (구 list_topics 통합)", async () => {
+    const t = await callText("search_topics", {});
+    expect(t).toContain("주제 목록");
+    expect(t).toContain("### 노동");
+  });
+  it("search_topics category 필터만 → 해당 분야 목록", async () => {
+    const t = await callText("search_topics", { category: "노동" });
+    expect(t).toContain("### 노동");
+    expect(t).not.toContain("### 주택임대차");
+  });
   it("search_topics '가족한테 빌려준 돈 떼였어요' → 대여 주제로 진단", async () => {
     const t = await callText("search_topics", { query: "가족한테 빌려준 돈 떼였어요" });
     expect(t).toMatch(/대여금미반환|차용증없음입증/);
