@@ -840,8 +840,9 @@ function 본문HTML(bodyRaw: string): string {
 // 서식 시각화 미리보기 — 모바일(카카오톡 인앱)에서 빈칸을 직접 채우고 인쇄/PDF로 저장. 자족적 HTML(외부 의존 0).
 function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string): string {
   const txtHref = `${baseUrl || ""}/forms/${encodeURIComponent(key)}.txt`;
-  // 제목 끝의 "(… 공란을 직접 채워 사용)" 꼬리표는 제목에서 떼어내 작은 배지로 — 모바일에서 제목이 두세 줄을 먹던 문제
-  const 꼬리표 = /\s*\(([^()]*공란을 직접 채워 사용[^()]*)\)\s*$/.exec(f.제목);
+  // 제목 끝의 서식 성격 꼬리표("… 공란 채움" · "… 예시 — 공란을 직접 채워 사용" · "… 상담 시 작성" 등)는
+  // 제목에서 떼어내 작은 배지로 — 모바일에서 제목이 두세 줄을 먹던 문제
+  const 꼬리표 = /\s*\(([^()]*(?:공란|채움|골격|예시|서식|작성|입력 항목)[^()]*)\)\s*$/.exec(f.제목);
   const title = htmlEscape(꼬리표 ? f.제목.slice(0, 꼬리표.index).trim() : f.제목);
   const kind = 꼬리표 ? htmlEscape(꼬리표[1]) : "";
   const purpose = htmlEscape(f.용도);
