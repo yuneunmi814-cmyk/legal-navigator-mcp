@@ -846,7 +846,10 @@ function 본문HTML(bodyRaw: string): string {
 // 서식 시각화 미리보기 — 모바일(카카오톡 인앱)에서 빈칸을 직접 채우고 인쇄/PDF로 저장. 자족적 HTML(외부 의존 0).
 function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string): string {
   const txtHref = `${baseUrl || ""}/forms/${encodeURIComponent(key)}.txt`;
-  const title = htmlEscape(f.제목);
+  // 제목 끝의 "(… 공란을 직접 채워 사용)" 꼬리표는 제목에서 떼어내 작은 배지로 — 모바일에서 제목이 두세 줄을 먹던 문제
+  const 꼬리표 = /\s*\(([^()]*공란을 직접 채워 사용[^()]*)\)\s*$/.exec(f.제목);
+  const title = htmlEscape(꼬리표 ? f.제목.slice(0, 꼬리표.index).trim() : f.제목);
+  const kind = 꼬리표 ? htmlEscape(꼬리표[1]) : "";
   const purpose = htmlEscape(f.용도);
   const official = f.공식양식 ? htmlEscape(f.공식양식) : "";
   const tips = f.작성요령.map((t) => `<li>${htmlEscape(t)}</li>`).join("");
@@ -867,14 +870,16 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .btn:active{transform:translateY(1px)}
 .wrap{max-width:760px;margin:0 auto;padding:18px 14px 60px;}
 .hd{margin:6px 2px 14px}
-.hd h1{font-size:clamp(19px,4.6vw,26px);margin:0 0 8px;letter-spacing:-.01em;line-height:1.25;text-wrap:balance;}
-.hd .use{font-size:13.5px;color:var(--ink2);margin:0}
+.hd h1{font-size:clamp(19px,4.6vw,26px);margin:0 0 8px;letter-spacing:-.01em;line-height:1.25;text-wrap:balance;word-break:keep-all;}
+.hd .kind{display:inline-block;font-size:11.5px;font-weight:700;color:var(--ink2);background:var(--tip-bg);border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:0 0 8px}
+.hd .use{font-size:13.5px;color:var(--ink2);margin:0;word-break:keep-all}
 .official{margin:12px 0 0;font-size:13px;background:var(--tip-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2)}
 .official b{color:var(--ink)}
-.hint{display:flex;gap:8px;align-items:center;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2)}
-.hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700}
-.doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);white-space:pre-wrap;word-break:break-word;font-size:15px;line-height:1.95;}
-.fld{display:inline-block;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
+/* 안내문은 한 덩어리 문장으로 흐르게 — flex로 두면 조각조각 칼럼처럼 쪼개져 읽기 어려움 */
+.hint{display:block;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2);line-height:1.9;word-break:keep-all}
+.hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap}
+.doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;font-size:15px;line-height:1.95;}
+.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
 .lbl{font-weight:800;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--ink);padding:1px 8px;border-radius:6px;letter-spacing:-.01em;}
@@ -885,6 +890,16 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
 .foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
 .foot a{color:var(--foot)}
+/* 좁은 화면 — 버튼 3개가 제멋대로 두 줄로 접히던 것을 '인쇄 한 줄 + 나머지 반반'으로 정돈 */
+@media (max-width:520px){
+  .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:9px 12px}
+  .bar .btn.pri{grid-column:1 / -1}
+  .bar .sp{display:none}
+  .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
+  .wrap{padding:16px 12px 56px}
+  .doc{line-height:1.85;font-size:14.5px}
+  .tips{padding:15px 16px}
+}
 @media print{
   body{background:#fff;color:#000}
   .bar,.hint,.tips,.foot{display:none!important}
@@ -906,6 +921,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </div>
 <div class="wrap">
   <div class="hd">
+    ${kind ? `<div class="kind">${kind}</div>` : ""}
     <h1>${title}</h1>
     <p class="use">${purpose}</p>
     ${official ? `<p class="official">📄 <b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
