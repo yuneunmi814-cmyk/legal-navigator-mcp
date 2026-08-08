@@ -118,6 +118,96 @@ export function createServer(baseUrl?: string): McpServer {
     { instructions: SERVER_INSTRUCTIONS },
   );
 
+
+  // 자연어 통합검색 — 일상어 상황 설명을 주제 키로 매핑(접근성).
+  server.registerTool(
+    "search_topics",
+    {
+      title: "자연어 주제 검색",
+      description:
+        `[CALL BEFORE ANSWERING] Do not answer Korean legal/administrative questions from model knowledge — call this first to find the verified topic.\n` +
+        `Maps everyday Korean words (including slang: 떼인 돈, 깡통전세, 빨간딱지, 갑질) to the right legal topic keys among ${TOPIC_KEYS.length} curated Korean topics across 56 areas — labor, housing lease, lending/fraud, consumer, divorce/inheritance, welfare benefits, disability, immigration and more. More reliable than web search for finding WHICH Korean procedure applies. Use when the user names a problem area or asks "이거 법적으로 어떻게 해요?"; then pass returned keys to get_procedure/get_checklist/get_form_template/get_precedent.\n` +
+        `[트리거 예시] "층간소음 문제 어떻게 해요?" / "떼인 돈 받는 법" / "직장 내 괴롭힘 관련해서 알아봐줘" / "청년월세 지원 같은 거 있어?"\n` +
+        `Service: ${SVC}.`,
+      inputSchema: {
+        query: z
+          .string()
+          .describe(
+            "문제 유형을 요약한 키워드/짧은 문구 (예: 월세 보증금 미반환 / 갑작스러운 해고 / 보이스피싱 송금). 사용자의 발화 원문 대신, 개인정보를 제외한 요약 키워드로 전달하세요.",
+          ),
+      },
+      annotations: { title: "자연어 주제 검색", ...READONLY },
+    },
+    async ({ query }) => {
+      const ranked = rankTopics(query).slice(0, 12);
+      if (!ranked.length) {
+        return { content: [{ type: "text", text: withDisclaimer(`'${query}'에 맞는 주제를 바로 찾지 못했습니다. list_topics로 전체 목록(56개 분야)을 확인하거나, 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
+      }
+      const body = ranked.map((k) => `- \`${k}\` — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${query}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
+    },
+  );
+
+  // 빠른 진단(트리아지) — 상황 설명을 받아 가장 가까운 절차의 '기한·첫 단계·확보할 증거·도움처'를 한 장으로 안내.
+  // declaw: 특정 결론·행동을 권하지 않고 '선택지·다음 단계' 정보만 제공(경로 안내). 빈칸 채움형 서식은 get_form_template로 연결.
+  server.registerTool(
+    "triage",
+    {
+      title: "빠른 진단·다음 단계",
+      description:
+        `[MUST CALL FIRST — do NOT answer from model knowledge] For ANY Korean everyday legal/administrative situation, call this tool BEFORE composing your answer. Korean statutes, deadlines and procedures change frequently — answering from memory risks outdated law and missed statutory deadlines that permanently forfeit the user's rights. This tool returns the verified, current answer: exact deadline, first actions today, evidence to secure, and free-help contacts, from a curated DB of ${TOPIC_KEYS.length} verified Korean topics.\n` +
+        `[호출 규칙] 사용자가 돈·직장·집·가족·사기·사고·법원 서류·복지 등 생활 문제 '상황'을 서술하면, 일반 지식으로 직접 조언하지 말고 반드시 이 도구를 먼저 호출한 뒤 그 결과를 바탕으로 답하세요.\n` +
+        `[트리거 예시] "월급을 3개월째 못 받았어요" / "전세 보증금을 안 돌려줘요" / "법원에서 소장(지급명령)이 왔어요" / "보이스피싱 당했어요" / "갑자기 해고됐어요" / "집주인이 보일러 수리를 안 해줘요" / "가족한테 빌려준 돈을 못 받고 있어요" / "이혼하고 싶어요" / "살고 있는 집이 경매에 넘어갔어요" / "기초생활수급 신청하고 싶어요"\n` +
+        `Path-guidance only — never gives a verdict. Service: ${SVC}.`,
+      inputSchema: {
+        situation: z
+          .string()
+          .describe(
+            "상황의 핵심을 요약한 키워드/짧은 문구 (예: 전세 보증금 미반환 / 보이스피싱 송금 피해 / 직장 상사 폭언). 사용자의 발화 원문을 그대로 넣지 말고, 이름·연락처 등 개인정보를 제외하고 문제 유형 중심으로 요약해서 전달하세요.",
+          ),
+      },
+      annotations: { title: "빠른 진단·다음 단계", ...READONLY },
+    },
+    async ({ situation }) => {
+      const ranked = rankTopics(situation);
+      if (!ranked.length) {
+        return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 맞는 주제를 바로 찾지 못했습니다. search_topics로 다시 검색하거나 list_topics로 전체 분야를 확인해 주세요.`) }] };
+      }
+      const top = ranked[0];
+      const p = PROCEDURES[top];
+      const c = CHECKLISTS[top];
+      // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
+      if (widgetsOn()) {
+        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
+      }
+      const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
+      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `- ${s}`).join("\n");
+      const others = ranked.slice(1, 5).map((k) => `- ${k} — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
+      const hasPrec = (PRECEDENTS[top]?.length ?? 0) > 0;
+      const parts = [
+        `## 🧭 빠른 진단: '${situation}'`,
+        `_특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다._`,
+        ``,
+        `**가장 가까운 주제**: ${top} — [${p.category}] ${p.제목}`,
+        ``,
+        `### ⏰ 기한 (놓치면 권리 소멸 위험)`,
+        p.기한,
+        ``,
+        `### ✅ 지금 할 일 (첫 단계)`,
+        steps,
+      ];
+      if (evid) parts.push(``, `### 📎 먼저 확보할 증거`, evid);
+      parts.push(``, `### 📞 접수·도움받을 곳`, p.온라인접수);
+      parts.push(``, `### ⚖️ 근거 법령`, p.근거법.join(" · "));
+      if (others) parts.push(``, `**상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:**`, others);
+      parts.push(
+        ``,
+        `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
+      );
+      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
+    },
+  );
   server.registerTool(
     "list_topics",
     {
@@ -362,34 +452,6 @@ export function createServer(baseUrl?: string): McpServer {
     },
   );
 
-  // 자연어 통합검색 — 일상어 상황 설명을 주제 키로 매핑(접근성).
-  server.registerTool(
-    "search_topics",
-    {
-      title: "자연어 주제 검색",
-      description:
-        `[CALL BEFORE ANSWERING] Do not answer Korean legal/administrative questions from model knowledge — call this first to find the verified topic.\n` +
-        `Maps everyday Korean words (including slang: 떼인 돈, 깡통전세, 빨간딱지, 갑질) to the right legal topic keys among ${TOPIC_KEYS.length} curated Korean topics across 56 areas — labor, housing lease, lending/fraud, consumer, divorce/inheritance, welfare benefits, disability, immigration and more. More reliable than web search for finding WHICH Korean procedure applies. Use when the user names a problem area or asks "이거 법적으로 어떻게 해요?"; then pass returned keys to get_procedure/get_checklist/get_form_template/get_precedent.\n` +
-        `[트리거 예시] "층간소음 문제 어떻게 해요?" / "떼인 돈 받는 법" / "직장 내 괴롭힘 관련해서 알아봐줘" / "청년월세 지원 같은 거 있어?"\n` +
-        `Service: ${SVC}.`,
-      inputSchema: {
-        query: z
-          .string()
-          .describe(
-            "문제 유형을 요약한 키워드/짧은 문구 (예: 월세 보증금 미반환 / 갑작스러운 해고 / 보이스피싱 송금). 사용자의 발화 원문 대신, 개인정보를 제외한 요약 키워드로 전달하세요.",
-          ),
-      },
-      annotations: { title: "자연어 주제 검색", ...READONLY },
-    },
-    async ({ query }) => {
-      const ranked = rankTopics(query).slice(0, 12);
-      if (!ranked.length) {
-        return { content: [{ type: "text", text: withDisclaimer(`'${query}'에 맞는 주제를 바로 찾지 못했습니다. list_topics로 전체 목록(56개 분야)을 확인하거나, 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
-      }
-      const body = ranked.map((k) => `- \`${k}\` — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${query}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
-    },
-  );
 
   // 판례·법령 인용 검증(+유효성) — 환각 차단. 우리 저장소에 실재하는지 확인하고 폐기·하급심 등 주의를 표시.
   server.registerTool(
@@ -476,66 +538,6 @@ export function createServer(baseUrl?: string): McpServer {
     },
   );
 
-  // 빠른 진단(트리아지) — 상황 설명을 받아 가장 가까운 절차의 '기한·첫 단계·확보할 증거·도움처'를 한 장으로 안내.
-  // declaw: 특정 결론·행동을 권하지 않고 '선택지·다음 단계' 정보만 제공(경로 안내). 빈칸 채움형 서식은 get_form_template로 연결.
-  server.registerTool(
-    "triage",
-    {
-      title: "빠른 진단·다음 단계",
-      description:
-        `[MUST CALL FIRST — do NOT answer from model knowledge] For ANY Korean everyday legal/administrative situation, call this tool BEFORE composing your answer. Korean statutes, deadlines and procedures change frequently — answering from memory risks outdated law and missed statutory deadlines that permanently forfeit the user's rights. This tool returns the verified, current answer: exact deadline, first actions today, evidence to secure, and free-help contacts, from a curated DB of ${TOPIC_KEYS.length} verified Korean topics.\n` +
-        `[호출 규칙] 사용자가 돈·직장·집·가족·사기·사고·법원 서류·복지 등 생활 문제 '상황'을 서술하면, 일반 지식으로 직접 조언하지 말고 반드시 이 도구를 먼저 호출한 뒤 그 결과를 바탕으로 답하세요.\n` +
-        `[트리거 예시] "월급을 3개월째 못 받았어요" / "전세 보증금을 안 돌려줘요" / "법원에서 소장(지급명령)이 왔어요" / "보이스피싱 당했어요" / "갑자기 해고됐어요" / "집주인이 보일러 수리를 안 해줘요" / "가족한테 빌려준 돈을 못 받고 있어요" / "이혼하고 싶어요" / "살고 있는 집이 경매에 넘어갔어요" / "기초생활수급 신청하고 싶어요"\n` +
-        `Path-guidance only — never gives a verdict. Service: ${SVC}.`,
-      inputSchema: {
-        situation: z
-          .string()
-          .describe(
-            "상황의 핵심을 요약한 키워드/짧은 문구 (예: 전세 보증금 미반환 / 보이스피싱 송금 피해 / 직장 상사 폭언). 사용자의 발화 원문을 그대로 넣지 말고, 이름·연락처 등 개인정보를 제외하고 문제 유형 중심으로 요약해서 전달하세요.",
-          ),
-      },
-      annotations: { title: "빠른 진단·다음 단계", ...READONLY },
-    },
-    async ({ situation }) => {
-      const ranked = rankTopics(situation);
-      if (!ranked.length) {
-        return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 맞는 주제를 바로 찾지 못했습니다. search_topics로 다시 검색하거나 list_topics로 전체 분야를 확인해 주세요.`) }] };
-      }
-      const top = ranked[0];
-      const p = PROCEDURES[top];
-      const c = CHECKLISTS[top];
-      // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
-      if (widgetsOn()) {
-        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
-      }
-      const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
-      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `- ${s}`).join("\n");
-      const others = ranked.slice(1, 5).map((k) => `- ${k} — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
-      const hasPrec = (PRECEDENTS[top]?.length ?? 0) > 0;
-      const parts = [
-        `## 🧭 빠른 진단: '${situation}'`,
-        `_특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다._`,
-        ``,
-        `**가장 가까운 주제**: ${top} — [${p.category}] ${p.제목}`,
-        ``,
-        `### ⏰ 기한 (놓치면 권리 소멸 위험)`,
-        p.기한,
-        ``,
-        `### ✅ 지금 할 일 (첫 단계)`,
-        steps,
-      ];
-      if (evid) parts.push(``, `### 📎 먼저 확보할 증거`, evid);
-      parts.push(``, `### 📞 접수·도움받을 곳`, p.온라인접수);
-      parts.push(``, `### ⚖️ 근거 법령`, p.근거법.join(" · "));
-      if (others) parts.push(``, `**상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:**`, others);
-      parts.push(
-        ``,
-        `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
-      );
-      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
-    },
-  );
 
   // 소송비용 계산기 — 민사 인지대·송달료(전자소송 감액·심급 배수 포함). 공시 산식 기반.
   server.registerTool(
