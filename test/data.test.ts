@@ -69,6 +69,14 @@ describe("데이터 정합성", () => {
     expect(bad.map((s) => `${s.법령} ${s.조문}`)).toEqual([]);
   });
 
+  it("생활밀착 커버리지 확대 8/9 — 택배·항공·환불·누수·중고차·사망후·화재", () => {
+    for (const k of ["택배분실파손", "항공지연결항피해", "헬스장학원환불", "중고차매매피해", "세대간누수분쟁", "사망후행정처리", "화재피해대응"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+    expect(CATEGORIES).toContain("화재·소방");
+  });
+
   it("신규 취약·위기 주제·서식·분야가 등록되어 있다(신청 절차+신청서 한 동선)", () => {
     for (const k of ["소상공인_폐업재기", "노란우산공제_폐업", "출소자_갱생보호", "위기임신_보호출산"]) {
       expect(TOPIC_KEYS).toContain(k);
@@ -148,8 +156,8 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(243);
-    expect(CATEGORIES.length).toBe(56);
+    expect(TOPIC_KEYS.length).toBe(250);
+    expect(CATEGORIES.length).toBe(57);
     expect(FORM_KEYS.length).toBe(114);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
