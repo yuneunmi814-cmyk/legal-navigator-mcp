@@ -77,6 +77,13 @@ describe("데이터 정합성", () => {
     expect(CATEGORIES).toContain("화재·소방");
   });
 
+  it("생활밀착 커버리지 확대 2차 — 사실혼·유실물·동물학대·계정해킹·이사·상조", () => {
+    for (const k of ["사실혼해소", "유실물분실습득", "동물학대신고", "계정해킹도용대응", "포장이사파손분쟁", "상조서비스분쟁"]) {
+      expect(TOPIC_KEYS).toContain(k);
+      expect(CHECKLISTS[k]).toBeTruthy();
+    }
+  });
+
   it("신규 취약·위기 주제·서식·분야가 등록되어 있다(신청 절차+신청서 한 동선)", () => {
     for (const k of ["소상공인_폐업재기", "노란우산공제_폐업", "출소자_갱생보호", "위기임신_보호출산"]) {
       expect(TOPIC_KEYS).toContain(k);
@@ -156,7 +163,7 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(250);
+    expect(TOPIC_KEYS.length).toBe(256);
     expect(CATEGORIES.length).toBe(57);
     expect(FORM_KEYS.length).toBe(114);
     expect(GLOSSARY.length).toBe(125);
