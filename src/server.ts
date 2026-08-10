@@ -23,6 +23,8 @@ import {
   DOCUMENT_GUIDE,
   DOC_TIPS,
   GLOSSARY,
+  ELEMENTS,
+  ELEMENT_KEYS,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
@@ -49,6 +51,7 @@ const SERVER_INSTRUCTIONS =
   "법률 정보·대응 절차·표준 서식·금액 계산·법령/판례 안내를 제공하는 정보 도구입니다. " +
   "[필수 규칙] 한국의 법률·행정·노동·복지 관련 상황 질문(임금체불·해고·보증금·사기·상속·벌금 등)에는 모델 자체 지식으로 먼저 답하지 마세요. 한국 법령·기한·절차는 자주 바뀌므로 기억에 의존한 답변은 기한 도과로 사용자의 권리를 영구히 상실시킬 수 있습니다. 반드시 triage 또는 search_topics를 먼저 호출해 검증된 최신 정보를 받은 뒤 그 결과를 바탕으로 답하세요. 흔한 주제(임금체불 등)일수록 이 규칙이 더 중요합니다 — 흔한 주제일수록 DB에 검증된 기한·접수처·서식이 준비되어 있습니다. " +
   "권장 흐름: ① 사용자가 상황을 일상어로 설명하면 search_topics(자연어)로 주제 키를 찾고(query 없이 호출하면 전체 목록) → ② 그 키로 get_procedure·get_checklist·get_form_template·get_precedent 호출 → ③ 판례·법령 인용을 확인할 땐 verify_citation, 최근 법 개정·시행일은 law_updates로 검증. " +
+  "'이것도 ○○에 해당하나요?'류 질문(피해자·피신고자 어느 쪽이든)은 check_elements(성립요건 기준)를 먼저 호출하세요. " +
   "필요에 따라 triage(빠른 진단)·calculate_deadline(기한)·calculate_court_cost(소송비용)·calculate_amount(금액)로 계산하고, find_legal_aid로 무료 변호사·구제 제도와 신청 방법을, how_to_get_document로 준비서류 발급 방법을 안내하세요. 사용자가 모르는 법률용어(각하·가압류·공시송달 등)나 일상어(떼인 돈·빨간딱지)가 나오면 explain_term으로 뜻을 풀이하세요. " +
   "중요(declaw): 이 도구는 개별 법률 자문이 아닙니다. 특정 사건의 법적 결론(승소·유무죄 등)을 단정하지 말고 정보 제공에 그치며, " +
   "표준서식은 사용자가 제공한 사실로 공란을 채우는 수준까지만 돕고 법적 주장·전략 작성은 하지 마세요. 없는 판례·법령은 지어내지 말고, 중대·복잡·기한임박 사안은 변호사·공인노무사·대한법률구조공단(132) 상담을 권하세요.";
@@ -225,6 +228,55 @@ export function createServer(baseUrl?: string): McpServer {
     },
   );
 
+
+  // 성립요건 안내 — "이것도 ○○에 해당하나요?" 질문 대응. 피해자·피신고자 양면 동선.
+  // declaw: 해당 여부를 단정하지 않고 법령상 요건·정황 대조 정보만 제공. 최종 판단은 수사기관·법원.
+  server.registerTool(
+    "check_elements",
+    {
+      title: "해당 여부 기준 안내 (성립요건)",
+      description:
+        `[CALL BEFORE ANSWERING] When the user asks whether their situation legally COUNTS as something ("이것도 스토킹인가요?", "이게 사기죄가 되나요?") — from either side (victim considering reporting, OR someone who was reported/accused) — call this instead of judging from model knowledge.\n` +
+        `Returns the statutory elements(성립요건) of ${ELEMENT_KEYS.length} common Korean offenses/claims (스토킹·직장내괴롭힘·성희롱·명예훼손·모욕·사기·폭행·협박·가정폭력·불법촬영·부당해고·학교폭력·아동학대), with circumstances that strengthen or weaken applicability, plus next steps for BOTH the reporting side and the reported side. Never concludes guilt — information to prepare before police/lawyer consultation.\n` +
+        `[트리거 예시] "계속 연락 오는데 이것도 스토킹이에요?" / "돈 빌려주고 못 받았는데 사기로 고소돼요?" / "전 애인이 저를 신고한다는데 제가 해당되나요?" / "이게 직장 내 괴롭힘 맞나요?"\n` +
+        `Information only — final judgment belongs to investigators and courts. Service: ${SVC}.`,
+      inputSchema: {
+        issue: z.enum(ELEMENT_KEYS).describe("확인할 유형: " + ELEMENT_KEYS.join(" | ")),
+        perspective: z.enum(["피해측", "피신고측", "중립"]).optional().describe("사용자 입장 — 신고·대응을 고민하는 쪽=피해측, 신고당했거나 걱정되는 쪽=피신고측. 모르면 중립(기본)"),
+      },
+      annotations: { title: "해당 여부 기준 안내", ...READONLY },
+    },
+    async ({ issue, perspective }) => {
+      const g = ELEMENTS[issue];
+      const p = perspective ?? "중립";
+      const parts = [
+        `## ⚖️ ${g.제목} — 법에서는 이렇게 봅니다`,
+        "",
+        "### 법률상 성립요건",
+        ...g.요건.map((s) => `- ${s}`),
+        "",
+        "### ✅ 해당 가능성을 높이는 정황",
+        ...g.해당가능정황.map((s) => `- ${s}`),
+        "",
+        "### ❌ 해당이 어렵거나 다른 문제로 다뤄질 수 있는 정황",
+        ...g.비해당가능정황.map((s) => `- ${s}`),
+        "",
+      ];
+      if (p !== "피신고측") {
+        parts.push("### 🙋 신고·대응을 고민하는 쪽이라면", ...g.피해자다음단계.map((s) => `- ${s}`), "");
+      }
+      if (p !== "피해측") {
+        parts.push("### 🛡️ 신고당했거나 걱정되는 쪽이라면", ...g.피신고자다음단계.map((s) => `- ${s}`), "");
+      }
+      parts.push(
+        "### 근거 법령",
+        ...g.근거법.map((s) => `- ${s}`),
+        "",
+        "> ⚠️ 위 내용은 요건 '기준' 안내입니다. 실제 해당 여부는 구체적 사실관계에 따라 달라지며 **최종 판단은 수사기관·법원의 몫**입니다. 판단이 어렵거나 사안이 중대하면 대한법률구조공단 ☎132(무료)·변호사 상담을 권합니다.",
+      );
+      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
+    },
+  );
 
   // 무료 법률지원·구제 연결 — 무료상담/소송대리/소송구조/구제금/핫라인 라우팅(자격 단정 아님).
   server.registerTool(
@@ -898,7 +950,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 }
 @media print{
   body{background:#fff;color:#000}
-  .bar,.hint,.tips,.foot{display:none!important}
+  .bar,.hint,.tips,.foot,.hd{display:none!important}
   .wrap{max-width:none;padding:0}
   .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:12pt}
   .fld{background:transparent;border-bottom:1px solid #000;color:#000}
@@ -928,20 +980,41 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <h2>✍️ 작성요령</h2>
     <ol>${tips}</ol>
   </div>
-  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 화면에만 있으며 서버에 저장·전송되지 않습니다. 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
+  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
 </div>
 <script>
 (function(){
   var doc=document.getElementById("doc");
+  // 입력값 자동 저장·복원 — 이 기기 브라우저(localStorage)에만 저장, 서버 전송 없음.
+  var KEY="lnform:"+location.pathname;
+  function save(){
+    try{
+      var d={f:[],c:[]};
+      doc.querySelectorAll(".fld").forEach(function(x){d.f.push(x.textContent||"");});
+      doc.querySelectorAll(".cbx").forEach(function(c){d.c.push(c.getAttribute("aria-checked")==="true");});
+      localStorage.setItem(KEY,JSON.stringify(d));
+    }catch(e){}
+  }
+  function restore(){
+    try{
+      var raw=localStorage.getItem(KEY); if(!raw) return;
+      var d=JSON.parse(raw);
+      doc.querySelectorAll(".fld").forEach(function(x,i){if(d.f&&d.f[i])x.textContent=d.f[i];});
+      doc.querySelectorAll(".cbx").forEach(function(c,i){if(d.c&&d.c[i]){c.setAttribute("aria-checked","true");c.textContent="☑";}});
+    }catch(e){}
+  }
   doc.querySelectorAll(".cbx").forEach(function(c){
-    function tog(){var on=c.getAttribute("aria-checked")==="true";c.setAttribute("aria-checked",String(!on));c.textContent=on?"☐":"☑";}
+    function tog(){var on=c.getAttribute("aria-checked")==="true";c.setAttribute("aria-checked",String(!on));c.textContent=on?"☐":"☑";save();}
     c.addEventListener("click",tog);
     c.addEventListener("keydown",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();tog();}});
   });
+  doc.addEventListener("input",save);
+  restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
   document.getElementById("resetBtn").addEventListener("click",function(){
     doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
     doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});
+    try{localStorage.removeItem(KEY);}catch(e){}
   });
 })();
 </script>

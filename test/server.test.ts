@@ -36,9 +36,9 @@ async function rawCallText(body: string): Promise<string> {
 }
 
 describe("도구 목록·PlayMCP 규격", () => {
-  it("15개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
+  it("16개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
     const tools = (await rpc("tools/list", {})).result.tools;
-    expect(tools.length).toBe(15);
+    expect(tools.length).toBe(16);
     for (const t of tools) {
       expect(t.description.length).toBeLessThanOrEqual(1024);
       for (const a of ["readOnlyHint", "destructiveHint", "openWorldHint", "idempotentHint"]) expect(t.annotations).toHaveProperty(a);
@@ -152,6 +152,20 @@ describe("핵심 동작", () => {
 });
 
 describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("check_elements 스토킹 → 성립요건·양면 동선·단정 금지 문구", async () => {
+    const t = await callText("check_elements", { issue: "스토킹" });
+    expect(t).toContain("법률상 성립요건");
+    expect(t).toContain("지속적·반복적");
+    expect(t).toContain("신고·대응을 고민하는 쪽이라면");
+    expect(t).toContain("신고당했거나 걱정되는 쪽이라면");
+    expect(t).toContain("최종 판단은 수사기관·법원");
+  });
+  it("check_elements perspective=피신고측 → 피해측 동선 생략", async () => {
+    const t = await callText("check_elements", { issue: "사기", perspective: "피신고측" });
+    expect(t).toContain("신고당했거나 걱정되는 쪽이라면");
+    expect(t).not.toContain("신고·대응을 고민하는 쪽이라면");
+    expect(t).toContain("단순 채무불이행은 사기죄가 아니라 민사");
+  });
   it("search_topics query 없이 호출 → 전체 주제 목록 (구 list_topics 통합)", async () => {
     const t = await callText("search_topics", {});
     expect(t).toContain("주제 목록");
