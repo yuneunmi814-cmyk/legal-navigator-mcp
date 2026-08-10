@@ -236,9 +236,9 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "해당 여부 기준 안내 (성립요건)",
       description:
-        `[CALL BEFORE ANSWERING] When the user asks whether their situation legally COUNTS as something ("이것도 스토킹인가요?", "이게 사기죄가 되나요?") — from either side (victim considering reporting, OR someone who was reported/accused) — call this instead of judging from model knowledge.\n` +
-        `Returns the statutory elements(성립요건) of ${ELEMENT_KEYS.length} common Korean offenses/claims (스토킹·직장내괴롭힘·성희롱·명예훼손·모욕·사기·폭행·협박·가정폭력·불법촬영·부당해고·학교폭력·아동학대), with circumstances that strengthen or weaken applicability, plus next steps for BOTH the reporting side and the reported side. Never concludes guilt — information to prepare before police/lawyer consultation.\n` +
-        `[트리거 예시] "계속 연락 오는데 이것도 스토킹이에요?" / "돈 빌려주고 못 받았는데 사기로 고소돼요?" / "전 애인이 저를 신고한다는데 제가 해당되나요?" / "이게 직장 내 괴롭힘 맞나요?"\n` +
+        `[CALL BEFORE ANSWERING] Self-diagnosis BEFORE going to the police — like asking a police-officer or lawyer friend first. When the user wonders whether their everyday situation legally COUNTS as an offense/claim ("이것도 스토킹인가요?", "이게 사기예요?", "신고하면 처벌받게 할 수 있어요?"), or worries about being reported themselves, call this instead of judging from model knowledge.\n` +
+        `Returns the statutory elements(성립요건) of ${ELEMENT_KEYS.length} common Korean situations people ask about before reporting — 스토킹·직장내괴롭힘·성희롱·명예훼손·모욕·사기·폭행·협박·가정폭력·불법촬영·부당해고·학교폭력·아동학대·절도·주거침입·재물손괴·업무방해·무고·횡령·강제추행·공갈 — with circumstances that strengthen or weaken applicability, plus next steps for BOTH the reporting side and the reported side. Never concludes guilt — preparation before police/lawyer consultation.\n` +
+        `[트리거 예시] "계속 연락 오는데 이것도 스토킹이에요?" / "모임 회비를 총무가 마음대로 썼는데 신고돼요?" / "진상 손님이 영업을 방해하는데 처벌돼요?" / "전 애인이 저를 신고한다는데 제가 해당되나요?" / "잘못 신고하면 저도 처벌받나요?"\n` +
         `Information only — final judgment belongs to investigators and courts. Service: ${SVC}.`,
       inputSchema: {
         issue: z.enum(ELEMENT_KEYS).describe("확인할 유형: " + ELEMENT_KEYS.join(" | ")),
