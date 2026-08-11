@@ -69,6 +69,17 @@ describe("데이터 정합성", () => {
     expect(bad.map((s) => `${s.법령} ${s.조문}`)).toEqual([]);
   });
 
+  it("FORM_TOPIC 매핑 정합성 — 서식 접수처는 검증된 주제 데이터만 참조", async () => {
+    const { FORM_TOPIC } = await import("../src/data/form_topic.js");
+    for (const [form, topic] of Object.entries(FORM_TOPIC)) {
+      expect(FORM_KEYS).toContain(form);
+      expect(TOPIC_KEYS).toContain(topic);
+    }
+    // 개인 간 계약서 등 제출처 없는 서식 3종만 의도적 제외
+    const unmapped = FORM_KEYS.filter((k) => !FORM_TOPIC[k]);
+    expect(unmapped.sort()).toEqual(["금전소비대차계약서", "분쟁조정_신청서", "채무변제확인서"]);
+  });
+
   it("생활밀착 커버리지 확대 8/9 — 택배·항공·환불·누수·중고차·사망후·화재", () => {
     for (const k of ["택배분실파손", "항공지연결항피해", "헬스장학원환불", "중고차매매피해", "세대간누수분쟁", "사망후행정처리", "화재피해대응"]) {
       expect(TOPIC_KEYS).toContain(k);

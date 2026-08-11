@@ -152,6 +152,28 @@ describe("핵심 동작", () => {
 });
 
 describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("get_form_template 텍스트 응답에 접수처(관할·온라인접수) 포함", async () => {
+    const t = await callText("get_form_template", { form: "임금체불진정서" });
+    expect(t).toContain("어디에 내나요(접수처)");
+    expect(t).toMatch(/고용노동|노동/);
+  });
+  it("서식 카드 위젯에 접수처 바로가기 버튼 포함 (8/11 회의 결정)", async () => {
+    const { buildFormWidget } = await import("../src/widgets.js");
+    const w = buildFormWidget("임금체불진정서", { 제목: "진정서", 용도: "테스트" }, "https://x.test", { url: "https://labor.moel.go.kr", 관할: "고용노동부" });
+    const s = JSON.stringify(w);
+    expect(s).toContain("접수처 바로가기");
+    expect(s).toContain("labor.moel.go.kr");
+    expect(w.copy_text).toContain("제출처: 고용노동부");
+    // 접수처 없는 서식은 버튼 미표시
+    const w2 = buildFormWidget("금전소비대차계약서", { 제목: "차용증", 용도: "테스트" }, "https://x.test");
+    expect(JSON.stringify(w2)).not.toContain("접수처 바로가기");
+    // URL 없는 방문 접수: 버튼은 없고 제출처 캡션만
+    const w3 = buildFormWidget("폭행상해_고소장", { 제목: "고소장", 용도: "테스트" }, "https://x.test", { url: null, 관할: "관할 경찰서" });
+    const s3 = JSON.stringify(w3);
+    expect(s3).not.toContain("접수처 바로가기");
+    expect(s3).toContain("제출: 관할 경찰서");
+  });
+
   it("check_elements 스토킹 → 성립요건·양면 동선·단정 금지 문구", async () => {
     const t = await callText("check_elements", { issue: "스토킹" });
     expect(t).toContain("법률상 성립요건");

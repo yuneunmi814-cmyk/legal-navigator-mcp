@@ -64,6 +64,9 @@ export function buildFormWidget(
   formKey: string,
   f: { 제목: string; 용도: string; 공식양식?: string },
   baseUrl: string,
+  // 8/11 회의 결정: 서식을 채운 뒤 '어디에 내는지'를 카드에 함께 — 주제의 검증된 접수처 데이터 재사용.
+  // url이 없으면(방문·서면 접수) 버튼 없이 제출처 캡션만 표시.
+  submit?: { url?: string | null; 관할: string },
 ): KakaoWidget {
   const previewUrl = `${baseUrl}/forms/${encodeURIComponent(formKey)}`;
   const txtUrl = `${previewUrl}.txt`;
@@ -80,13 +83,26 @@ export function buildFormWidget(
     },
     { type: "Divider" },
     { type: "Button", label: "🖊️ 빈칸 바로 채우기 (미리보기·PDF)", onClickAction: openUrl(previewUrl), style: "primary", block: true },
+    ...(submit?.url
+      ? [{ type: "Button", label: "🏛️ 접수처 바로가기", onClickAction: openUrl(submit.url), style: "secondary", block: true } as Button]
+      : []),
     { type: "Button", label: "📎 텍스트 파일로 받기", onClickAction: openUrl(txtUrl), style: "secondary", block: true },
+    ...(submit ? [{ type: "Caption", value: trunc(`🏛️ 제출: ${submit.관할}`, 70) } as Caption] : []),
     { type: "Caption", value: "일반 정보이며 개별 법률 자문이 아닙니다 · 법률 절차 길잡이" },
   ];
   return {
     widget: { type: "Card", size: "md", children },
-    copy_text: `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF 저장까지: ${previewUrl}\n— 법률 절차 길잡이`,
+    copy_text:
+      `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF 저장까지: ${previewUrl}` +
+      (submit ? `\n제출처: ${submit.관할}` : "") +
+      `\n— 법률 절차 길잡이`,
   };
+}
+
+// 접수처 자유 텍스트에서 첫 URL/도메인 추출 — 진단 카드·서식 카드 공용.
+export function extractSubmitUrl(온라인접수: string): string | null {
+  const m = 온라인접수.match(/https?:\/\/[^\s)”"']+|[a-z0-9.-]+\.(?:go\.kr|or\.kr|kr|com)[^\s)”"']*/i);
+  return m ? (m[0].startsWith("http") ? m[0] : `https://${m[0]}`) : null;
 }
 
 // ── 2) 진단 카드 — triage용: 주제·기한 경고·첫 단계 3개·접수처 버튼 ──
@@ -95,8 +111,7 @@ export function buildTriageWidget(
   topic: { key: string; category: string; 제목: string; 기한: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
 ): KakaoWidget {
   // 접수처 자유 텍스트에서 첫 URL/도메인 추출(있으면 버튼 제공)
-  const m = topic.온라인접수.match(/https?:\/\/[^\s)”"']+|[a-z0-9.-]+\.(?:go\.kr|or\.kr|kr|com)[^\s)”"']*/i);
-  const url = m ? (m[0].startsWith("http") ? m[0] : `https://${m[0]}`) : null;
+  const url = extractSubmitUrl(topic.온라인접수);
   const steps = topic.단계.slice(0, 3).map(
     (s): TextC => ({ type: "Text", value: trunc(s.replace(/^\d+[)\-]?\s*/, "• "), 70), size: "sm" }),
   );

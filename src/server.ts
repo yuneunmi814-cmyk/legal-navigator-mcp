@@ -25,6 +25,7 @@ import {
   GLOSSARY,
   ELEMENTS,
   ELEMENT_KEYS,
+  FORM_TOPIC,
 } from "./data/index.js";
 import {
   calcUnpaidWages,
@@ -36,7 +37,7 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
-import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText } from "./widgets.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
@@ -65,6 +66,14 @@ const READONLY = {
 
 const 항목값 = ["체불임금", "퇴직금", "주휴수당", "지연이자", "셀프등기절감액", "상속등기비용"] as const;
 const TOPIC_DESC = "주제 키. 카테고리: 노동·주택임대차·돈거래·소비자·교통사고·형사·민사절차. 모르면 search_topics로 먼저 확인(query 없이 호출하면 전체 목록).";
+
+// 서식의 접수처 — 매핑된 주제의 검증된 관할기관·온라인접수를 재사용(새 URL 창작 금지). 8/11 회의 결정.
+function formSubmitInfo(form: string): { 관할: string; 온라인접수: string; url: string | null } | null {
+  const topic = FORM_TOPIC[form];
+  const p = topic ? PROCEDURES[topic] : undefined;
+  if (!p) return null;
+  return { 관할: p.관할기관, 온라인접수: p.온라인접수, url: extractSubmitUrl(p.온라인접수) };
+}
 
 // 응답은 마크다운(카카오 툴즈 가이드: 텍스트 답변은 정제된 마크다운 권장).
 function 절차텍스트(key: string): string {
@@ -383,13 +392,15 @@ export function createServer(baseUrl?: string): McpServer {
       if (!f) {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
-      // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·txt 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
+      const submit = formSubmitInfo(form);
+      // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·접수처·txt 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
       // for_assistant: 카드에는 본문이 없어 호스트 AI가 초안을 못 만들므로, 렌더러가 무시하는 별도 필드로 본문+지침 동봉.
       if (widgetsOn() && baseUrl) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl), name: "get_form_template", for_assistant: 작성보조지침(f) }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl, submit ?? undefined), name: "get_form_template", for_assistant: 작성보조지침(f) }) }] };
       }
       const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
       if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
+      if (submit) head.push(`**🏛️ 어디에 내나요(접수처)**: ${submit.관할} — ${submit.온라인접수}`);
       const tail = ["### ✍️ 작성요령", ...f.작성요령.map((s) => `- ${s}`), "", 작성지침(f)];
       if (baseUrl) {
         tail.push(
@@ -1078,7 +1089,8 @@ app.get("/widgets/:kind", (req, res) => {
       res.status(404).type("text/plain; charset=utf-8").send("서식 키를 확인하세요 (?key=서식키)");
       return;
     }
-    built = buildFormWidget(key, f, baseUrl);
+    const sub = formSubmitInfo(key);
+    built = buildFormWidget(key, f, baseUrl, sub ?? undefined);
     heading = "차용증 양식 좀 만들어줘";
   } else if (kind === "triage") {
     const q = (req.query.q as string) || "월급을 3개월째 못 받았어요";
