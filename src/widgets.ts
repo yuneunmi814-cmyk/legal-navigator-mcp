@@ -100,9 +100,23 @@ export function buildFormWidget(
 }
 
 // 접수처 자유 텍스트에서 첫 URL/도메인 추출 — 진단 카드·서식 카드 공용.
+// URL에 쓰일 수 있는 ASCII만 받는다. 이전 정규식은 '공백·닫는괄호'만 경계로 삼아
+// "bokjiro.go.kr(서비스신청→…" "animal.go.kr·qia.go.kr"처럼 한글·여는괄호·가운뎃점까지
+// 주소에 붙여버렸다(버튼 113개 중 60개가 죽은 링크). 경계를 문자 집합으로 막는다.
+const URL_CHARS = "A-Za-z0-9\\-._~%/?#=&+@:";
+const SUBMIT_URL_RE = new RegExp(
+  // ① 스킴이 있는 주소 ② 스킴 없는 맨 도메인(go.kr·or.kr·kr·com). 앞에 @·영숫자가 붙은 것은
+  //    이메일 도메인이거나 토큰 중간이므로 제외.
+  `https?://[${URL_CHARS}]+` +
+    `|(?<![${URL_CHARS}])[A-Za-z0-9][A-Za-z0-9\\-]*(?:\\.[A-Za-z0-9\\-]+)*\\.(?:go\\.kr|or\\.kr|kr|com)(?:/[${URL_CHARS}]*)?`,
+);
+
 export function extractSubmitUrl(온라인접수: string): string | null {
-  const m = 온라인접수.match(/https?:\/\/[^\s)”"']+|[a-z0-9.-]+\.(?:go\.kr|or\.kr|kr|com)[^\s)”"']*/i);
-  return m ? (m[0].startsWith("http") ? m[0] : `https://${m[0]}`) : null;
+  const m = 온라인접수.match(SUBMIT_URL_RE);
+  if (!m) return null;
+  // 문장 부호로 끝나면(…go.kr. / …go.kr, ) 주소에서 떼어낸다.
+  const raw = m[0].replace(/[.,;:?!/#]+$/, "");
+  return raw.startsWith("http") ? raw : `https://${raw}`;
 }
 
 // ── 2) 진단 카드 — triage용: 주제·기한 경고·첫 단계 3개·접수처 버튼 ──

@@ -213,3 +213,48 @@ describe("데이터 정합성", () => {
     }
   });
 });
+
+// 접수처 바로가기 버튼(8/11 회의 결정)의 URL 품질 — 링크가 죽으면 '편의성' 심사축에 직격.
+describe("접수처 버튼 URL", () => {
+  it("자유 텍스트에서 한글·괄호·가운뎃점을 주소에 붙이지 않는다", async () => {
+    const { extractSubmitUrl } = await import("../src/widgets.js");
+    // 실제 데이터에서 이전 정규식이 통째로 삼켰던 형태들
+    expect(extractSubmitUrl("복지로 bokjiro.go.kr(서비스신청→복지급여→청년월세, 읍·면·동)")).toBe(
+      "https://bokjiro.go.kr",
+    );
+    expect(extractSubmitUrl("동물보호관리시스템 animal.go.kr·qia.go.kr")).toBe("https://animal.go.kr");
+    expect(extractSubmitUrl("금융감독원 fine.fss.or.kr·☎1332")).toBe("https://fine.fss.or.kr");
+    expect(extractSubmitUrl("대법원 전자소송 ecfs.scourt.go.kr → '지급명령(독촉)신청'")).toBe(
+      "https://ecfs.scourt.go.kr",
+    );
+    // 스킴이 있는 주소·경로도 그대로 살린다
+    expect(extractSubmitUrl("신청 https://www.kca.go.kr/odr/pg/ma/pgProcssInfo2.do 에서")).toBe(
+      "https://www.kca.go.kr/odr/pg/ma/pgProcssInfo2.do",
+    );
+    // 접수 창구가 전화뿐이면 버튼을 만들지 않는다
+    expect(extractSubmitUrl("검찰 피해자지원 1301 / 경찰 182")).toBeNull();
+  });
+
+  it("모든 주제의 접수처 URL이 ASCII 주소로만 추출된다", async () => {
+    const { extractSubmitUrl } = await import("../src/widgets.js");
+    const bad: string[] = [];
+    for (const k of TOPIC_KEYS) {
+      const url = extractSubmitUrl(PROCEDURES[k].온라인접수);
+      if (url && !/^https?:\/\/[A-Za-z0-9\-._~%/?#=&+@:]+$/.test(url)) bad.push(`${k} → ${url}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("apex에 DNS가 없어 www가 필요한 기관 도메인은 www로 적는다", () => {
+    // 2026-08-12 전수 확인: 아래 도메인은 apex가 NXDOMAIN이라 버튼이 열리지 않았다.
+    const wwwOnly = ["courtauction.go.kr", "iros.go.kr", "k-apt.go.kr", "nhis.or.kr", "noiseinfo.or.kr", "tdrc.kr", "fbo.or.kr", "myhome.go.kr"];
+    const bad: string[] = [];
+    for (const k of TOPIC_KEYS) {
+      const t = PROCEDURES[k].온라인접수;
+      for (const d of wwwOnly) {
+        if (new RegExp(`(?<![A-Za-z0-9.\\-/])${d.replace(/\./g, "\\.")}`).test(t)) bad.push(`${k}: ${d}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+});
