@@ -831,27 +831,36 @@ const htmlEscape = (s: string): string =>
 // 개인정보는 서버로 오지 않고(무상태 유지) 호스트 대화 안에서만 채워진다.
 // 변호사법 경계: 사용자가 말한 사실만 옮겨 적는 '작성 보조'이며 최종 확인·작성은 본인 — 사실 창작·법률 주장 금지.
 
-// 본문에서 채울 항목을 추출(본문HTML과 동일 규칙: 줄머리 대괄호=섹션 라벨 제외, [_/공백]=이름 없는 빈칸)
-function 빈칸항목(bodyRaw: string): { named: string[]; blanks: number } {
+// 본문에서 채울 항목을 추출(본문HTML과 동일 규칙: 줄머리 대괄호=섹션 라벨 제외, [_/공백]=이름 없는 빈칸,
+// 대괄호 밖의 ○○=기관·법원명 자리)
+function 빈칸항목(bodyRaw: string): { named: string[]; blanks: number; circles: number } {
   const named = new Set<string>();
   let blanks = 0;
+  let circles = 0;
   for (const line of bodyRaw.split("\n")) {
     let rest = line;
     const lbl = rest.match(/^[ \t]*\[([^\]]+)\]/);
     if (lbl && !/^[_\s]*$/.test(lbl[1])) rest = rest.slice(lbl[0].length);
     for (const m of rest.matchAll(/\[([^\]]*)\]/g)) {
+      if (/[☐□☑☒]/.test(m[1])) continue; // 선택지 묶음 — 채워 넣는 항목이 아니다(본문HTML과 같은 규칙)
       if (/^[_\s]*$/.test(m[1])) blanks += 1;
       else named.add(m[1].trim());
     }
+    // 대괄호 안의 ○는 예시라 세지 않는다 — 본문HTML과 같은 규칙
+    대괄호밖(rest, (seg) => {
+      circles += (seg.match(동그라미자리) || []).length;
+      return seg;
+    });
   }
-  return { named: [...named], blanks };
+  return { named: [...named], blanks, circles };
 }
 
 function 작성지침(f: { 본문: string }): string {
-  const { named, blanks } = 빈칸항목(f.본문);
+  const { named, blanks, circles } = 빈칸항목(f.본문);
   const items =
     (named.length ? named.slice(0, 25).join(" · ") : "") +
-    (blanks ? `${named.length ? " " : ""}(이름 없는 빈칸 ${blanks}곳)` : "");
+    (blanks ? `${named.length ? " " : ""}(이름 없는 빈칸 ${blanks}곳)` : "") +
+    (circles ? `${named.length || blanks ? " " : ""}(○○ = 법원·기관 이름 ${circles}곳)` : "");
   return [
     "### 🤖 어시스턴트 작성 보조 지침",
     "- 사용자가 이 대화에서 **이미 말한 사실**(이름·날짜·금액·주소 등)이 있으면 해당 [빈칸]을 채운 **초안**을 만들어 보여주세요. 모르는 칸은 [빈칸] 그대로 두고, 필요한 정보를 2~3개씩 질문하세요.",
@@ -874,12 +883,35 @@ function 작성보조지침(f: { 본문: string; 작성요령: string[] }): stri
   ].join("\n");
 }
 
+// 관공서 서식의 '○○' 자리(○○지방법원·○○경찰서장·○○고용센터장 등) — 기관·법원 이름이 들어갈 곳.
+// 단, 대괄호 안의 ○는 건드리지 않는다: 그 대괄호가 이미 통째로 빈칸 하나이고,
+// 안의 ○는 쓰는 법을 보여주는 예시다([○○은행 등]·[○○지방법원 20○○가소○○○○ 판결정본]).
+// ㅇ(한글)로 적힌 서식이 뒤에 추가될 수 있어 2자 이상 연속일 때만 함께 인정한다(홑 ㅇ은 실제 글자).
+const 동그라미자리 = /[○◯〇]+|ㅇ{2,}/g;
+
+// 대괄호 밖 구간에만 함수를 적용 — split의 캡처 그룹 덕에 홀수 인덱스가 대괄호 자신이 된다.
+function 대괄호밖(s: string, fn: (seg: string) => string): string {
+  return s
+    .split(/(\[[^\]]*\])/)
+    .map((seg, i) => (i % 2 === 1 ? seg : fn(seg)))
+    .join("");
+}
+
 // 서식 본문을 '탭해서 채우는' 문서로 변환.
 //  · 줄머리 대괄호(예 [신청인]·[재산내역]) → 섹션 라벨(굵게, 입력 불가)
 //  · 그 외 대괄호([성명]·[______]·[   ]) → 채울 빈칸 입력 필드
+//  · 대괄호 밖의 ○○(○○지방법원 등) → 채울 빈칸 입력 필드
 //  · ☐ → 탭 토글 체크박스.  (사용자가 본인 사실만 입력 — AI 대필 아님)
 function 본문HTML(bodyRaw: string): string {
   let s = htmlEscape(bodyRaw);
+  // 0) ○○ → 입력 필드. 반드시 대괄호 처리보다 먼저 — 나중에 하면 생성된 필드의
+  //    data-ph 속성값 안에 든 ○까지 다시 치환해 HTML이 깨진다.
+  s = 대괄호밖(s, (seg) =>
+    seg.replace(동그라미자리, (m) => {
+      const minw = Math.min(Math.max(m.length, 4), 28);
+      return `<span class="fld" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw}ch"></span>`;
+    }),
+  );
   // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
   s = s.replace(/(^|\n)([ \t]*)\[([^\]]+)\]/g, (m, br: string, sp: string, inner: string) => {
     if (/^[_\s]*$/.test(inner)) return m; // 실제 빈칸이면 라벨로 만들지 않음
@@ -890,13 +922,26 @@ function 본문HTML(bodyRaw: string): string {
     .replace(/[☐□]/g, '<span class="cbx" role="checkbox" aria-checked="false" tabindex="0">☐</span>')
     .replace(/[☑☒]/g, '<span class="cbx" role="checkbox" aria-checked="true" tabindex="0">☑</span>');
   // 3) 남은 대괄호 → 입력 필드
+  //    긴 서술형(경위·사실관계·목록 등)은 줄 안에서 부풀어 앞의 항목명을 밀어내므로
+  //    '.big' 블록 입력칸으로 분리 — 항목명은 그 줄에 고정되고 입력은 아래 칸에서 한다(8/11 회의 결정 ②).
   s = s.replace(/\[([^\]]*)\]/g, (_m, innerRaw: string) => {
     const inner = String(innerRaw); // 이미 htmlEscape됨 → 텍스트/속성값 모두 안전
+    // 대괄호 안이 선택지 묶음이면([☐정기신청 ☐기한 후 신청]) 채워 넣는 빈칸이 아니다.
+    // 이걸 필드로 만들면 체크박스 마크업이 data-ph 속성값 안으로 들어가 화면이 깨진다.
+    if (inner.includes('class="cbx"')) return _m;
     const isBlank = /^[_\s]*$/.test(inner);
     const ph = isBlank ? "" : inner;
+    if (!isBlank && inner.length >= 12) {
+      return `<span class="fld big" contenteditable="true" role="textbox" data-ph="${ph}"></span>`;
+    }
     const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
     const minw = Math.min(Math.max(width, 4), 28);
     return `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
+  });
+  // 4) 대괄호 밖에 남은 밑줄(____)도 입력 가능하게 — 종이 서식의 빈칸 관행(8/11 회의 결정 ②)
+  s = s.replace(/_{3,}/g, (m) => {
+    const minw = Math.min(Math.max(m.length, 4), 28);
+    return `<span class="fld" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
   });
   return s;
 }
@@ -943,6 +988,11 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
+/* 긴 서술형 칸 — 항목명(예: "- 경위:")은 윗줄에 그대로 두고, 입력은 아래 전용 칸에서.
+   인라인으로 두면 글을 쓸수록 칸이 부풀어 앞 항목명이 밀려 내려간다(8/11 회의 결정 ②). */
+.fld.big{display:block;width:100%;min-width:0;margin:6px 0 4px;padding:10px 12px;min-height:4.2em;
+  border:1.5px dashed var(--fld-line);border-radius:10px;line-height:1.7;font-weight:500;white-space:pre-wrap;}
+.fld.big:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400;font-size:.94em}
 .lbl{font-weight:800;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--ink);padding:1px 8px;border-radius:6px;letter-spacing:-.01em;}
 .cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.15em;line-height:1;padding:0 2px;color:var(--accent);vertical-align:-.05em}
 .cbx:focus{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
@@ -959,6 +1009,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
   .doc{line-height:1.85;font-size:14.5px}
+  .fld.big{min-height:5em}
   .tips{padding:15px 16px}
 }
 @media print{
@@ -968,6 +1019,8 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:12pt}
   .fld{background:transparent;border-bottom:1px solid #000;color:#000}
   .fld:empty::before{content:""}
+  .fld.big{border:1px solid #000;background:transparent;color:#000;min-height:3.2em}
+  .fld.big:empty::before{content:""}
   .lbl{background:transparent;padding:0}
   .cbx{color:#000}
   .official{background:transparent}
@@ -987,7 +1040,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 을 탭해 본인 정보를 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하세요.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하세요.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>

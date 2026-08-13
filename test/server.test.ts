@@ -133,6 +133,38 @@ describe("핵심 동작", () => {
     expect(html).toContain("인쇄 · PDF로 저장");
     expect(html).toContain("개별 법률 자문이 아닙니다"); // 면책 유지
   });
+  it("○○ 자리(○○지방법원 등)가 입력 필드로 렌더 — 대괄호 안의 ○는 예시라 그대로 둔다", async () => {
+    // 임차권등기명령신청서 본문: "… ○○지방법원 귀중"(대괄호 밖 → 필드)
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("임차권등기명령신청서")}`)).text();
+    expect(html).toContain('data-ph="○○"');
+    expect(html).not.toContain("○○지방법원 귀중"); // 원문 그대로 남아 있으면 안 됨
+    expect(html).toContain("지방법원 귀중"); // ○○만 필드로 바뀌고 뒷말은 유지
+
+    // 채권압류추심_신청서: "[○○은행 등]"·"[○○지방법원 20○○가소○○○○ …]" → 대괄호 통째로 빈칸 하나,
+    // 안의 ○는 쓰는 법을 보여주는 예시이므로 쪼개지 않는다(속성값 안에 그대로 들어간다).
+    const b = await (await fetch(`${base}/forms/${encodeURIComponent("채권압류추심_신청서")}`)).text();
+    expect(b).toContain('data-ph="○○은행 등"');
+    expect(b).not.toMatch(/data-ph="○○"[^>]*><\/span>은행/); // 대괄호 안이 쪼개지지 않았음
+  });
+  it("○○ 자리가 작성 보조 지침의 '채울 항목'에 집계된다", async () => {
+    const t = await callText("get_form_template", { form: "임차권등기명령신청서" });
+    expect(t).toMatch(/○○ = 법원·기관 이름 \d+곳/);
+  });
+  it("대괄호 안이 선택지 묶음이면([☐정기신청 ☐기한 후 신청]) 체크박스로 남고 빈칸이 되지 않는다", async () => {
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("근로자녀장려금_신청서")}`)).text();
+    expect(html).not.toMatch(/data-ph="[^"]*[<>]/); // 속성값에 마크업이 새어 들어가지 않음
+    expect(html).toContain("정기신청");
+    expect(html).toContain('role="checkbox"');
+  });
+  it("어느 서식도 data-ph 속성에 마크업이 새어 들어가지 않는다(전수)", async () => {
+    for (const k of FORM_KEYS) {
+      const html = await (await fetch(`${base}/forms/${encodeURIComponent(k)}`)).text();
+      expect(html, k).not.toMatch(/data-ph="[^"]*[<>]/);
+      const open = (html.match(/<span\b/g) || []).length;
+      const close = (html.match(/<\/span>/g) || []).length;
+      expect(open, k).toBe(close);
+    }
+  });
   it("서식 미리보기는 사용자 입력값을 서버에 저장하지 않는다(무상태·정적)", async () => {
     const a = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
@@ -152,6 +184,20 @@ describe("핵심 동작", () => {
 });
 
 describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
+    const html = await res.text();
+    expect(html).toContain('class="fld big"');
+    // 긴 서술형(경위)은 .big으로, 짧은 항목(성명)은 인라인 유지
+    expect(html).toMatch(/class="fld big"[^>]*data-ph="언제부터/);
+    expect(html).toMatch(/class="fld"[^>]*data-ph="성명"/);
+    // 블록칸 CSS·인쇄 규칙 존재
+    expect(html).toContain(".fld.big{display:block");
+    const res2 = await fetch(`${base}/forms/${encodeURIComponent("소송구조신청서")}`);
+    const html2 = await res2.text();
+    expect(html2).not.toMatch(/____/); // 대괄호 밖 밑줄도 입력칸으로 변환됨
+  });
+
   it("get_form_template 텍스트 응답에 접수처(관할·온라인접수) 포함", async () => {
     const t = await callText("get_form_template", { form: "임금체불진정서" });
     expect(t).toContain("어디에 내나요(접수처)");
