@@ -912,6 +912,15 @@ function 본문HTML(bodyRaw: string): string {
       return `<span class="fld" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw}ch"></span>`;
     }),
   );
+  // 0-2) 대괄호 밖에 남은 밑줄(____)도 입력 가능하게 — 종이 서식의 빈칸 관행(8/11 회의 결정 ②).
+  //    ○○와 같은 이유로 대괄호 처리보다 먼저·대괄호 밖에서만. 뒤로 미루면 3)이 만든
+  //    data-ph 안의 밑줄까지 치환한다(예: 항소장 "[○○지방법원 20 가단 ____ … 선고]").
+  s = 대괄호밖(s, (seg) =>
+    seg.replace(/_{3,}/g, (m) => {
+      const minw = Math.min(Math.max(m.length, 4), 28);
+      return `<span class="fld" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
+    }),
+  );
   // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
   s = s.replace(/(^|\n)([ \t]*)\[([^\]]+)\]/g, (m, br: string, sp: string, inner: string) => {
     if (/^[_\s]*$/.test(inner)) return m; // 실제 빈칸이면 라벨로 만들지 않음
@@ -937,11 +946,6 @@ function 본문HTML(bodyRaw: string): string {
     const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
     const minw = Math.min(Math.max(width, 4), 28);
     return `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
-  });
-  // 4) 대괄호 밖에 남은 밑줄(____)도 입력 가능하게 — 종이 서식의 빈칸 관행(8/11 회의 결정 ②)
-  s = s.replace(/_{3,}/g, (m) => {
-    const minw = Math.min(Math.max(m.length, 4), 28);
-    return `<span class="fld" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
   });
   return s;
 }
