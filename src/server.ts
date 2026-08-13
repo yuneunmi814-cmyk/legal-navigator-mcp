@@ -917,7 +917,9 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · 법률 절차 길잡이</title>
 <style>
-:root{--bg:#eceef2;--paper:#fff;--ink:#1c2230;--ink2:#5a6172;--line:#e3e6ec;--accent:#1f6feb;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#b6bccb;--tip-bg:#f5f8ff;--foot:#8892a4;}
+/* 랜딩(legal-navigator-web index.html :root)과 같은 값. 두 화면이 한 서비스로 보이려면 갈리면 안 된다.
+   --fld 계열(빈칸의 노란 표시)만 기능색이라 별도 유지. */
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#8b95a1;--tip-bg:#f4f6f9;--foot:#8b95a1;}
 @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;--fld:#2a2410;--fld-line:#6f5a1f;--fld-ink:#e7c877;--ph:#6b7488;--tip-bg:#141b2b;--foot:#7a8398;}}
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -973,22 +975,22 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <div class="bar">
-  <button class="btn pri" id="printBtn" type="button">🖨️ 인쇄 · PDF로 저장</button>
-  <a class="btn" href="${txtHref}">⬇️ 텍스트 파일</a>
+  <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
+  <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
-  <button class="btn" id="resetBtn" type="button">↺ 빈칸 비우기</button>
+  <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
 </div>
 <div class="wrap">
   <div class="hd">
     ${kind ? `<div class="kind">${kind}</div>` : ""}
     <h1>${title}</h1>
     <p class="use">${purpose}</p>
-    ${official ? `<p class="official">📄 <b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
+    ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
   <div class="hint"><span class="k">[빈칸]</span> 을 탭해 본인 정보를 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하세요.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
-    <h2>✍️ 작성요령</h2>
+    <h2>작성요령</h2>
     <ol>${tips}</ol>
   </div>
   <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
