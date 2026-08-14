@@ -58,6 +58,52 @@ describe("회귀: 2차 코드리뷰가 잡은 버그", () => {
     const t = await callText("verify_citation", { citation: "민법 제759조" });
     expect(t).toContain("수록확인");
   });
+});
+
+describe("회귀: 인용 검증 오탐·미가동", () => {
+  it("[높음] 주택임대차보호법 질의에 상가건물 임대차보호법이 붙지 않는다", async () => {
+    const t = await callText("verify_citation", { citation: "주택임대차보호법 제10조" });
+    expect(t).not.toContain("상가건물");
+    expect(t).toContain("확인되지 않");
+  });
+
+  it("[높음] 모법 질의에 시행규칙의 같은 조문이 붙지 않는다", async () => {
+    // 저장소엔 '출입국관리법 시행규칙 제70조의2'만 있고 모법엔 그 조문이 없다.
+    const t = await callText("verify_citation", { citation: "출입국관리법 제70조의2" });
+    expect(t).not.toContain("수록확인");
+  });
+
+  it("[높음] 연도만 인용하면 그 해 판례가 전부 확인되지 않는다", async () => {
+    const t = await callText("verify_citation", { citation: "2020" });
+    expect(t).not.toContain("수록확인");
+  });
+
+  it("'제' 없는 일상 표기도 검증에 진입한다(도구 트리거 예시)", async () => {
+    const t = await callText("verify_citation", { citation: "민법 623조가 맞는 조문인지 확인해줘" });
+    expect(t).toContain("수록확인");
+    expect(t).toContain("민법 제623조");
+  });
+
+  it("낫표 표기에서 법령명을 놓치지 않는다", async () => {
+    const t = await callText("verify_citation", { citation: "「민법」 제759조" });
+    expect(t).toContain("수록확인");
+  });
+
+  it("법령명이 없으면 '확인'이 아니라 후보로만 제시한다", async () => {
+    const t = await callText("verify_citation", { citation: "제9조" });
+    expect(t).not.toContain("수록확인");
+    expect(t).toContain("법령명을 특정할 수 없어");
+  });
+
+  it("정식 제명으로 인용해도 약칭 저장분과 대조된다", async () => {
+    const t = await callText("verify_citation", { citation: "성폭력범죄의 처벌 등에 관한 특례법 제14조" });
+    expect(t).toContain("수록확인");
+  });
+
+  it("판례 인용은 유효성 주의까지 함께 나온다", async () => {
+    const t = await callText("verify_citation", { citation: "대법원 2012다89399" });
+    expect(t).toContain("유효성");
+  });
   it("[중간] calculate_deadline — 불가능한 날짜(2026-02-31) 거부", async () => {
     const t = await callText("calculate_deadline", { start_date: "2026-02-31", deadline_type: "상속포기_한정승인" });
     expect(t).toContain("올바르지 않");

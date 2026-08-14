@@ -10,6 +10,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "audit:law": "tsx scripts/verify-statutes.ts",
     "test": "vitest run"
   },
   "dependencies": {

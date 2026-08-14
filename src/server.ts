@@ -3,6 +3,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { withDisclaimer } from "./disclaimer.js";
+import { normalizeLawName, matchLawName, parseArticle, extractCaseNumbers, matchCaseNumber, caseCore } from "./citation.js";
 import {
   PROCEDURES,
   CHECKLISTS,
@@ -568,45 +569,68 @@ export function createServer(baseUrl?: string): McpServer {
     },
     async ({ citation }) => {
       const raw = citation.trim();
-      const nq = raw.replace(/\s|\(.*?\)/g, "");
       const lines: string[] = [];
-      // 1) 판례(사건번호) 매칭
+      const notes: string[] = [];
+
+      // 1) 판례(사건번호) — 질의에서 사건번호를 뽑아 정확 대조.
+      //    종전엔 질의 문자열의 부분포함으로 봤는데, 그러면 "2020"만 쳐도 2020년 판례가 전부 확인됐다.
+      const queried = extractCaseNumbers(raw);
+      const matchedNos = new Set<string>();
       const seen = new Set<string>();
       for (const [k, arr] of Object.entries(PRECEDENTS)) {
         for (const p of arr) {
-          const core = p.사건번호.replace(/\s|\(.*?\)/g, "").split(",")[0];
-          if (core && (nq.includes(core) || core.includes(nq)) && !seen.has(p.사건번호 + k)) {
-            seen.add(p.사건번호 + k);
-            lines.push(`✅ [판례·수록확인] ${p.법원} ${p.사건번호} (주제: ${k})\n   ${p.요지}`);
-          }
+          if (!queried.some((q) => matchCaseNumber(q, p.사건번호)) || seen.has(p.사건번호 + k)) continue;
+          seen.add(p.사건번호 + k);
+          matchedNos.add(caseCore(p.사건번호));
+          lines.push(`✅ [판례·수록확인] ${p.법원} ${p.사건번호} (주제: ${k})\n   ${p.요지}`);
         }
       }
-      // 2) 법령 조문 매칭(조문 일치 + 법령명 일부 일치로 오탐 방지)
-      const joMatch = raw.match(/제\s*\d+\s*조(\s*의\s*\d+)?/);
-      if (joMatch) {
-        const joN = joMatch[0].replace(/\s/g, "");
-        for (const s of STATUTES) {
-          const lawTokens = s.법령.replace(/\s/g, "");
-          // 법령명을 2글자 윈도우로만 대조(끝의 1글자 '법' 단독 매칭이 다른 법의 동일 조문을 거짓 확인시키던 버그 수정).
-          const nameHit =
-            lawTokens.length >= 2 &&
-            Array.from({ length: lawTokens.length - 1 }, (_, i) => lawTokens.slice(i, i + 2)).some((bi) => nq.includes(bi));
-          if (s.조문.replace(/\s/g, "") === joN && (nameHit || !/\d{2,4}[가-힣]/.test(nq))) {
-            lines.push(`✅ [법령·수록확인] ${s.법령} ${s.조문} — ${s.요지}`);
+
+      // 2) 법령 조문 — 법령명을 명시적으로 뽑아 대조.
+      //    법령명이 안 뽑히면 조문만으로 확인해주지 않는다(어느 법인지 모른 채 ✅는 오답이다).
+      const art = parseArticle(raw);
+      if (art) {
+        const sameJo = STATUTES.filter((s) => normalizeLawName(s.조문) === art.display);
+        if (art.lawName) {
+          const hits = sameJo.filter((s) => matchLawName(art.lawName!, s.법령));
+          for (const s of hits) lines.push(`✅ [법령·수록확인] ${s.법령} ${s.조문} — ${s.요지}`);
+          if (!hits.length) {
+            notes.push(
+              `ℹ️ **'${art.lawName} ${art.display}' — 이 서비스 저장소에서 확인되지 않았습니다.** 저장소는 생활법률 중심 발췌본이라 미수록이 곧 '없는 조문'이라는 뜻은 아닙니다. 아래 원문에서 확인하세요.`,
+            );
           }
+        } else if (sameJo.length) {
+          // 법령명 불명확 — 확인이 아니라 후보 제시. 어느 법인지는 사용자가 골라야 한다.
+          notes.push(
+            `⚠️ **법령명을 특정할 수 없어 조문 실존은 확인하지 못했습니다.** ('${art.display}'만 인용됨) 저장소에서 같은 조문 번호를 쓰는 법령은 다음과 같습니다 — 어느 법인지 알려주시면 대조해 드립니다:\n` +
+              sameJo
+                .slice(0, 8)
+                .map((s) => `   - ${s.법령} ${s.조문} — ${s.요지}`)
+                .join("\n") +
+              (sameJo.length > 8 ? `\n   - …외 ${sameJo.length - 8}건` : ""),
+          );
         }
       }
+
       // 3) 유효성 주의(폐기·하급심·헌법불합치 등) — 질의한 번호 또는 매칭된 번호 모두 점검
-      const statusKeys = Object.keys(CITATION_STATUS).filter((no) => nq.includes(no) || [...seen].some((s) => s.includes(no)));
+      const statusKeys = Object.keys(CITATION_STATUS).filter(
+        (no) => queried.some((q) => matchCaseNumber(q, no)) || matchedNos.has(caseCore(no)),
+      );
       for (const no of statusKeys) {
         const st = CITATION_STATUS[no];
         lines.push(`⚠️ [유효성] ${no} — ${st.라벨}: ${st.설명}`);
       }
+
+      const enc = encodeURIComponent(raw);
+      const 원문 = `- [국가법령정보센터에서 검색](https://www.law.go.kr/precScListR.do?menuId=1&query=${enc})\n- [CaseNote에서 검색](https://casenote.kr/search/?q=${enc})`;
       if (!lines.length) {
-        const enc = encodeURIComponent(raw);
-        return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n**이 서비스의 검증된 저장소에서 확인되지 않았습니다.**\n없는 판례·법령은 지어내지 않으니, 아래에서 직접 확인하세요:\n- [국가법령정보센터에서 검색](https://www.law.go.kr/precScListR.do?menuId=1&query=${enc})\n- [CaseNote에서 검색](https://casenote.kr/search/?q=${enc})`) }] };
+        const head = notes.length
+          ? notes.join("\n\n")
+          : "**이 서비스의 검증된 저장소에서 확인되지 않았습니다.**\n없는 판례·법령은 지어내지 않으니, 아래에서 직접 확인하세요:";
+        return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n${head}\n\n${원문}`) }] };
       }
-      return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n${lines.map((l) => `- ${l}`).join("\n")}\n\n원문 확인: [law.go.kr](https://www.law.go.kr) · [casenote.kr](https://casenote.kr)`) }] };
+      const body = [lines.map((l) => `- ${l}`).join("\n"), ...notes].join("\n\n");
+      return { content: [{ type: "text", text: withDisclaimer(`## 🔍 인용 검증: '${raw}'\n\n${body}\n\n원문 확인: [law.go.kr](https://www.law.go.kr) · [casenote.kr](https://casenote.kr)`) }] };
     },
   );
 
