@@ -306,6 +306,19 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     const t = await callText("search_topics", { query: "가족한테 빌려준 돈 떼였어요" });
     expect(t).toMatch(/대여금미반환|차용증없음입증/);
   });
+  it("실사용 발화(지식iN 원문) — 일반 사기·중고사기가 전세사기로 오매칭되지 않는다 (8/16 628건 분석 반영)", async () => {
+    // 수정 전: '사기 피해' 20건 중 8건이 전세사기대응으로 갔음
+    for (const q of ["코인투자 사기 피해", "사기 피해 구제를 하려면 어떻게 하나요?", "4천원 사기 당했어요 신고 가능한가요"]) {
+      const t = await callText("search_topics", { query: q });
+      const top = (t.match(/- `([^`]+)`/) ?? [])[1] ?? "";
+      expect(top, q).not.toBe("전세사기대응");
+      expect(top, q).toMatch(/거래투자사기|즉시계좌지급정지|피해금환급절차/);
+    }
+    for (const q of ["중고사기 피해금액 돌려받을 수 있나요?", "중고 사기 당했습니다 도와주세요", "중고사기 카드깡 의심"]) {
+      const t = await callText("search_topics", { query: q });
+      expect((t.match(/- `([^`]+)`/) ?? [])[1], q).toBe("중고거래사기");
+    }
+  });
   it("search_topics '떼인 돈' → 대여 주제로 진단", async () => {
     const t = await callText("search_topics", { query: "떼인 돈 어떻게 받아요" });
     expect(t).toMatch(/대여금미반환|차용증없음입증/);
