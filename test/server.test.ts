@@ -286,6 +286,13 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(t).toContain("신고당했거나 걱정되는 쪽이라면");
     expect(t).toContain("최종 판단은 수사기관·법원");
   });
+  it("check_elements 보이스피싱 — 실사용 발화 '이거 보이스피싱인가요?' 대응 (8/16 추가)", async () => {
+    const t = await callText("check_elements", { issue: "보이스피싱" });
+    expect(t).toContain("안전계좌");
+    expect(t).toContain("즉시계좌지급정지");
+    expect(t).toContain("전달책"); // 피신고측: 대포통장·전달책 경고
+    expect(t).toContain("최종 판단은 수사기관·법원");
+  });
   it("check_elements perspective=피신고측 → 피해측 동선 생략", async () => {
     const t = await callText("check_elements", { issue: "사기", perspective: "피신고측" });
     expect(t).toContain("신고당했거나 걱정되는 쪽이라면");
