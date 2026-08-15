@@ -1019,10 +1019,9 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
 .foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
 .foot a{color:var(--foot)}
-/* 좁은 화면 — 버튼 3개가 제멋대로 두 줄로 접히던 것을 '인쇄 한 줄 + 나머지 반반'으로 정돈 */
+/* 좁은 화면 — 버튼 4개를 2×2로. 위 줄은 내보내기(PDF·한글), 아래 줄은 보조(텍스트·비우기) */
 @media (max-width:520px){
   .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:9px 12px}
-  .bar .btn.pri{grid-column:1 / -1}
   .bar .sp{display:none}
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
@@ -1030,23 +1029,30 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   .fld.big{min-height:5em}
   .tips{padding:15px 16px}
 }
+/* 인쇄 — A4 관공서 문서 규격. 화면용 카드·색·버튼은 전부 걷어내고 본문만 종이에 앉힌다. */
+@page{size:A4;margin:20mm 20mm 22mm}
 @media print{
-  body{background:#fff;color:#000}
+  html,body{background:#fff;color:#000}
   .bar,.hint,.tips,.foot,.hd{display:none!important}
-  .wrap{max-width:none;padding:0}
-  .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:12pt}
-  .fld{background:transparent;border-bottom:1px solid #000;color:#000}
+  .wrap{max-width:none;padding:0;margin:0}
+  .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:11.5pt;line-height:1.75;
+       font-family:"Batang","바탕","Nanum Myeongjo","Apple SD Gothic Neo","Malgun Gothic",serif;
+       orphans:3;widows:3;color:#000}
+  .fld{background:transparent;border-bottom:1px solid #000;color:#000;border-radius:0}
   .fld:empty::before{content:""}
-  .fld.big{border:1px solid #000;background:transparent;color:#000;min-height:3.2em}
+  .fld.big{border:1px solid #000;background:transparent;color:#000;min-height:3.2em;border-radius:0;
+           break-inside:avoid;page-break-inside:avoid}
   .fld.big:empty::before{content:""}
-  .lbl{background:transparent;padding:0}
+  .lbl{background:transparent;padding:0;font-weight:700}
   .cbx{color:#000}
   .official{background:transparent}
+  a{color:#000;text-decoration:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <div class="bar">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
+  <button class="btn" id="docBtn" type="button">한글 · 워드로 가져가기</button>
   <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
@@ -1058,7 +1064,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하세요.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 가져가기</b>로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -1095,6 +1101,35 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",save);
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
+  // 한글·워드로 가져가기 — 채운 값 그대로 담은 .doc(웹문서)을 브라우저에서 만들어 내려받는다.
+  // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙). 한글·워드·리브레오피스에서 열리며
+  // 이어서 편집·인쇄 가능. '제출본 생성'이 아니라 '작성한 내용의 반출'이 목적.
+  document.getElementById("docBtn").addEventListener("click",function(){
+    function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    var out=[];
+    doc.childNodes.forEach(function(n){
+      if(n.nodeType===3){out.push(esc(n.textContent));return;}
+      if(n.nodeType!==1)return;
+      if(n.classList.contains("fld")){
+        var v=n.textContent||"";
+        if(n.classList.contains("big")){out.push('<div style="border:1px solid #000;padding:6pt;margin:4pt 0;min-height:36pt;white-space:pre-wrap">'+(v?esc(v):"")+"</div>");}
+        else out.push('<u>'+(v?esc(v):"      ")+"</u>");
+      }else if(n.classList.contains("cbx")){out.push(n.getAttribute("aria-checked")==="true"?"☑":"☐");}
+      else if(n.classList.contains("lbl")){out.push("<b>"+esc(n.textContent)+"</b>");}
+      else out.push(esc(n.textContent));
+    });
+    var title=${JSON.stringify(f.제목)}, fname=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
+    var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'
+      +'<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->'
+      +'<style>@page{size:A4;margin:20mm} body{font-family:"Batang","바탕","Malgun Gothic",serif;font-size:11.5pt;line-height:1.75;color:#000} u{text-decoration:underline}</style></head>'
+      +'<body><div style="white-space:pre-wrap">'+out.join("")+"</div></body></html>";
+    var blob=new Blob([String.fromCharCode(0xFEFF)+html],{type:"application/msword;charset=utf-8"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=fname.replace(/[\\\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+".doc";
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+  });
   document.getElementById("resetBtn").addEventListener("click",function(){
     doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
     doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});

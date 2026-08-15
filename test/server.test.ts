@@ -230,6 +230,18 @@ describe("핵심 동작", () => {
 });
 
 describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
+  it("서식 페이지: 한글·워드 내보내기 버튼 + A4 인쇄 규격", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
+    const html = await res.text();
+    expect(html).toContain('id="docBtn"');
+    expect(html).toContain("한글 · 워드로 가져가기");
+    expect(html).toContain("@page{size:A4");
+    // 내보내기는 브라우저 안에서만 — 서버 전송 코드(fetch/XMLHttpRequest)가 핸들러에 없어야 한다
+    const handler = html.slice(html.indexOf('getElementById("docBtn")'), html.indexOf('getElementById("resetBtn")'));
+    expect(handler).toContain("application/msword");
+    expect(handler).not.toMatch(/fetch\(|XMLHttpRequest/);
+  });
+
   it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
     const html = await res.text();
