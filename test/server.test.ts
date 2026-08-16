@@ -238,7 +238,7 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(html).toContain("@page{size:A4");
     // 내보내기는 브라우저 안에서만 — 서버 전송 코드(fetch/XMLHttpRequest)가 핸들러에 없어야 한다
     const handler = html.slice(html.indexOf('getElementById("docBtn")'), html.indexOf('getElementById("resetBtn")'));
-    expect(handler).toContain("application/msword");
+    expect(handler).toContain("wordprocessingml");
     expect(handler).not.toMatch(/fetch\(|XMLHttpRequest/);
   });
 

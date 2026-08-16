@@ -1101,35 +1101,79 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",save);
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
-  // 한글·워드로 가져가기 — 채운 값 그대로 담은 .doc(웹문서)을 브라우저에서 만들어 내려받는다.
-  // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙). 한글·워드·리브레오피스에서 열리며
-  // 이어서 편집·인쇄 가능. '제출본 생성'이 아니라 '작성한 내용의 반출'이 목적.
-  document.getElementById("docBtn").addEventListener("click",function(){
-    function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-    var out=[];
-    doc.childNodes.forEach(function(n){
-      if(n.nodeType===3){out.push(esc(n.textContent));return;}
-      if(n.nodeType!==1)return;
-      if(n.classList.contains("fld")){
-        var v=n.textContent||"";
-        if(n.classList.contains("big")){out.push('<div style="border:1px solid #000;padding:6pt;margin:4pt 0;min-height:36pt;white-space:pre-wrap">'+(v?esc(v):"")+"</div>");}
-        else out.push('<u>'+(v?esc(v):"      ")+"</u>");
-      }else if(n.classList.contains("cbx")){out.push(n.getAttribute("aria-checked")==="true"?"☑":"☐");}
-      else if(n.classList.contains("lbl")){out.push("<b>"+esc(n.textContent)+"</b>");}
-      else out.push(esc(n.textContent));
+  // 한글·워드로 가져가기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
+  // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙).
+  // .doc(HTML) 방식은 Word 없는 환경(맥 미리보기·텍스트편집기)에서 소스가 그대로 보여 폐기했다.
+  // DOCX = ZIP(무압축 저장) + 최소 3파트. 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
+  (function(){
+    var crcT=(function(){var t=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+    function crc32(u8){var c=0xFFFFFFFF;for(var i=0;i<u8.length;i++)c=crcT[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+    function zipStore(files){
+      var enc=new TextEncoder(),parts=[],central=[],offset=0;
+      function u32(v){return [v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];}
+      function u16(v){return [v&255,(v>>>8)&255];}
+      files.forEach(function(f){
+        var name=enc.encode(f.name),data=enc.encode(f.data),crc=crc32(data);
+        var lh=[80,75,3,4].concat(u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0));
+        parts.push(new Uint8Array(lh),name,data);
+        central.push(new Uint8Array([80,75,1,2].concat(u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset))),name);
+        offset+=lh.length+name.length+data.length;
+      });
+      var cdSize=central.reduce(function(a,b){return a+b.length;},0);
+      var eocd=[80,75,5,6].concat(u16(0),u16(0),u16(files.length),u16(files.length),u32(cdSize),u32(offset),u16(0));
+      return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+    }
+    function xe(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+    // 화면의 서식(빈칸·체크박스·굵은 라벨)을 문단·런 구조로 옮긴다.
+    function collect(){
+      var paras=[[]];
+      function push(text,style){
+        String(text).split("\n").forEach(function(seg,i){
+          if(i>0)paras.push([]);
+          if(seg)paras[paras.length-1].push({t:seg,s:style||{}});
+        });
+      }
+      doc.childNodes.forEach(function(n){
+        if(n.nodeType===3){push(n.textContent);return;}
+        if(n.nodeType!==1)return;
+        if(n.classList.contains("fld")){
+          var v=n.textContent||"";
+          if(n.classList.contains("big")){
+            paras.push([]); push(v||" ",{u:true}); paras.push([]);
+          } else push(v||"        ",{u:true});
+        } else if(n.classList.contains("cbx")){
+          push(n.getAttribute("aria-checked")==="true"?"☑":"☐");
+        } else if(n.classList.contains("lbl")){
+          push(n.textContent,{b:true});
+        } else push(n.textContent);
+      });
+      return paras;
+    }
+    function docXml(paras){
+      var body=paras.map(function(runs){
+        var rs=runs.map(function(r){
+          var pr='<w:rPr><w:rFonts w:ascii="Batang" w:eastAsia="Batang" w:hAnsi="Batang"/><w:sz w:val="23"/>'+(r.s.b?"<w:b/>":"")+(r.s.u?'<w:u w:val="single"/>':"")+"</w:rPr>";
+          return "<w:r>"+pr+'<w:t xml:space="preserve">'+xe(r.t)+"</w:t></w:r>";
+        }).join("");
+        return '<w:p><w:pPr><w:spacing w:after="0" w:line="300" w:lineRule="auto"/></w:pPr>'+rs+"</w:p>";
+      }).join("");
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
+    }
+    document.getElementById("docBtn").addEventListener("click",function(){
+      var fname=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
+      var blob=zipStore([
+        {name:"[Content_Types].xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'},
+        {name:"_rels/.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'},
+        {name:"word/document.xml",data:docXml(collect())}
+      ]);
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=fname.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_")+".docx";
+      document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
     });
-    var title=${JSON.stringify(f.제목)}, fname=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
-    var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'
-      +'<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->'
-      +'<style>@page{size:A4;margin:20mm} body{font-family:"Batang","바탕","Malgun Gothic",serif;font-size:11.5pt;line-height:1.75;color:#000} u{text-decoration:underline}</style></head>'
-      +'<body><div style="white-space:pre-wrap">'+out.join("")+"</div></body></html>";
-    var blob=new Blob([String.fromCharCode(0xFEFF)+html],{type:"application/msword;charset=utf-8"});
-    var a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=fname.replace(/[\\\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+".doc";
-    document.body.appendChild(a);a.click();
-    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
-  });
+  })();
   document.getElementById("resetBtn").addEventListener("click",function(){
     doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
     doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});
