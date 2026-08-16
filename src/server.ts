@@ -1137,7 +1137,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     function collect(){
       var paras=[[]];
       function push(text,style){
-        String(text).split("\n").forEach(function(seg,i){
+        String(text).split("\\n").forEach(function(seg,i){
           if(i>0)paras.push([]);
           if(seg)paras[paras.length-1].push({t:seg,s:style||{}});
         });
@@ -1178,7 +1178,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       ]);
       var a=document.createElement("a");
       a.href=URL.createObjectURL(blob);
-      a.download=fname.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_")+".docx";
+      a.download=fname.replace(/[\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+".docx";
       document.body.appendChild(a);a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
     });
