@@ -1003,7 +1003,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .hint{display:block;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2);line-height:1.9;word-break:keep-all}
 .hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap}
 .doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;font-size:15px;line-height:1.95;}
-.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
+.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:top;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
 /* 긴 서술형 칸 — 항목명(예: "- 경위:")은 윗줄에 그대로 두고, 입력은 아래 전용 칸에서.
@@ -1098,7 +1098,16 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     c.addEventListener("click",tog);
     c.addEventListener("keydown",function(e){if(e.key===" "||e.key==="Enter"){e.preventDefault();tog();}});
   });
-  doc.addEventListener("input",save);
+  // 짧은 빈칸이라도 길게 쓰면 넓은 칸으로 승격 — 좁고 긴 세로 칸이 되는 것을 막는다(8/16 은미 피드백).
+  function autoGrow(el){
+    if(!el||!el.classList||!el.classList.contains("fld"))return;
+    var long=(el.textContent||"").length>=40;
+    if(long!==el.classList.contains("big")){
+      if(el.dataset.wasBig==="1"||long)el.classList.toggle("big",long);
+      if(long)el.dataset.wasBig="1";
+    }
+  }
+  doc.addEventListener("input",function(e){autoGrow(e.target);save();});
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
   // 한글·워드로 가져가기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
