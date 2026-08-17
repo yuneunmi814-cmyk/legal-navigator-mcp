@@ -1032,7 +1032,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   .bar .sp{display:none}
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
-  .doc{line-height:1.85;font-size:14.5px}
+  /* 16px 미만이면 iOS가 빈칸을 탭할 때마다 화면을 확대해 버린다. 서식은 빈칸을
+     스무 번씩 눌러 채우는 문서라 그때마다 확대되면 못 쓴다. 읽기에도 14.5px은 작다. */
+  .doc{line-height:1.9;font-size:16px}
+  .fld{padding:1px 6px;min-height:1.7em}
   .fld.big{min-height:5em}
   .tips{padding:15px 16px}
 }
