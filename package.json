@@ -11,7 +11,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "audit:law": "tsx scripts/verify-statutes.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "audit:links": "node scripts/check-links.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

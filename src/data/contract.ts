@@ -1,7 +1,7 @@
 // 계약 일반 도메인. 출처: 민법 채권편 — 원문 law.go.kr.
 import type { Procedure, Checklist, FormTemplate, Statute, Precedent } from "./types.js";
 
-const 지원 = "대법원 전자소송 ecfs.scourt.go.kr / 대한법률구조공단 132 / 인터넷우체국(내용증명) ipost.epost.go.kr";
+const 지원 = "대법원 전자소송 ecfs.scourt.go.kr / 대한법률구조공단 132 / 인터넷우체국(내용증명) www.epost.go.kr";
 
 export const procedures: Record<string, Procedure> = {
   계약해제해지: {

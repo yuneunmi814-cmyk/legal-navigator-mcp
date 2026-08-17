@@ -2,7 +2,7 @@
 // ★환산보증금 초과 임대차에도 갱신요구권(10년)·권리금 보호·차임연체 해지 적용(제2조③).
 import type { Procedure, Checklist, FormTemplate, Statute, Precedent } from "./types.js";
 
-const 지원 = "상가건물임대차분쟁조정위원회(지역별, 한국부동산원·LH 운영) / 대한법률구조공단 132 / 대법원 전자소송 ecfs.scourt.go.kr / 인터넷우체국(내용증명) ipost.epost.go.kr";
+const 지원 = "상가건물임대차분쟁조정위원회(지역별, 한국부동산원·LH 운영) / 대한법률구조공단 132 / 대법원 전자소송 ecfs.scourt.go.kr / 인터넷우체국(내용증명) www.epost.go.kr";
 
 export const procedures: Record<string, Procedure> = {
   상가계약갱신요구권: {
