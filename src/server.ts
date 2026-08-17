@@ -964,6 +964,9 @@ function 본문HTML(bodyRaw: string): string {
   return s;
 }
 
+// 검색엔진에 알릴 '원본' 주소. 도메인을 붙이면 여기만 바꾸면 된다.
+const CANONICAL_SITE = (process.env.CANONICAL_SITE || "https://legalnavi.pages.dev").replace(/\/$/, "");
+
 // 서식 시각화 미리보기 — 모바일(카카오톡 인앱)에서 빈칸을 직접 채우고 인쇄/PDF로 저장. 자족적 HTML(외부 의존 0).
 function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string): string {
   const txtHref = `${baseUrl || ""}/forms/${encodeURIComponent(key)}.txt`;
@@ -979,6 +982,10 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · 법률 절차 길잡이</title>
+<!-- 같은 서식이 두 주소(여기 + 랜딩 도메인)에 있다. 검색엔진이 둘로 갈라 세지 않도록
+     원본은 우리 도메인 쪽이라고 알려준다. 카카오클라우드 주소는 공모전이 내준 것이라
+     영구적이지 않다. -->
+<link rel="canonical" href="${CANONICAL_SITE}/forms/${encodeURIComponent(key)}">
 <style>
 /* 랜딩(legal-navigator-web index.html :root)과 같은 값. 두 화면이 한 서비스로 보이려면 갈리면 안 된다.
    --fld 계열(빈칸의 노란 표시)만 기능색이라 별도 유지. */
