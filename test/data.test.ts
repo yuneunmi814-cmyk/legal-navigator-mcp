@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   CHECKLISTS,
   PROCEDURES,
+  FORMS,
   FORM_KEYS,
   TOPIC_KEYS,
   PRECEDENTS,
@@ -253,6 +254,23 @@ describe("접수처 버튼 URL", () => {
       const t = PROCEDURES[k].온라인접수;
       for (const d of wwwOnly) {
         if (new RegExp(`(?<![A-Za-z0-9.\\-/])${d.replace(/\./g, "\\.")}`).test(t)) bad.push(`${k}: ${d}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("채워야 할 칸이 줄머리 대괄호라 라벨로 굳어버리지 않는다", () => {
+    // 렌더러(본문HTML)는 줄 시작의 [대괄호]를 섹션 라벨로 바꾼다. 그래서 [작성일자]처럼
+    // 사용자가 채워야 하는 항목이 줄머리에 오면 회색 글씨가 되고 입력이 안 된다.
+    // 2026-08-18 회의에서 "작성일자·계좌번호가 입력이 안 된다"로 보고된 실제 사고 —
+    // 서식 48종이 날짜를 쓸 수 없는 상태였다. 항목명을 앞에 붙여 줄머리를 벗어나게 고쳤다.
+    const 채우는칸 = /^(작성일자|작성일|일자|날짜|계좌|은행|예금|서명|날인|예\)|등기부등본)/;
+    const bad: string[] = [];
+    for (const k of FORM_KEYS) {
+      for (const line of String(FORMS[k].본문 ?? "").split("\n")) {
+        const m = /^[ \t]*\[([^\]]+)\]/.exec(line);
+        if (!m || /^[_\s]*$/.test(m[1])) continue;
+        if (채우는칸.test(m[1])) bad.push(`${k}: ${line.trim().slice(0, 50)}`);
       }
     }
     expect(bad).toEqual([]);
