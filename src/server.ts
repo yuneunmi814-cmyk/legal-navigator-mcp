@@ -979,6 +979,17 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
   const official = f.공식양식 ? htmlEscape(f.공식양식) : "";
   const tips = f.작성요령.map((t) => `<li>${htmlEscape(t)}</li>`).join("");
   const body = 본문HTML(f.본문);
+  // 어디에 내는지는 위젯에만 두면 안 된다 — 위젯이 뜰 때가 있고 안 뜰 때가 있다(8/18 회의).
+  // 서식 자체에 박아두면 인쇄해서 들고 가도 보인다.
+  const sub = formSubmitInfo(key);
+  const submitBlock = sub
+    ? `<div class="submit">
+    <h3>다 채우셨으면, 여기에 내세요</h3>
+    <div><b>접수처</b> · ${htmlEscape(sub.관할)}</div>
+    <div><b>접수 방법</b> · ${htmlEscape(sub.온라인접수)}</div>
+    ${sub.url ? `<div style="margin-top:9px"><a class="btn" href="${sub.url}" target="_blank" rel="noopener">접수처 바로가기</a></div>` : ""}
+  </div>`
+    : "";
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · 법률 절차 길잡이</title>
@@ -1004,6 +1015,13 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .hd h1{font-size:clamp(19px,4.6vw,26px);margin:0 0 8px;letter-spacing:-.01em;line-height:1.25;text-wrap:balance;word-break:keep-all;}
 .hd .kind{display:inline-block;font-size:11.5px;font-weight:700;color:var(--ink2);background:var(--tip-bg);border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:0 0 8px}
 .hd .use{font-size:13.5px;color:var(--ink2);margin:0;word-break:keep-all}
+.submit{margin:20px 0 0;padding:14px 16px;background:var(--tip-bg);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;font-size:13.5px;color:var(--ink2);line-height:1.7}
+.submit h3{margin:0 0 7px;font-size:14px;color:var(--ink);letter-spacing:-.02em}
+.submit b{color:var(--ink)}
+.submit a{color:var(--accent);word-break:break-all}
+.share{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0;justify-content:flex-end}
+.share .btn{font-size:13px;padding:9px 13px}
+@media print{.share{display:none}}
 .official{margin:12px 0 0;font-size:13px;background:var(--tip-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2)}
 .official b{color:var(--ink)}
 /* 안내문은 한 덩어리 문장으로 흐르게 — flex로 두면 조각조각 칼럼처럼 쪼개져 읽기 어려움 */
@@ -1019,7 +1037,9 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   border:1.5px dashed var(--fld-line);border-radius:10px;line-height:1.7;font-weight:500;white-space:pre-wrap;}
 .fld.big:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400;font-size:.94em}
 .lbl{font-weight:800;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--ink);padding:1px 8px;border-radius:6px;letter-spacing:-.01em;}
-.cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.15em;line-height:1;padding:0 2px;color:var(--accent);vertical-align:-.05em}
+.cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.3em;line-height:1;padding:2px 5px;margin:0 1px;color:var(--accent);vertical-align:-.12em;border-radius:5px}
+.cbx:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.cbx:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .cbx:focus{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .tips{margin:22px 0 0;background:var(--tip-bg);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .tips h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:7px}
@@ -1062,7 +1082,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </style></head><body>
 <div class="bar">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
-  <button class="btn" id="docBtn" type="button">한글 · 워드로 가져가기</button>
+  <button class="btn" id="docBtn" type="button">한글 · 워드로 내보내기</button>
   <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
@@ -1074,11 +1094,18 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 가져가기</b>로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 내보내기</b>로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
     <ol>${tips}</ol>
+  </div>
+  ${submitBlock}
+  <div class="share">
+    <button class="btn" id="shareBtn" type="button" hidden>공유하기</button>
+    <button class="btn" id="copyBtn" type="button">링크 복사</button>
+    <a class="btn" id="mailBtn" href="#">메일</a>
+    <a class="btn" id="tgBtn" href="#" target="_blank" rel="noopener">텔레그램</a>
   </div>
   <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
 </div>
@@ -1120,7 +1147,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",function(e){autoGrow(e.target);save();});
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
-  // 한글·워드로 가져가기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
+  // 한글·워드로 내보내기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
   // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙).
   // .doc(HTML) 방식은 Word 없는 환경(맥 미리보기·텍스트편집기)에서 소스가 그대로 보여 폐기했다.
   // DOCX = ZIP(무압축 저장) + 최소 3파트. 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
@@ -1197,6 +1224,48 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
     doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});
     try{localStorage.removeItem(KEY);}catch(e){}
+  });
+
+  // ── 공유 (8/18 회의 결정 ③) ─────────────────────────
+  // 카카오톡 공유 SDK는 외부 스크립트와 앱 키가 필요해 이 페이지의 '외부 의존 0'을 깬다.
+  // Web Share API를 쓰면 폰의 기본 공유 시트가 뜨고 거기에 카카오톡이 그대로 들어 있다.
+  var pageUrl=location.href.split("#")[0];
+  var pageTitle=(document.querySelector("h1")||{}).textContent||"법률 절차 길잡이";
+  var shareText=pageTitle+" — 빈칸만 채우면 되는 서식입니다.";
+
+  var mail=document.getElementById("mailBtn");
+  if(mail) mail.href="mailto:?subject="+encodeURIComponent(pageTitle)
+    +"&body="+encodeURIComponent(shareText+"\n"+pageUrl);
+  var tg=document.getElementById("tgBtn");
+  if(tg) tg.href="https://t.me/share/url?url="+encodeURIComponent(pageUrl)
+    +"&text="+encodeURIComponent(shareText);
+
+  var shareBtn=document.getElementById("shareBtn");
+  if(shareBtn&&navigator.share){
+    shareBtn.hidden=false;
+    shareBtn.addEventListener("click",function(){
+      navigator.share({title:pageTitle,text:shareText,url:pageUrl}).catch(function(){});
+    });
+  }
+
+  var copyBtn=document.getElementById("copyBtn");
+  if(copyBtn) copyBtn.addEventListener("click",function(){
+    function done(){
+      var old=copyBtn.textContent;
+      copyBtn.textContent="복사됨";
+      setTimeout(function(){copyBtn.textContent=old;},1500);
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(pageUrl).then(done).catch(fallback);
+    }else fallback();
+    function fallback(){
+      var ta=document.createElement("textarea");
+      ta.value=pageUrl;ta.setAttribute("readonly","");
+      ta.style.cssText="position:fixed;top:-1000px";
+      document.body.appendChild(ta);ta.select();
+      try{document.execCommand("copy");done();}catch(e){}
+      document.body.removeChild(ta);
+    }
   });
 })();
 </script>
