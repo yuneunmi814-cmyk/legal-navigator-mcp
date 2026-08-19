@@ -1,6 +1,7 @@
 // 데이터 정합성 불변식. index.ts import 자체가 mergeStrict(키 충돌 시 throw)를 실행 → 충돌 시 이 파일이 실패.
 import { describe, it, expect } from "vitest";
 import {
+  SEARCH_SYNONYMS,
   CHECKLISTS,
   PROCEDURES,
   FORMS,
@@ -274,5 +275,22 @@ describe("접수처 버튼 URL", () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it("빌려준 돈과 물품·용역 대금이 섞이지 않는다 (소멸시효 10년 vs 3년)", () => {
+    // 2026-08-19 아린 님(PlayMCP)이 "법률은 해석 여지가 다양하다"며 든 예시
+    // ("돈거래 했는데" / "하기로 했는데")를 실제로 던져보니, '돈거래'라는 말이
+    // 동의어 표에 없어 '물건값 미수금'으로 잘못 떨어지고 있었다.
+    // 반대로 '물건값·공사대금'은 아예 매칭에 실패했다.
+    // 둘은 소멸시효가 10년 / 3년으로 달라 잘못 가면 안내가 통째로 틀린다.
+    const find = (w: string) =>
+      SEARCH_SYNONYMS.filter((e) => e.q.some((x) => w.includes(x))).flatMap((e) => e.topics);
+    for (const w of ["돈거래", "금전거래", "빌려준 돈", "떼인 돈"])
+      expect(find(w), `${w} → 대여금`).toContain("대여금미반환");
+    for (const w of ["물건값", "공사대금", "납품대금", "용역대금", "미수금"])
+      expect(find(w), `${w} → 미수금`).toContain("물품용역대금미수금");
+    // 서로 넘어가지 않아야 한다
+    expect(find("돈거래")).not.toContain("물품용역대금미수금");
+    expect(find("공사대금")).not.toContain("대여금미반환");
   });
 });
