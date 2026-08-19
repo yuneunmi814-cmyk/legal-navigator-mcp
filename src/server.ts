@@ -134,7 +134,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "자연어 주제 검색·주제 목록",
       description:
-        `일상어 상황 설명을 법률 주제 키로 매핑(속어 포함: 떼인 돈·깡통전세·갑질). 한국 생활법률 ${TOPIC_KEYS.length}개 주제. query 없이 호출하면 전체 목록. 반환된 키를 get_procedure·get_checklist·get_form_template에 사용.\n` +
+        `주제를 찾아보거나 전체 목록을 볼 때. 일상어·속어(떼인 돈·깡통전세·갑질)로 주제 키를 찾습니다. 사용자가 자기 상황을 이야기하면 이 도구가 아니라 triage를 호출하세요. 한국 생활법률 ${TOPIC_KEYS.length}개 주제. query 없이 호출하면 전체 목록. 반환된 키를 get_procedure·get_checklist·get_form_template에 사용.\n` +
         `[트리거 예시] "층간소음 문제 어떻게 해요?" / "떼인 돈 받는 법" / "직장 내 괴롭힘 관련해서 알아봐줘" / "청년월세 지원 같은 거 있어?" / "무슨 법률 문제 도와줄 수 있어?"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
