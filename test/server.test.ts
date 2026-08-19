@@ -673,4 +673,24 @@ describe("피해·위기(범죄피해자·자살·재난) 주제·연결", () =>
     const t = await callText("find_legal_aid", { keyword: "자살" });
     expect(t).toContain("자살예방");
   });
+
+  it("서식 페이지의 클라이언트 스크립트가 문법적으로 살아있다", async () => {
+    // 2026-08-16, 그리고 2026-08-19에 또 — 템플릿 리터럴 안의 클라이언트 JS에서
+    // 줄바꿈을 "\\n" 이 아니라 "\n" 으로 쓰면 실제 줄바꿈으로 치환돼 문자열이 끊긴다.
+    // SyntaxError 하나로 페이지 스크립트 전체가 죽는다(인쇄·자동저장·체크박스·
+    // 내보내기 전부). 문서에 적어두는 것만으로는 두 번 다 못 막았다.
+    for (const key of FORM_KEYS.slice(0, 6)) {
+      const res = await fetch(`${base}/forms/${encodeURIComponent(key)}`);
+      const html = await res.text();
+      const scripts = [...html.matchAll(/<script(?![^>]*ld\+json)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+      expect(scripts.length).toBeGreaterThan(0);
+      for (const src of scripts) {
+        try {
+          new Function(src);
+        } catch (e) {
+          throw new Error(`${key}: 서식 페이지 스크립트 문법 오류 — ${(e as Error).message}`);
+        }
+      }
+    }
+  });
 });

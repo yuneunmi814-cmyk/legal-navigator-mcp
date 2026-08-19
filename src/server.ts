@@ -1020,7 +1020,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .submit b{color:var(--ink)}
 .submit a{color:var(--accent);word-break:break-all}
 .share{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0;justify-content:flex-end}
-.share .btn{font-size:13px;padding:9px 13px}
+.share .btn{font-size:13px;padding:9px 14px;display:inline-flex;align-items:center;gap:6px}
+.share .btn svg{width:15px;height:15px;flex:0 0 auto}
+.share .share-k{background:#FEE500;color:#3C1E1E;border-color:#FEE500;font-weight:700}
+.share .share-k:hover{background:#F2DA00}
 @media print{.share{display:none}}
 .official{margin:12px 0 0;font-size:13px;background:var(--tip-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2)}
 .official b{color:var(--ink)}
@@ -1102,10 +1105,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   </div>
   ${submitBlock}
   <div class="share">
-    <button class="btn" id="shareBtn" type="button" hidden>공유하기</button>
-    <button class="btn" id="copyBtn" type="button">링크 복사</button>
-    <a class="btn" id="mailBtn" href="#">메일</a>
-    <a class="btn" id="tgBtn" href="#" target="_blank" rel="noopener">텔레그램</a>
+    <button class="btn share-k" id="shareBtn" type="button" hidden>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C6.9 3 2.8 6.3 2.8 10.3c0 2.6 1.7 4.8 4.3 6.1l-1 3.6c-.1.3.2.5.5.4l4.2-2.8c.4 0 .8.1 1.2.1 5.1 0 9.2-3.3 9.2-7.4S17.1 3 12 3z"/></svg>카카오톡 공유</button>
+    <button class="btn" id="copyBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>링크 복사</button>
   </div>
   <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
 </div>
@@ -1232,13 +1235,6 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   var pageUrl=location.href.split("#")[0];
   var pageTitle=(document.querySelector("h1")||{}).textContent||"법률 절차 길잡이";
   var shareText=pageTitle+" — 빈칸만 채우면 되는 서식입니다.";
-
-  var mail=document.getElementById("mailBtn");
-  if(mail) mail.href="mailto:?subject="+encodeURIComponent(pageTitle)
-    +"&body="+encodeURIComponent(shareText+"\n"+pageUrl);
-  var tg=document.getElementById("tgBtn");
-  if(tg) tg.href="https://t.me/share/url?url="+encodeURIComponent(pageUrl)
-    +"&text="+encodeURIComponent(shareText);
 
   var shareBtn=document.getElementById("shareBtn");
   if(shareBtn&&navigator.share){
