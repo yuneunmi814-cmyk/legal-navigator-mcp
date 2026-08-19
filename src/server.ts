@@ -111,6 +111,12 @@ function rankTopics(query: string): string[] {
   for (const k of TOPIC_KEYS) {
     const p = PROCEDURES[k];
     if (nQ.includes(k) || k.includes(nQ)) add(k, 6);
+    // 법률명을 통째로 친 경우("스토킹범죄의 처벌 등에 관한 법률") — 그 법을 근거로 삼는
+    // 주제가 이겨야 한다. 단어 단위로만 재면 '처벌'·'법률' 같은 흔한 조각이 이겨버린다.
+    for (const law of p.근거법) {
+      const nLaw = law.replace(/\s/g, "");
+      if (nLaw.length >= 6 && nQ.includes(nLaw)) add(k, 7);
+    }
     const hay = `${p.적용대상} ${p.근거법.join(" ")}`;
     for (const w of words) {
       if (p.제목.includes(w)) add(k, 4);
@@ -118,7 +124,12 @@ function rankTopics(query: string): string[] {
       else if (hay.includes(w)) add(k, 2);
     }
   }
-  return [...score.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  const ranked = [...score.entries()].sort((a, b) => b[1] - a[1]);
+  // 근거가 약하면 답하지 않는다. 흔한 단어 하나가 2점 먹고 1등이 되면 그게 답이 되던 구조라,
+  // "업무누락 반복하는 실장급 직원"이 '검찰 사칭 보이스피싱'으로 갔다(2026-08-19 발화 감사).
+  // 법률 안내에서 근거 없이 확신하는 것보다 못 찾았다고 하는 편이 낫다.
+  if (ranked.length && ranked[0][1] < 4) return [];
+  return ranked.map(([k]) => k);
 }
 
 export function createServer(baseUrl?: string): McpServer {

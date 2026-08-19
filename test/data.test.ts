@@ -293,4 +293,14 @@ describe("접수처 버튼 URL", () => {
     expect(find("돈거래")).not.toContain("물품용역대금미수금");
     expect(find("공사대금")).not.toContain("대여금미반환");
   });
+
+  it("법률 정식명칭과 줄임말로도 주제를 찾는다", () => {
+    // 2026-08-19 실사용 발화 628건 감사 — 근거법이 약칭("스토킹처벌법")으로 적혀 있어
+    // 정식 명칭을 그대로 친 질문이 엉뚱한 주제로 갔다. 사람들은 법률명으로도 검색한다.
+    const find = (w: string) =>
+      SEARCH_SYNONYMS.filter((e) => e.q.some((x) => w.includes(x))).flatMap((e) => e.topics);
+    expect(find("스토킹범죄의 처벌 등에 관한 법률")).toContain("스토킹신고응급조치");
+    expect(find("스토킹방지 및 피해자보호 등에 관한 법률")).toContain("스토킹신고응급조치");
+    expect(find("통매음")).toContain("촬영물협박강요");
+  });
 });
