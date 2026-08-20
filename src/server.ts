@@ -96,6 +96,22 @@ function 절차텍스트(key: string): string {
 }
 
 // 자연어 질의 → 관련 주제 키 랭킹(동의어군 + 메타데이터 가중). search_topics·triage 공용.
+// 주제엔 없는데 서식 이름엔 있는 말이 있다. "내용증명"·"차용증"·"합의서"처럼
+// **문서 이름으로 찾는 사람**이 그렇다 — 내용증명 서식이 12종이나 있는데
+// '내용증명' 한 단어로는 0건이었다(2026-08-21 확인). 주제 검색이 비면 서식 이름에서 한 번 더 찾는다.
+export function matchFormsByName(query: string): string[] {
+  const n = (x: string) => x.replace(/[\s_·\-]/g, "");
+  const nq = n(query);
+  if (nq.length < 2) return [];
+  const toks = query.split(/[\s_·\-]+/).map(n).filter((t) => t.length >= 2);
+  const hit: string[] = [];
+  for (const key of FORM_KEYS) {
+    const hay = n(key + (FORMS[key]?.제목 ?? ""));
+    if (hay.includes(nq) || (toks.length > 0 && toks.every((t) => hay.includes(t)))) hit.push(key);
+  }
+  return hit;
+}
+
 function rankTopics(query: string): string[] {
   const Q = query.replace(/\s+/g, " ").trim();
   const nQ = Q.replace(/\s/g, "");
@@ -177,6 +193,21 @@ export function createServer(baseUrl?: string): McpServer {
       }
       const ranked = rankTopics(q).slice(0, 12);
       if (!ranked.length) {
+        // 주제로는 못 찾아도 서식 이름이면 찾을 수 있다 — 빈손으로 돌려보내기 전에 한 번 더.
+        const forms = matchFormsByName(q).slice(0, 12);
+        if (forms.length) {
+          const list = forms.map((k) => `- \`${k}\` — ${FORMS[k].제목}`).join("\n");
+          return {
+            content: [
+              {
+                type: "text",
+                text: withDisclaimer(
+                  `## 📄 '${q}' 서식 ${forms.length}종\n\n주제로는 못 찾았지만 이름이 맞는 서식이 있습니다.\n\n${list}\n\n→ 위 서식 키로 \`get_form_template\`을 호출하면 빈칸 채움형 서식을 바로 받습니다.`,
+                ),
+              },
+            ],
+          };
+        }
         return { content: [{ type: "text", text: withDisclaimer(`'${q}'에 맞는 주제를 바로 찾지 못했습니다. query 없이 호출하면 전체 목록(56개 분야)을 볼 수 있습니다. 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
       }
       const body = ranked.map((k) => `- \`${k}\` — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");

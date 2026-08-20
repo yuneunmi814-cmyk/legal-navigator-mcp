@@ -1,6 +1,7 @@
 // 데이터 정합성 불변식. index.ts import 자체가 mergeStrict(키 충돌 시 throw)를 실행 → 충돌 시 이 파일이 실패.
 import { describe, it, expect } from "vitest";
 import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
+import { matchFormsByName } from "../src/server.js";
 import {
   SEARCH_SYNONYMS,
   CHECKLISTS,
@@ -414,6 +415,41 @@ describe("HWPX 내보내기", () => {
     expect(browser.map((f: { name: string }) => f.name)).toEqual(server.map((f) => f.name));
     for (let i = 0; i < server.length; i++) {
       expect(browser[i].data, `${server[i].name} 불일치`).toBe(server[i].data);
+    }
+  });
+});
+
+// ── 서식 이름으로 찾기 ──────────────────────────────────────────────
+// "내용증명"·"합의서"처럼 문서 이름만 아는 사람이 많다. 주제 검색이 비었다고 빈손으로
+// 돌려보내면, 정작 그 이름의 서식을 12종이나 갖고 있으면서 없다고 답하게 된다(8/21 확인).
+describe("서식 이름 검색 (주제 검색이 빌 때의 대비책)", () => {
+  it("'내용증명' 한 단어로 내용증명 서식을 찾는다", () => {
+    const hits = matchFormsByName("내용증명");
+    expect(hits.length).toBeGreaterThanOrEqual(10);
+    expect(hits).toContain("보증금반환_내용증명");
+    expect(hits).toContain("임금지급_내용증명");
+  });
+
+  it("띄어쓰기·가운뎃점·밑줄을 무시하고 맞춘다", () => {
+    for (const q of ["보증금반환 내용증명", "보증금반환_내용증명", "보증금반환·내용증명"]) {
+      expect(matchFormsByName(q), q).toContain("보증금반환_내용증명");
+    }
+  });
+
+  it("여러 낱말은 모두 들어간 서식만 맞춘다", () => {
+    const hits = matchFormsByName("보증금 내용증명");
+    expect(hits).toContain("보증금반환_내용증명");
+    expect(hits).not.toContain("임금지급_내용증명");
+  });
+
+  it("한 글자나 관계없는 말에는 아무것도 주지 않는다", () => {
+    expect(matchFormsByName("가")).toHaveLength(0);
+    expect(matchFormsByName("떡볶이 레시피")).toHaveLength(0);
+  });
+
+  it("모든 서식이 제 이름으로 검색된다", () => {
+    for (const key of FORM_KEYS) {
+      expect(matchFormsByName(key), `${key} — 제 이름으로도 안 찾힌다`).toContain(key);
     }
   });
 });
