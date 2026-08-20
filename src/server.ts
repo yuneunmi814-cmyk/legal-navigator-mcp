@@ -39,6 +39,7 @@ import {
   calcDeadline,
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
+import { hwpxClientScript } from "./hwpx.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
@@ -1060,9 +1061,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
 .foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
 .foot a{color:var(--foot)}
-/* 좁은 화면 — 버튼 4개를 2×2로. 위 줄은 내보내기(PDF·문서), 아래 줄은 보조(텍스트·비우기) */
+/* 좁은 화면 — 버튼 5개를 2열로. 인쇄는 한 줄 전체, 그 아래 한글|워드, 텍스트|비우기 */
 @media (max-width:520px){
   .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:9px 12px}
+  .bar #printBtn{grid-column:1/-1}
   .bar .sp{display:none}
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
@@ -1094,9 +1096,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
-<div class="bar">
+<div class="bar" id="save">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
-  <button class="btn" id="docBtn" type="button">워드 · 한글로 내보내기</button>
+  <button class="btn" id="hwpBtn" type="button">한글로 내보내기</button>
+  <button class="btn" id="docBtn" type="button">워드로 내보내기</button>
   <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
@@ -1108,7 +1111,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>워드·한글로 내보내기</b>로 작성한 내용을 받아 이어서 편집할 수 있습니다. 받는 파일은 <b>.docx</b> 한 가지이며, 워드와 한글(한컴오피스) 어느 쪽으로도 열립니다.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 내보내기</b>로 작성한 내용을 받아 이어서 편집할 수 있습니다. 한글은 <b>.hwpx</b>(한글 2014 이상), 워드는 <b>.docx</b>로 받습니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -1161,16 +1164,16 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",function(e){autoGrow(e.target);save();});
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
-  // 워드·한글로 내보내기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
-  // .hwp는 만들지 않는다(비공개 바이너리 포맷). 한글도 .docx를 여니 실사용엔 문제가 없지만,
-  // 버튼이 "한글"을 먼저 말하면 .hwp를 기대하게 된다 — 2026-08-20 회의에서 실제로 그렇게 읽혔다.
+  // 한글·워드로 내보내기 — 채운 값 그대로 담은 진짜 .hwpx / .docx를 브라우저에서 만들어 내려받는다.
+  // 둘 다 ZIP+XML이라 같은 zipStore를 쓴다. .hwp(비공개 바이너리)는 만들 수 없어
+  // 한글 쪽은 국가표준 .hwpx로 낸다 — 한글 2014 이상에서 그대로 열린다(2026-08-20 회의 지적).
   // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙).
   // .doc(HTML) 방식은 Word 없는 환경(맥 미리보기·텍스트편집기)에서 소스가 그대로 보여 폐기했다.
   // DOCX = ZIP(무압축 저장) + 최소 3파트. 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
   (function(){
     var crcT=(function(){var t=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
     function crc32(u8){var c=0xFFFFFFFF;for(var i=0;i<u8.length;i++)c=crcT[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
-    function zipStore(files){
+    function zipStore(files,mime){
       var enc=new TextEncoder(),parts=[],central=[],offset=0;
       function u32(v){return [v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];}
       function u16(v){return [v&255,(v>>>8)&255];}
@@ -1183,7 +1186,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       });
       var cdSize=central.reduce(function(a,b){return a+b.length;},0);
       var eocd=[80,75,5,6].concat(u16(0),u16(0),u16(files.length),u16(files.length),u32(cdSize),u32(offset),u16(0));
-      return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+      return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:mime});
     }
     function xe(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
     // 화면의 서식(빈칸·체크박스·굵은 라벨)을 문단·런 구조로 옮긴다.
@@ -1222,18 +1225,26 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
     }
+${hwpxClientScript()}
+    var FNAME=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
+    function saveBlob(blob,ext){
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=FNAME.replace(/[\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+ext;
+      document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+    }
+    document.getElementById("hwpBtn").addEventListener("click",function(){
+      saveBlob(zipStore(hwpxFiles(FNAME,collect()),"application/vnd.hancom.hwpx"),".hwpx");
+    });
     document.getElementById("docBtn").addEventListener("click",function(){
-      var fname=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
+      var fname=FNAME;
       var blob=zipStore([
         {name:"[Content_Types].xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'},
         {name:"_rels/.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'},
         {name:"word/document.xml",data:docXml(collect())}
-      ]);
-      var a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download=fname.replace(/[\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+".docx";
-      document.body.appendChild(a);a.click();
-      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
+      ],"application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      saveBlob(blob,".docx");
     });
   })();
   document.getElementById("resetBtn").addEventListener("click",function(){

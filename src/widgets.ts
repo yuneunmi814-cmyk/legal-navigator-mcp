@@ -69,7 +69,9 @@ export function buildFormWidget(
   submit?: { url?: string | null; 관할: string },
 ): KakaoWidget {
   const previewUrl = `${baseUrl}/forms/${encodeURIComponent(formKey)}`;
-  const txtUrl = `${previewUrl}.txt`;
+  // 8/21: "텍스트 파일로 받기"를 없애고 서식 파일 받기로 바꿨다.
+  // #save는 서식 페이지 위쪽 버튼 바(인쇄·한글·워드)로 바로 내려보낸다.
+  const saveUrl = `${previewUrl}#save`;
   const children: WidgetComponent[] = [
     { type: "Title", value: trunc(f.제목.replace(/\s*\(.*?\)\s*$/, ""), 40) },
     { type: "Caption", value: trunc(f.용도, 90) },
@@ -86,14 +88,14 @@ export function buildFormWidget(
     ...(submit?.url
       ? [{ type: "Button", label: "🏛️ 접수처 바로가기", onClickAction: openUrl(submit.url), style: "secondary", block: true } as Button]
       : []),
-    { type: "Button", label: "📎 텍스트 파일로 받기", onClickAction: openUrl(txtUrl), style: "secondary", block: true },
+    { type: "Button", label: "📄 서식 다운로드 (한글·워드)", onClickAction: openUrl(saveUrl), style: "secondary", block: true },
     ...(submit ? [{ type: "Caption", value: trunc(`🏛️ 제출: ${submit.관할}`, 70) } as Caption] : []),
     { type: "Caption", value: "일반 정보이며 개별 법률 자문이 아닙니다 · 법률 절차 길잡이" },
   ];
   return {
     widget: { type: "Card", size: "md", children },
     copy_text:
-      `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF 저장까지: ${previewUrl}` +
+      `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF·한글(.hwpx)·워드(.docx)로 받기: ${previewUrl}` +
       (submit ? `\n제출처: ${submit.관할}` : "") +
       `\n— 법률 절차 길잡이`,
   };

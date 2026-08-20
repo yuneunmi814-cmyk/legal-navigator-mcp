@@ -1,5 +1,6 @@
 // 데이터 정합성 불변식. index.ts import 자체가 mergeStrict(키 충돌 시 throw)를 실행 → 충돌 시 이 파일이 실패.
 import { describe, it, expect } from "vitest";
+import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
 import {
   SEARCH_SYNONYMS,
   CHECKLISTS,
@@ -302,5 +303,117 @@ describe("접수처 버튼 URL", () => {
     expect(find("스토킹범죄의 처벌 등에 관한 법률")).toContain("스토킹신고응급조치");
     expect(find("스토킹방지 및 피해자보호 등에 관한 법률")).toContain("스토킹신고응급조치");
     expect(find("통매음")).toContain("촬영물협박강요");
+  });
+});
+
+// ── HWPX(한글) 내보내기 ─────────────────────────────────────────────
+// 실물 .hwpx(정부 공고문)를 뜯어 맞춘 구조다. 한 글자만 어긋나도 한글이 "열 수 없는 파일"이라 한다.
+// 여기서 막지 못하면 사용자 폰에서야 알게 된다.
+describe("HWPX 내보내기", () => {
+  const paras: HwpxRun[][] = [
+    [{ t: "임 금 체 불 진 정 서", b: true }],
+    [],
+    [{ t: "진정인 성명: " }, { t: "윤은미", u: true }],
+    [{ t: "☑ 임금 미지급  ☐ 퇴직금 미지급" }],
+  ];
+
+  it("ZIP 첫 항목은 mimetype이어야 한다 (HWPX 규칙)", () => {
+    const files = hwpxFiles("임금체불 진정서", paras);
+    expect(files[0].name).toBe("mimetype");
+    expect(files[0].data).toBe("application/hwp+zip");
+  });
+
+  it("한글이 요구하는 파트가 모두 들어 있다", () => {
+    const names = hwpxFiles("t", paras).map((f) => f.name);
+    for (const need of [
+      "version.xml",
+      "settings.xml",
+      "Contents/header.xml",
+      "Contents/section0.xml",
+      "Contents/content.hpf",
+      "META-INF/container.xml",
+      "META-INF/manifest.xml",
+      "META-INF/container.rdf",
+      "Preview/PrvText.txt",
+    ]) {
+      expect(names).toContain(need);
+    }
+  });
+
+  it("모든 XML 파트의 태그가 짝이 맞는다", () => {
+    for (const f of hwpxFiles("따옴표 & <꺾쇠> 제목", paras)) {
+      if (f.name === "mimetype" || f.name.endsWith(".txt")) continue;
+      const stack: string[] = [];
+      for (const m of f.data.matchAll(/<(\/?)([A-Za-z0-9:_.-]+)([^>]*?)(\/?)>/g)) {
+        const [, close, name, , self] = m;
+        if (f.data.slice(m.index!, m.index! + 2) === "<?") continue;
+        if (close) expect(stack.pop(), `${f.name}: </${name}> 짝 안 맞음`).toBe(name);
+        else if (!self) stack.push(name);
+      }
+      expect(stack, `${f.name}: 안 닫힌 태그 ${stack.join(",")}`).toHaveLength(0);
+    }
+  });
+
+  it("본문의 모든 ID 참조가 header에 정의돼 있다", () => {
+    const files = hwpxFiles("t", paras);
+    const pick = (n: string) => files.find((f) => f.name === n)!.data;
+    const header = pick("Contents/header.xml");
+    const section = pick("Contents/section0.xml");
+    const defined = (tag: string, src: string) =>
+      new Set([...src.matchAll(new RegExp(`<${tag} id="(\\d+)"`, "g"))].map((m) => m[1]));
+    const used = (attr: string, src: string) =>
+      new Set([...src.matchAll(new RegExp(`${attr}="(\\d+)"`, "g"))].map((m) => m[1]).filter((v) => v !== "4294967295"));
+
+    for (const [attr, tag, src] of [
+      ["charPrIDRef", "hh:charPr", section],
+      ["paraPrIDRef", "hh:paraPr", section],
+      ["styleIDRef", "hh:style", section],
+      ["outlineShapeIDRef", "hh:numbering", section],
+      ["borderFillIDRef", "hh:borderFill", header + section],
+      ["tabPrIDRef", "hh:tabPr", header],
+    ] as const) {
+      const have = defined(tag, header);
+      for (const id of used(attr, src)) {
+        expect(have.has(id), `${attr}="${id}" 인데 ${tag} id=${id} 이 header에 없다`).toBe(true);
+      }
+    }
+  });
+
+  it("refList 자식 순서가 스키마 순서와 같다", () => {
+    const header = hwpxFiles("t", paras).find((f) => f.name === "Contents/header.xml")!.data;
+    const order = ["hh:fontfaces", "hh:borderFills", "hh:charProperties", "hh:tabProperties", "hh:numberings", "hh:paraProperties", "hh:styles"];
+    const at = order.map((t) => header.indexOf("<" + t));
+    expect(at.every((v) => v > 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("본문 글자가 XML 이스케이프된다", () => {
+    const sec = hwpxFiles("t", [[{ t: "채권자 & 채무자 <갑>" }]]).find((f) => f.name === "Contents/section0.xml")!.data;
+    expect(sec).toContain("채권자 &amp; 채무자 &lt;갑&gt;");
+    expect(sec).not.toContain("<갑>");
+  });
+
+  it("빈 문단도 문단으로 남는다 (서식의 줄 간격이 무너지지 않게)", () => {
+    const sec = hwpxFiles("t", paras).find((f) => f.name === "Contents/section0.xml")!.data;
+    expect([...sec.matchAll(/<hp:p /g)]).toHaveLength(paras.length);
+  });
+
+  // 8/16·8/19에 템플릿 리터럴 안에 직접 적은 "\\n"이 실제 줄바꿈으로 치환되면서 서식 페이지
+  // 스크립트가 통째로 죽은 적이 두 번 있다. 이 스크립트는 런타임에 끼워 넣는 값이라 그 함정은
+  // 없지만, 결과물이 실제로 돌아가는지는 여기서 확인한다(페이지 전체는 server.test.ts가 본다).
+  it("클라이언트 스크립트가 문법적으로 살아있다", () => {
+    expect(() => new Function("xe", hwpxClientScript() + "; return hwpxFiles;")).not.toThrow();
+  });
+
+  it("브라우저에서 만든 결과가 서버 쪽 결과와 같다", () => {
+    const make = new Function("xe", hwpxClientScript() + "; return hwpxFiles;")(
+      (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+    );
+    const browser = make("임금체불 진정서", paras.map((r) => r.map((x) => ({ t: x.t, s: { b: x.b, u: x.u } }))));
+    const server = hwpxFiles("임금체불 진정서", paras);
+    expect(browser.map((f: { name: string }) => f.name)).toEqual(server.map((f) => f.name));
+    for (let i = 0; i < server.length; i++) {
+      expect(browser[i].data, `${server[i].name} 불일치`).toBe(server[i].data);
+    }
   });
 });
