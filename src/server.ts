@@ -416,7 +416,7 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "표준 서식 제공",
       description:
-        `표준 서식 ${FORM_KEYS.length}종의 빈칸 채움 골격 + 작성요령 + 공식 양식 출처 + 제출 접수처. 모바일 미리보기(빈칸을 탭해 입력·인쇄/PDF 저장)와 .txt 다운로드 링크 제공. 문서를 써야 하거나 보내야 할 때 사용.\n` +
+        `표준 서식 ${FORM_KEYS.length}종의 빈칸 채움 골격 + 작성요령 + 공식 양식 출처 + 제출 접수처. 모바일 미리보기(빈칸을 탭해 입력·인쇄/PDF 저장)와 한글(.hwpx)·워드(.docx)·텍스트 다운로드 제공. 문서를 써야 하거나 보내야 할 때 사용.\n` +
         `[트리거 예시] "내용증명 양식 줘" / "고소장 어떻게 써요?" / "차용증 써야 하는데" / "기초연금 신청서 양식 있어?" / "월급 못 받은 거 내용증명 보내고 싶어요"\n` +
         `Service: ${SVC}.`,
       inputSchema: { form: z.enum(FORM_KEYS).describe("서식 키. get_procedure/search_topics에서 안내된 서식명을 사용") },
@@ -442,7 +442,7 @@ export function createServer(baseUrl?: string): McpServer {
           "",
           `**🖊️ 빈칸 바로 채우기(모바일 미리보기·인쇄/PDF 저장)**: ${baseUrl}/forms/${encodeURIComponent(form)}`,
           "링크를 누르면 이 서식이 문서 화면으로 열립니다 — [빈칸]을 탭해 본인 정보를 직접 입력하고 인쇄·PDF로 저장하세요.",
-          `**📎 텍스트 파일로 저장·공유**: ${baseUrl}/forms/${encodeURIComponent(form)}.txt` +
+          `**📎 서식 다운로드(한글·워드·텍스트)**: ${baseUrl}/forms/${encodeURIComponent(form)}#save` +
             (f.공식양식 ? " (관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성)" : ""),
         );
       }
@@ -1012,7 +1012,6 @@ const CANONICAL_SITE = (process.env.CANONICAL_SITE || "https://legalnavi.pages.d
 
 // 서식 시각화 미리보기 — 모바일(카카오톡 인앱)에서 빈칸을 직접 채우고 인쇄/PDF로 저장. 자족적 HTML(외부 의존 0).
 function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string): string {
-  const txtHref = `${baseUrl || ""}/forms/${encodeURIComponent(key)}.txt`;
   // 제목 끝의 서식 성격 꼬리표("… 공란 채움" · "… 예시 — 공란을 직접 채워 사용" · "… 상담 시 작성" 등)는
   // 제목에서 떼어내 작은 배지로 — 모바일에서 제목이 두세 줄을 먹던 문제
   const 꼬리표 = /\s*\(([^()]*(?:공란|채움|골격|예시|서식|작성|입력 항목)[^()]*)\)\s*$/.exec(f.제목);
@@ -1046,6 +1045,9 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
 :root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#8b95a1;--tip-bg:#f4f6f9;--foot:#8b95a1;}
 @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;--fld:#2a2410;--fld-line:#6f5a1f;--fld-ink:#e7c877;--ph:#6b7488;--tip-bg:#141b2b;--foot:#7a8398;}}
 *{box-sizing:border-box}
+/* hidden 속성은 display를 지정한 요소에서 밀린다. 랜딩에서 서식 114개가 한꺼번에
+   그려진 적이 있고, 다운로드 메뉴도 같은 이유로 열린 채 떴다(8/21). */
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.62;-webkit-text-size-adjust:100%;}
 .bar{position:sticky;top:0;z-index:5;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
@@ -1067,6 +1069,21 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .share .btn svg{width:15px;height:15px;flex:0 0 auto}
 .share .share-k{background:#FEE500;color:#3C1E1E;border-color:#FEE500;font-weight:700}
 .share .share-k:hover{background:#F2DA00}
+/* 서식 다운로드 드롭다운 — 형식이 넷이라 버튼을 늘어놓으면 바가 길어진다.
+   인쇄·PDF만 밖에 남긴다: 그건 파일이 떨어지는 게 아니라 인쇄 대화상자가 뜨는 다른 동작이고,
+   서식에서 가장 많이 쓰는 버튼이라 한 번 더 누르게 하면 안 된다. */
+.dd{position:relative;display:inline-flex}
+/* 탭할 때 글자가 파랗게 선택되는 것 방지 — 폰에서 버튼을 누르면 그렇게 된다 */
+.bar .btn,.menu button{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.dd .chev{margin-left:6px;transition:transform .16s ease}
+.dd[data-open="1"] .chev{transform:rotate(180deg)}
+.menu{position:absolute;z-index:70;top:calc(100% + 7px);left:0;min-width:236px;padding:6px;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.05),0 18px 44px -18px rgba(0,0,0,.34);display:flex;flex-direction:column;gap:2px}
+.menu button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.menu button:hover{background:var(--tip-bg)}
+.menu button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.menu .ext{margin-left:auto;font-size:12px;font-weight:500;color:var(--ph);font-variant-numeric:tabular-nums}
+.menu .ic{width:26px;height:26px;flex:none;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.ic-h{background:#1f6feb}.ic-w{background:#2b579a}.ic-m{background:#4e5968}.ic-t{background:#8b95a1}
 @media print{.share{display:none}}
 .official{margin:12px 0 0;font-size:13px;background:var(--tip-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink2)}
 .official b{color:var(--ink)}
@@ -1092,10 +1109,13 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
 .foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
 .foot a{color:var(--foot)}
-/* 좁은 화면 — 버튼 5개를 2열로. 인쇄는 한 줄 전체, 그 아래 한글|워드, 텍스트|비우기 */
+/* 좁은 화면 — 인쇄는 한 줄 전체, 그 아래 [서식 다운로드 ▾] | [빈칸 비우기] */
 @media (max-width:520px){
   .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:9px 12px}
   .bar #printBtn{grid-column:1/-1}
+  .bar .dd{width:100%}
+  .bar .dd>.btn{width:100%}
+  .menu{min-width:0;width:max(100%,220px)}
   .bar .sp{display:none}
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
@@ -1129,9 +1149,15 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </style></head><body>
 <div class="bar" id="save">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
-  <button class="btn" id="hwpBtn" type="button">한글로 내보내기</button>
-  <button class="btn" id="docBtn" type="button">워드로 내보내기</button>
-  <a class="btn" href="${txtHref}">텍스트 파일</a>
+  <div class="dd" id="dd">
+    <button class="btn" id="saveBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="saveMenu">서식 다운로드<svg class="chev" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.6 4.4 6 7.8l3.4-3.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="menu" id="saveMenu" role="menu" aria-labelledby="saveBtn" hidden>
+      <button type="button" role="menuitem" data-fmt="hwpx"><span class="ic ic-h" aria-hidden="true">한</span>한글<span class="ext">.hwpx</span></button>
+      <button type="button" role="menuitem" data-fmt="docx"><span class="ic ic-w" aria-hidden="true">W</span>워드<span class="ext">.docx</span></button>
+      <button type="button" role="menuitem" data-fmt="md"><span class="ic ic-m" aria-hidden="true">M</span>마크다운<span class="ext">.md</span></button>
+      <button type="button" role="menuitem" data-fmt="txt"><span class="ic ic-t" aria-hidden="true">T</span>텍스트<span class="ext">.txt</span></button>
+    </div>
+  </div>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
 </div>
@@ -1142,7 +1168,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 내보내기</b>로 작성한 내용을 받아 이어서 편집할 수 있습니다. 한글은 <b>.hwpx</b>(한글 2014 이상), 워드는 <b>.docx</b>로 받습니다.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>서식 다운로드</b>에서 작성한 내용을 파일로 받아 이어서 편집할 수 있습니다. 한글(<b>.hwpx</b> — 한글 2014 이상)·워드(<b>.docx</b>)·마크다운·텍스트 중에 고르시면 됩니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -1265,17 +1291,59 @@ ${hwpxClientScript()}
       document.body.appendChild(a);a.click();
       setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
     }
-    document.getElementById("hwpBtn").addEventListener("click",function(){
-      saveBlob(zipStore(hwpxFiles(FNAME,collect()),"application/vnd.hancom.hwpx"),".hwpx");
-    });
-    document.getElementById("docBtn").addEventListener("click",function(){
-      var fname=FNAME;
-      var blob=zipStore([
+    // 서식을 글자로 옮긴다. md면 굵은 라벨을 **굵게**로 살린다.
+    function asLines(md){
+      var NL=String.fromCharCode(10);
+      return collect().map(function(runs){
+        return runs.map(function(r){
+          var t=r.t;
+          if(md&&r.s&&r.s.b&&t.trim()) return "**"+t.trim()+"**";
+          return t;
+        }).join("");
+      }).join(NL);
+    }
+    function textBlob(md){
+      var NL=String.fromCharCode(10);
+      var body=asLines(md);
+      if(md) body="# "+FNAME+NL+NL+body;
+      return new Blob([body],{type:md?"text/markdown;charset=utf-8":"text/plain;charset=utf-8"});
+    }
+    function makeDocx(){
+      return zipStore([
         {name:"[Content_Types].xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'},
         {name:"_rels/.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'},
         {name:"word/document.xml",data:docXml(collect())}
       ],"application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-      saveBlob(blob,".docx");
+    }
+
+    // ── 서식 다운로드 메뉴 ────────────────────────────
+    var dd=document.getElementById("dd"),saveBtn=document.getElementById("saveBtn"),saveMenu=document.getElementById("saveMenu");
+    var items=[].slice.call(saveMenu.querySelectorAll("[data-fmt]"));
+    function openMenu(v){
+      saveMenu.hidden=!v;
+      dd.setAttribute("data-open",v?"1":"0");
+      saveBtn.setAttribute("aria-expanded",v?"true":"false");
+      if(v&&items[0]) items[0].focus();
+    }
+    saveBtn.addEventListener("click",function(e){e.stopPropagation();openMenu(saveMenu.hidden);});
+    document.addEventListener("click",function(e){if(!dd.contains(e.target))openMenu(false);});
+    document.addEventListener("keydown",function(e){
+      if(e.key==="Escape"&&!saveMenu.hidden){openMenu(false);saveBtn.focus();}
+    });
+    saveMenu.addEventListener("keydown",function(e){
+      var i=items.indexOf(document.activeElement);
+      if(e.key==="ArrowDown"){e.preventDefault();items[(i+1)%items.length].focus();}
+      else if(e.key==="ArrowUp"){e.preventDefault();items[(i-1+items.length)%items.length].focus();}
+    });
+    items.forEach(function(btn){
+      btn.addEventListener("click",function(){
+        var f=btn.getAttribute("data-fmt");
+        if(f==="hwpx") saveBlob(zipStore(hwpxFiles(FNAME,collect()),"application/vnd.hancom.hwpx"),".hwpx");
+        else if(f==="docx") saveBlob(makeDocx(),".docx");
+        else if(f==="md") saveBlob(textBlob(true),".md");
+        else saveBlob(textBlob(false),".txt");
+        openMenu(false);
+      });
     });
   })();
   document.getElementById("resetBtn").addEventListener("click",function(){

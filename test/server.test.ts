@@ -156,7 +156,7 @@ describe("핵심 동작", () => {
   it("get_form_template에 미리보기·다운로드 링크 + /forms 다운로드 200", async () => {
     const t = await callText("get_form_template", { form: FORM_KEYS[0] });
     expect(t).toContain("빈칸 바로 채우기");
-    expect(t).toContain("텍스트 파일로 저장");
+    expect(t).toContain("서식 다운로드");
     const res = await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}.txt`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
@@ -233,18 +233,26 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   it("서식 페이지: 한글·워드 내보내기 버튼 + A4 인쇄 규격", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
     const html = await res.text();
-    expect(html).toContain('id="docBtn"');
+    // 내보내기는 드롭다운 한 개로 모았다 — 형식마다 버튼을 늘어놓으면 바가 길어진다(8/21)
+    expect(html).toContain('id="saveMenu"');
+    for (const fmt of ["hwpx", "docx", "md", "txt"]) {
+      expect(html, `${fmt} 항목이 메뉴에 없다`).toContain(`data-fmt="${fmt}"`);
+    }
     // 한글·워드를 따로 받을 수 있어야 한다 (2026-08-20 회의 지적 → 8/21 .hwpx 추가)
-    expect(html).toContain("한글로 내보내기");
-    expect(html).toContain("워드로 내보내기");
+    expect(html).toContain("서식 다운로드");
     // 어떤 확장자로 떨어지는지 화면에서 밝히고 있는지
     expect(html).toContain(".hwpx");
     expect(html).toContain(".docx");
     expect(html).toContain("@page{size:A4");
-    // 내보내기는 브라우저 안에서만 — 서버 전송 코드(fetch/XMLHttpRequest)가 핸들러에 없어야 한다
-    const handler = html.slice(html.indexOf('getElementById("docBtn")'), html.indexOf('getElementById("resetBtn")'));
-    expect(handler).toContain("wordprocessingml");
-    expect(handler).not.toMatch(/fetch\(|XMLHttpRequest/);
+    // 내보내기는 브라우저 안에서만 — 채운 값을 서버로 보내는 코드가 있으면 안 된다.
+    // 개인정보를 0건 수집한다는 말이 사실이려면 이 구간에 fetch/XHR이 없어야 한다.
+    const exportCode = html.slice(html.indexOf("function hwpxFiles(title,paras)"), html.indexOf('getElementById("resetBtn")'));
+    expect(exportCode.length).toBeGreaterThan(500);
+    expect(exportCode).toContain("wordprocessingml");
+    expect(exportCode).toContain("hancom.hwpx");
+    expect(exportCode).not.toMatch(/fetch\(|XMLHttpRequest|navigator\.sendBeacon/);
+    // hidden 속성이 display 지정에 밀리면 메뉴가 열린 채로 뜬다 — 8/21에 실제로 그랬다
+    expect(html).toMatch(/\[hidden\]\{display:none!important\}/);
   });
 
   it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
@@ -614,7 +622,7 @@ describe("복지·취약가구·농어업인 주제·신청서", () => {
   it("신청서: 사회보장급여_신청서 — 현행 명칭 정정 + 다운로드 링크", async () => {
     const t = await callText("get_form_template", { form: "사회보장급여_신청서" });
     expect(t).toContain("사회보장급여 신청(변경)서");
-    expect(t).toContain("파일로 저장·공유");
+    expect(t).toContain("서식 다운로드");
   });
   it("신청서: 외국인_사업장변경신청서 — 1개월 기한·2단계(출입국) 경고", async () => {
     const t = await callText("get_form_template", { form: "외국인_사업장변경신청서" });
