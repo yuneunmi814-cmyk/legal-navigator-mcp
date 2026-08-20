@@ -1060,7 +1060,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
 .foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
 .foot a{color:var(--foot)}
-/* 좁은 화면 — 버튼 4개를 2×2로. 위 줄은 내보내기(PDF·한글), 아래 줄은 보조(텍스트·비우기) */
+/* 좁은 화면 — 버튼 4개를 2×2로. 위 줄은 내보내기(PDF·문서), 아래 줄은 보조(텍스트·비우기) */
 @media (max-width:520px){
   .bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:9px 12px}
   .bar .sp{display:none}
@@ -1096,7 +1096,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </style></head><body>
 <div class="bar">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
-  <button class="btn" id="docBtn" type="button">한글 · 워드로 내보내기</button>
+  <button class="btn" id="docBtn" type="button">워드 · 한글로 내보내기</button>
   <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
@@ -1108,7 +1108,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 내보내기</b>로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>워드·한글로 내보내기</b>로 작성한 내용을 받아 이어서 편집할 수 있습니다. 받는 파일은 <b>.docx</b> 한 가지이며, 워드와 한글(한컴오피스) 어느 쪽으로도 열립니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -1161,7 +1161,9 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",function(e){autoGrow(e.target);save();});
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
-  // 한글·워드로 내보내기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
+  // 워드·한글로 내보내기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
+  // .hwp는 만들지 않는다(비공개 바이너리 포맷). 한글도 .docx를 여니 실사용엔 문제가 없지만,
+  // 버튼이 "한글"을 먼저 말하면 .hwp를 기대하게 된다 — 2026-08-20 회의에서 실제로 그렇게 읽혔다.
   // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙).
   // .doc(HTML) 방식은 Word 없는 환경(맥 미리보기·텍스트편집기)에서 소스가 그대로 보여 폐기했다.
   // DOCX = ZIP(무압축 저장) + 최소 3파트. 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
