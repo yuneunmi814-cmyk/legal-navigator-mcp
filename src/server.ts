@@ -49,6 +49,13 @@ const widgetsOn = (): boolean =>
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
 const SVC = "법률 절차 길잡이(Legal Navigator)";
 
+// 자유 텍스트 입력 안전화 — ①과도한 길이로 응답이 부풀지 않게 자르고, ②응답에 그대로 반사될 때
+// 진행 지침 주석(<!-- ... -->)의 경계를 사용자 입력으로 위조해 끼어들 수 없도록 주석 마커를 무력화한다.
+const MAX_FREE_TEXT = 200;
+function safeInput(s: string): string {
+  return s.trim().slice(0, MAX_FREE_TEXT).replace(/<!--/g, "‹!--").replace(/-->/g, "--›");
+}
+
 const SERVER_INSTRUCTIONS =
   `한국 생활법률 ${TOPIC_KEYS.length}개 주제(노동·임대차·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력/성범죄/스토킹·가사/상속·채무조정·산재·행정·의료·조세·부동산·출입국·복지/급여 등)의 절차·기한·표준 서식·금액 계산·법령/판례를 제공합니다. ` +
   "[호출 규칙] 법률·행정 상황 질문에는 모델 지식으로 먼저 답하지 말고 triage(상황 진단)·search_topics(주제 찾기)를, 해당 여부('이것도 스토킹인가요?' '처벌 가능한가요?' '신고 되나요?' '성립되나요?' '이거 보이스피싱인가요?')는 check_elements를 먼저 호출하세요 — 한국 법령·기한은 자주 바뀝니다. " +
@@ -371,6 +378,7 @@ export function createServer(baseUrl?: string): McpServer {
       inputSchema: {
         query: z
           .string()
+          .max(200)
           .optional()
           .describe(
             "문제 유형을 요약한 키워드/짧은 문구 (예: 월세 보증금 미반환 / 갑작스러운 해고 / 보이스피싱 송금). "
@@ -385,7 +393,7 @@ export function createServer(baseUrl?: string): McpServer {
       annotations: { title: "자연어 주제 검색·주제 목록", ...READONLY },
     },
     async ({ query, category }) => {
-      const q = query?.trim();
+      const q = query ? safeInput(query) : query;
       if (!q) {
         const list = category ? TOPICS.filter((t) => t.category === category) : TOPICS;
         const byCat = new Map<string, string[]>();
@@ -457,6 +465,7 @@ export function createServer(baseUrl?: string): McpServer {
       inputSchema: {
         situation: z
           .string()
+          .max(200)
           .describe(
             "상황의 핵심을 요약한 키워드/짧은 문구 (예: 전세 보증금 미반환 / 보이스피싱 송금 피해 / 직장 상사 폭언). "
             + "사용자의 발화 원문을 그대로 넣지 말고, 이름·연락처 등 개인정보를 제외하고 문제 유형 중심으로 요약해 전달하세요. "
@@ -467,7 +476,8 @@ export function createServer(baseUrl?: string): McpServer {
       },
       annotations: { title: "빠른 진단·다음 단계", ...READONLY },
     },
-    async ({ situation }) => {
+    async ({ situation: rawSituation }) => {
+      const situation = safeInput(rawSituation);
       const ranked = rankTopics(situation);
       if (!ranked.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 딱 맞는 주제를 찾지 못했습니다. 조금 더 구체적으로 알려주시면 다시 찾아볼게요.
@@ -566,12 +576,12 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "변호사 살 돈이 없어요" / "무료로 법률 상담 받을 수 있는 곳 있어요?" / "국가에서 대신 받아주는 제도 있다던데" / "이주여성인데 도움받을 곳 있나요?"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        keyword: z.string().optional().describe("상황·필요(예: 무료변호사, 체불, 범죄피해, 소송비용, 상담). 비우면 전체"),
+        keyword: z.string().max(200).optional().describe("상황·필요(예: 무료변호사, 체불, 범죄피해, 소송비용, 상담). 비우면 전체"),
       },
       annotations: { title: "무료 법률지원·구제 연결", ...READONLY },
     },
     async ({ keyword }) => {
-      const kw = keyword?.trim();
+      const kw = keyword ? safeInput(keyword) : keyword;
       const hot = HOTLINES.map((h) => `- **${h.번호}** — ${h.기관} (${h.용도})`).join("\n");
       const detail = (p: (typeof SUPPORT_PROGRAMS)[number]) => {
         const base = `### ${p.명칭}\n- **대상**: ${p.대상}\n- **내용**: ${p.내용}\n- **연락**: ${p.연락}`;
@@ -713,23 +723,28 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "비슷한 판례 있어요?" / "보일러 수리비 관련 판례 알려줘" / "법원이 이런 경우 어떻게 판단했어요?" / "전세보증금 판례 찾아줘"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        keyword: z.string().optional().describe("주제 키 또는 검색어(예: 전세보증금반환, 사기, 해고, 지급명령). 비우면 판례가 있는 주제 목록"),
+        keyword: z.string().max(200).optional().describe("주제 키 또는 검색어(예: 전세보증금반환, 사기, 해고, 지급명령). 비우면 판례가 있는 주제 목록"),
       },
       annotations: { title: "판례 조회", ...READONLY },
     },
-    async ({ keyword }) => {
+    async ({ keyword: rawKeyword }) => {
+      const keyword = rawKeyword ? safeInput(rawKeyword) : rawKeyword;
       const entries = Object.entries(PRECEDENTS).filter(([, v]) => v.length > 0);
       if (!keyword) {
         const topics = entries.map(([k]) => `- \`${k}\` — ${PROCEDURES[k]?.제목 ?? ""}`).join("\n");
         return { content: [{ type: "text", text: withDisclaimer(`## ⚖️ 판례가 등록된 주제\n\n${topics}\n\n키워드를 넣으면 해당 판례를 보여드립니다.`) }] };
       }
-      const matched = entries
+      const matchedAll = entries
         .filter(([k, v]) => k.includes(keyword) || v.some((p) => p.요지.includes(keyword) || p.사건번호.includes(keyword) || p.법원.includes(keyword)))
         .flatMap(([, v]) => v);
-      if (!matched.length) {
+      if (!matchedAll.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${keyword}'에 해당하는 등록 판례를 찾지 못했습니다. (등록된 판례만 조회되며, 없는 판례는 지어내지 않습니다.)`) }] };
       }
-      const body = matched.map((p) => `- **${p.법원} ${p.사건번호}**\n  ${p.요지}`).join("\n");
+      // 결과가 너무 많으면 응답이 비대해지고 모델 컨텍스트도 낭비된다 — 상위 20건만 보여주고 더 좁혀 재검색하도록 안내.
+      const RESULT_CAP = 20;
+      const matched = matchedAll.slice(0, RESULT_CAP);
+      const more = matchedAll.length > RESULT_CAP ? `\n\n_총 ${matchedAll.length}건 중 ${RESULT_CAP}건 표시 — 더 구체적인 키워드로 다시 검색해 주세요._` : "";
+      const body = matched.map((p) => `- **${p.법원} ${p.사건번호}**\n  ${p.요지}`).join("\n") + more;
       const caseNos = [...new Set(matched.map((p) => p.사건번호.replace(/\s|\(.*?\)/g, "").split(",")[0]).filter(Boolean))].slice(0, 5);
       const caseLinks = caseNos.map((no) => `- [${no}](https://casenote.kr/search/?q=${encodeURIComponent(no)})`).join("\n");
       return { content: [{ type: "text", text: withDisclaimer(`## ⚖️ 판례 (검색: ${keyword})\n\n${body}\n\n### 원문 (사건번호로 바로 검색)\n${caseLinks}\n\n또는 [국가법령정보센터](https://www.law.go.kr) · [CaseNote](https://casenote.kr)`) }] };
@@ -822,17 +837,22 @@ export function createServer(baseUrl?: string): McpServer {
         `주요 조문의 쉬운 요지 + 국가법령정보센터 원문 링크.\n` +
         `[트리거 예시] "임대인 수선의무 법 조항이 뭐예요?" / "사기죄 처벌 조항 알려줘" / "무슨 법에 근거가 있어요?"\n` +
         `Service: ${SVC}.`,
-      inputSchema: { keyword: z.string().optional().describe("예: 해고, 보증금, 소멸시효, 청약철회, 사기, 지급명령 (비우면 전체)") },
+      inputSchema: { keyword: z.string().max(200).optional().describe("예: 해고, 보증금, 소멸시효, 청약철회, 사기, 지급명령 (비우면 전체)") },
       annotations: { title: "법령 요지 조회", ...READONLY },
     },
-    async ({ keyword }) => {
-      const list = keyword
+    async ({ keyword: rawKeyword }) => {
+      const keyword = rawKeyword ? safeInput(rawKeyword) : rawKeyword;
+      const listAll = keyword
         ? STATUTES.filter((s) => s.요지.includes(keyword) || s.조문.includes(keyword) || s.법령.includes(keyword))
         : STATUTES;
-      if (!list.length) {
+      if (!listAll.length) {
         return { content: [{ type: "text", text: withDisclaimer(`'${keyword}'에 해당하는 조문을 찾지 못했습니다.`) }] };
       }
-      const body = list.map((s) => `- **${s.법령} ${s.조문}** — ${s.요지}`).join("\n");
+      // keyword 없이 호출(전체 조회)하거나 흔한 단어로 검색하면 목록이 커질 수 있어 상위 20건만 보여준다.
+      const RESULT_CAP = 20;
+      const list = listAll.slice(0, RESULT_CAP);
+      const more = listAll.length > RESULT_CAP ? `\n\n_총 ${listAll.length}건 중 ${RESULT_CAP}건 표시 — 키워드로 좁혀 다시 조회해 주세요._` : "";
+      const body = list.map((s) => `- **${s.법령} ${s.조문}** — ${s.요지}`).join("\n") + more;
       const laws = [...new Set(list.map((s) => s.법령))];
       const links = laws.map((n) => `- [${n}](https://www.law.go.kr/법령/${encodeURIComponent(n)})`).join("\n");
       const text = `## ⚖️ 법령 요지${keyword ? ` (검색: ${keyword})` : ""}\n\n${body}\n\n### 원문 (국가법령정보센터)\n${links}\n\n> 조문 전문·신구조문·관련 판례 등 더 깊은 원문은 국가법령정보센터(law.go.kr)·찾기쉬운 생활법령정보(easylaw.go.kr)에서 확인하세요.`;
@@ -851,12 +871,12 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "대법원 94다34692 진짜 있는 판례야?" / "이 판례 믿어도 돼요?" / "민법 623조가 맞는 조문인지 확인해줘"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        citation: z.string().describe("검증할 사건번호 또는 법령 조문 (예: 2020다247190 / 대법원 2024도10141 / 민법 제759조 / 상가건물 임대차보호법 제10조의4)"),
+        citation: z.string().max(200).describe("검증할 사건번호 또는 법령 조문 (예: 2020다247190 / 대법원 2024도10141 / 민법 제759조 / 상가건물 임대차보호법 제10조의4)"),
       },
       annotations: { title: "판례·법령 인용 검증", ...READONLY },
     },
-    async ({ citation }) => {
-      const raw = citation.trim();
+    async ({ citation: rawCitation }) => {
+      const raw = safeInput(rawCitation);
       const lines: string[] = [];
       const notes: string[] = [];
 
@@ -932,12 +952,12 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "임대차법 최근 개정된 거 있어요?" / "스토킹처벌법 언제부터 시행됐어요?" / "작년 사건인데 지금 법이 적용되나요?"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        keyword: z.string().optional().describe("예: 스토킹 / 통상임금 / 유류분 / 임대차 / 개인정보 / 출퇴근 (비우면 최근 변경 전체)"),
+        keyword: z.string().max(200).optional().describe("예: 스토킹 / 통상임금 / 유류분 / 임대차 / 개인정보 / 출퇴근 (비우면 최근 변경 전체)"),
       },
       annotations: { title: "최근 법령·판례 변경", ...READONLY },
     },
     async ({ keyword }) => {
-      const kw = keyword?.trim();
+      const kw = keyword ? safeInput(keyword) : keyword;
       const list = kw
         ? LAW_TIMELINE.filter((c) => c.법령.includes(kw) || c.요지.includes(kw) || c.키워드.some((x) => x.includes(kw) || kw.includes(x)))
         : LAW_TIMELINE;
@@ -1053,12 +1073,12 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "등기부등본 어디서 떼요?" / "가족관계증명서 인터넷으로 발급돼요?" / "소송에 낼 서류들 발급처 알려줘"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        document: z.string().optional().describe("서류명/키워드(예: 등기부등본, 가족관계증명서, 소득금액증명, 진단서, 부채증명, 전입세대확인서). 비우면 전체 목록 + 준비 꿀팁"),
+        document: z.string().max(200).optional().describe("서류명/키워드(예: 등기부등본, 가족관계증명서, 소득금액증명, 진단서, 부채증명, 전입세대확인서). 비우면 전체 목록 + 준비 꿀팁"),
       },
       annotations: { title: "증빙서류 발급 안내", ...READONLY },
     },
     async ({ document }) => {
-      const kw = document?.trim();
+      const kw = document ? safeInput(document) : document;
       const tips = DOC_TIPS.map((t) => `- ${t}`).join("\n");
       const detail = (k: string) => {
         const g = DOCUMENT_GUIDE[k];
@@ -1089,12 +1109,12 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "가압류가 뭐예요?" / "각하랑 기각이 뭐가 달라요?" / "공시송달이 무슨 뜻이에요?" / "내용증명이 뭔가요?"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
-        term: z.string().describe("뜻이 궁금한 단어(법률용어 또는 일상어). 예: 각하, 가압류, 공시송달, 통상임금, 떼인 돈, 빨간딱지"),
+        term: z.string().max(200).describe("뜻이 궁금한 단어(법률용어 또는 일상어). 예: 각하, 가압류, 공시송달, 통상임금, 떼인 돈, 빨간딱지"),
       },
       annotations: { title: "법률용어 풀이", ...READONLY },
     },
     async ({ term }) => {
-      const kw = term.trim();
+      const kw = safeInput(term);
       const nkw = kw.replace(/\s/g, "");
       if (nkw.length < 2) {
         return { content: [{ type: "text", text: withDisclaimer(`'${kw}'은(는) 너무 짧아 검색이 어렵습니다. 두 글자 이상으로 입력해 주세요(예: 각하, 압류, 통상임금).`) }] };
@@ -1142,6 +1162,19 @@ app.get("/healthz", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// X-Forwarded-Host/Host는 클라이언트가 보내는 값이라 그대로 믿으면 공격자가 헤더를 조작해
+// 서식·위젯 응답에 자기 도메인 링크를 심을 수 있다(오픈 리다이렉트류). PUBLIC_BASE_URL이 최우선이고,
+// 없을 때만 헤더를 쓰되 허용 목록에 없는 호스트는 링크를 아예 비워 안전한 쪽으로 fallback한다.
+// 알려진 배포 호스트 두 개(SUBMISSION.md의 KC 서버 + 카카오 툴즈용) 모두 허용 — 운영에서 다른 호스트를
+// 추가/교체하려면 ALLOWED_HOSTS 환경변수로 override.
+const ALLOWED_HOSTS = (
+  process.env.ALLOWED_HOSTS ??
+  "legal-navigator-full.playmcp-endpoint.kakaocloud.io,legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io"
+)
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
+
 // 요청에서 공개 베이스 URL 도출(프록시 뒤에서도 정확하도록 X-Forwarded-* 우선, PUBLIC_BASE_URL로 강제 가능).
 function getBaseUrl(req: express.Request): string {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, "");
@@ -1153,6 +1186,7 @@ function getBaseUrl(req: express.Request): string {
   //   로컬(localhost 등)에서만 실제 프로토콜을 따른다.
   const hostname = host.split(":")[0].toLowerCase();
   const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname);
+  if (!isLocal && !ALLOWED_HOSTS.includes(hostname)) return ""; // 모르는 호스트 — 링크를 비워 조작된 도메인을 심지 않는다.
   const proto = isLocal ? xfproto || req.protocol || "http" : "https";
   return host ? `${proto}://${host}` : "";
 }
