@@ -36,12 +36,21 @@ async function rawCallText(body: string): Promise<string> {
 }
 
 describe("도구 목록·PlayMCP 규격", () => {
-  it("16개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
+  it("16개 도구 · description ≤1024 · annotations 5종(값까지) · 이름규칙 · kakao 없음", async () => {
     const tools = (await rpc("tools/list", {})).result.tools;
     expect(tools.length).toBe(16);
     for (const t of tools) {
       expect(t.description.length).toBeLessThanOrEqual(1024);
-      for (const a of ["readOnlyHint", "destructiveHint", "openWorldHint", "idempotentHint"]) expect(t.annotations).toHaveProperty(a);
+      // annotations 5종: title + hint 4개. property 존재만이 아니라 실제 기대값까지 검증한다 —
+      // 전부 읽기 전용·비파괴 정보 제공 도구이므로 read/idempotent=true, destructive/openWorld=false가 맞다.
+      expect(typeof t.annotations?.title).toBe("string");
+      expect(t.annotations.title.trim().length).toBeGreaterThan(0);
+      expect(t.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
       expect(t.name).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(t.name).not.toMatch(/kakao/i);
     }
