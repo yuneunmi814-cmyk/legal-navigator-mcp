@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app } from "../src/server.js";
-import { TOPIC_KEYS, FORM_KEYS } from "../src/data/index.js";
+import { TOPIC_KEYS, FORM_KEYS, PROCEDURES } from "../src/data/index.js";
 
 let base = "";
 let server: Server;
@@ -144,10 +144,26 @@ describe("회귀: 인용 검증 오탐·미가동", () => {
 });
 
 describe("핵심 동작", () => {
+  // 8/9 결정 "문제 상황 → 관련 법 + 제출 방법"은 그대로다. 다만 섹션 제목 문자열을 확인하던 것을
+  // 실제 데이터가 실렸는지로 바꿨다 — 제목 문구가 바뀌어도 내용이 빠지면 잡아야 하기 때문.
   it("triage 텍스트 응답에 접수처·근거 법령이 함께 나온다 (문제 상황 → 관련 법 + 제출 방법)", async () => {
     const t = await callText("triage", { situation: "임금체불 3개월" });
-    expect(t).toContain("접수·도움받을 곳");
-    expect(t).toContain("근거 법령");
+    const p = PROCEDURES["임금체불"];
+    expect(t).toContain(p.온라인접수);
+    expect(t).toContain(p.근거법[0]);
+  });
+  it("triage는 확인 질문 하나로 끝난다 (선택지 + 직접 입력)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    expect(t).toContain("①");
+    expect(t).toContain("직접 입력");
+    // 한 번에 다 쏟지 않는다 — 사용자에게 보이는 본문은 짧게 유지한다.
+    expect(t.split("<!--")[0].length).toBeLessThan(900);
+  });
+  it("triage 진행 지침에 그 주제의 서식 키가 실린다 (모델이 서식 위젯을 띄울 수 있게)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    const hint = t.split("<!--")[1] ?? "";
+    expect(hint).toContain("임금체불진정서");
+    expect(hint).toContain("get_form_template");
   });
   it("모든 응답에 면책 고지가 붙는다", async () => {
     const t = await callText("get_procedure", { topic: TOPIC_KEYS[0] });
