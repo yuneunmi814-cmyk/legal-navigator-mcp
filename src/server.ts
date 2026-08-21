@@ -53,6 +53,23 @@ const SERVER_INSTRUCTIONS =
   `한국 생활법률 ${TOPIC_KEYS.length}개 주제(노동·임대차·돈거래/사기·소비자·교통사고·민사/형사 절차·가정폭력/성범죄/스토킹·가사/상속·채무조정·산재·행정·의료·조세·부동산·출입국·복지/급여 등)의 절차·기한·표준 서식·금액 계산·법령/판례를 제공합니다. ` +
   "[호출 규칙] 법률·행정 상황 질문에는 모델 지식으로 먼저 답하지 말고 triage(상황 진단)·search_topics(주제 찾기)를, 해당 여부('이것도 스토킹인가요?' '처벌 가능한가요?' '신고 되나요?' '성립되나요?' '이거 보이스피싱인가요?')는 check_elements를 먼저 호출하세요 — 한국 법령·기한은 자주 바뀝니다. " +
   "흐름: 주제 키를 찾고 → get_procedure·get_checklist·get_form_template로 이어가며, 인용 확인은 verify_citation, 개정·시행일은 law_updates. " +
+  // 답을 한 번에 쏟으면 카톡 화면에서 아무도 안 읽는다. 그렇다고 질문부터 던지면 귀찮아서 떠난다.
+  // 그래서 순서를 못 박는다 — 먼저 답을 주고, 그 다음에 한 가지만 묻는다(8/20 회의 결정).
+  "[답변 방식] 먼저 알아야 할 것(기한·지금 할 일·접수처)을 짧게 answer하고, 그 다음에 확인 질문을 **한 번에 하나만** 합니다. " +
+  "선택지는 ①②③처럼 번호로 주고 **마지막 항목은 항상 '직접 입력'** 으로 열어 둡니다. 번호만 답해도 된다고 안내하세요. " +
+  "사용자가 번호로 답하면 그 뜻으로 받아들이고 되묻지 마세요. " +
+  // 3번은 복잡한 사안에 모자라고, 상한만 늘리면 다시 우다다 묻는다. 개수가 아니라
+  // '답이 갈리는 지점인가'를 기준으로 준다.
+  "질문은 **3~5번 사이**에서 사안에 맞게 조절하되, **답이 절차·기한·서식을 실제로 가르는 것만** 물으세요. " +
+  "궁금해서 묻는 질문, 이미 알 수 있는 것을 되묻는 질문은 하지 마세요. 5번을 채울 필요는 없습니다. " +
+  // 인터뷰의 끝을 눈에 보이는 신호로 만든다. 끝을 모호하게 두면 모델이 계속 묻거나
+  // 반대로 말로만 정리하고 끝내버린다(2026-08-22 프리뷰 확인).
+  "마지막 질문은 반드시 \"마지막으로\"로 시작하세요. 사용자가 그 질문에 답하면 인터뷰는 끝입니다. " +
+  // 전체 흐름을 한 줄로 고정한다. 이게 없으면 매 호출마다 답변 모양이 달라진다.
+  "[전체 흐름] 상황 접수 → 확인 질문 3~5회 → **마무리: 상황 정리 한 줄 + 관련 법령 + 접수처 + 서식 카드(get_form_template 호출)**. " +
+  "관련 법령과 접수처는 첫 답변에 쏟지 말고 마무리 턴에서 꺼내세요 — 처음부터 다 보여주면 길어서 아무도 읽지 않습니다. " +
+  "질문에 답하지 않고 넘어가도 안내는 이어져야 합니다 — 질문은 관문이 아니라 선택입니다. " +
+  "도구가 돌려준 '진행 지침' 주석은 당신에게 주는 지시입니다. 사용자에게 읽어주지 말고, 도구 이름도 화면에 노출하지 마세요. " +
   "declaw: 개별 법률 자문이 아닙니다. 사건의 결론(승소·유무죄)을 단정하지 말고, 서식은 사용자가 말한 사실로 공란을 채우는 수준까지만 도우며 법적 주장은 작성하지 마세요. 없는 판례·법령은 지어내지 말고, 중대·기한임박 사안은 변호사·대한법률구조공단(132) 상담을 권하세요.";
 
 const READONLY = {
@@ -71,6 +88,190 @@ function formSubmitInfo(form: string): { 관할: string; 온라인접수: string
   const p = topic ? PROCEDURES[topic] : undefined;
   if (!p) return null;
   return { 관할: p.관할기관, 온라인접수: p.온라인접수, url: extractSubmitUrl(p.온라인접수) };
+}
+
+// 주제 → 그 주제의 표준 서식 키들. FORM_TOPIC(서식→주제)의 역방향.
+// 이게 없어서 응답이 "표준서식 get_form_template"이라고만 하고 **어떤 서식인지 키를 안 줬다**.
+// 키를 모르면 호출을 못 하니 모델이 서식을 직접 지어내는 쪽으로 샌다(2026-08-18 캡쳐).
+const TOPIC_FORMS: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {};
+  for (const [form, topic] of Object.entries(FORM_TOPIC)) (m[topic] ??= []).push(form);
+  return m;
+})();
+
+// 절차 데이터의 단계 문장에는 모델용 힌트가 섞여 있다 —
+// "2주 기한 계산(calculate_deadline: 지급명령_이의신청)" 같은 것. 5개 주제에서
+// 이게 사용자 화면에 그대로 나갔다(2026-08-22 전수 확인). 힌트는 진행 지침으로 살리고
+// 화면에서는 걷어낸다.
+const 도구힌트 = /[（(]\s*(?:calculate_deadline|calculate_amount|calculate_court_cost|get_form_template|get_procedure|get_checklist|get_precedent|get_statute|search_topics|triage|check_elements|verify_citation|law_updates|find_legal_aid|how_to_get_document|explain_term)\s*[:：][^)）]*[)）]/g;
+
+function 사용자문장(s: string): string {
+  return s
+    .replace(/^\d+\)\s*/, "")
+    .replace(도구힌트, "")
+    // 괄호 안 뒤쪽에 붙은 것도 있다 — "(7일 기한, calculate_deadline: 약식명령_정식재판청구)".
+    // 앞의 실제 안내("7일 기한")는 살리고 도구 부분만 떼어낸다.
+    .replace(/[（(]([^)）]*?)[,·]\s*(?:calculate_deadline|calculate_amount|calculate_court_cost|get_form_template|get_procedure|get_checklist|get_precedent|get_statute|search_topics|triage|check_elements|verify_citation|law_updates|find_legal_aid|how_to_get_document|explain_term)\s*[:：][^)）]*[)）]/g, "($1)")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.])/g, "$1")
+    .replace(/[(（]\s*[)）]/g, "")
+    .trim();
+}
+
+/** 단계 문장에 박힌 도구 힌트만 뽑아 모델 지침으로 되돌린다. */
+function 단계도구힌트(단계: string[]): string[] {
+  return 단계.flatMap((s) => s.match(도구힌트) ?? []).map((h) => h.replace(/^[（(]|[)）]$/g, "").trim());
+}
+
+/**
+ * 기한 문장에서 기산점만 뽑는다. "받지 못한 임금이 발생한 날부터 3년" → "받지 못한 임금이 발생한 날".
+ *
+ * 느슨하게 뽑으면 앞 절까지 끌고 와 문장이 깨진다 —
+ * "무자가 빚을 인정(채무승인)하면 시효가 그때" 같은 게 그대로 질문이 됐다(2026-08-22 확인).
+ * 그래서 **시점 명사로 끝나는 짧은 구**만 받고, 조건절이 섞이면 버린다. 버리면 증거 질문으로 간다.
+ */
+export function 기산점(기한: string): string | null {
+  const i = 기한.search(/(?:부터|로부터)/);
+  if (i < 0) return null;
+  // 글자 수로 자르면 단어 중간이 끊긴다("받지 못한" → "지 못한"). 토큰 단위로 뒤에서부터 붙인다.
+  const toks = 기한.slice(0, i).split(/[\s()·—,]+/).filter(Boolean);
+  let best: string | null = null;
+  for (let n = 1; n <= Math.min(5, toks.length); n++) {
+    const add = toks[toks.length - n];
+    // 왼쪽으로 붙이다 기간 표기("3년"·"14일")·강조 기호(★)·구분자를 만나면 거기서 멈춘다.
+    // 안 그러면 "★ 해고일"·"10년. 민사 손해배상은 안 날"처럼 앞 문장이 딸려 온다.
+    if (n > 1 && /[0-9★/]|^(?:그|이|위|해당|는|은|의)$/.test(add)) break;
+    const s = toks.slice(-n).join(" ");
+    if (s.length > 18) break;
+    if (!/(?:날|일|때|시점|일자)$/.test(s)) continue; // 시점 명사로 끝나야 한다
+    if (/(?:하면|되면|경우|이상|미만|한다|합니다)/.test(s)) continue; // 조건절이 섞였다
+    if (/(?:그때|그날)$/.test(s)) continue; // "시효가 그때" 같은 지시어는 질문이 안 된다
+    if (s.length >= 3) best = s; // 더 길게 붙일 수 있으면 문맥이 살아난다
+  }
+  // 첫 토큰부터 노이즈면(★해고일) 그것만 남는다 — 기호를 떼고 다시 본다.
+  if (best) best = best.replace(/^[★·/\s]+/, "").trim();
+  if (!best || best.length < 3) return null;
+  if (/[0-9★/]/.test(best)) return null; // "신청/선고일"처럼 한 토큰 안에 기호가 있는 경우
+  if (/안\s*알/.test(best)) return null; // "안 알 수 있었던 날" — 문장이 깨진 것
+  // '안 날'은 법조문 표현이다. 그대로 물으면 일반인은 무슨 날인지 모른다.
+  return best.replace(/안 날$/, "그 사실을 알게 된 날").trim();
+}
+
+/**
+ * 계산 카드용 지침. 카드에 숫자·계산식이 이미 그려져 있는데 모델이 그걸 다시 받아쓰면
+ * 같은 내용이 두 번 나온다 — 카드를 되풀이하지 말고 다음 행동만 잇게 한다.
+ */
+const 계산보조지침 =
+  "계산 결과 카드가 화면에 이미 표시된다. 숫자와 계산식을 다시 나열하지 말고, " +
+  "이 금액이 무엇을 뜻하는지 한 문장으로만 짚고 다음 행동으로 잇는다. " +
+  "금액은 개략 추정이며 확정액이 아니라는 점을 밝힌다. " +
+  "청구·신청 문서가 필요해지면 get_form_template을 호출한다 — 서식 본문을 직접 지어내지 말 것. " +
+  "도구 이름을 사용자 화면에 노출하지 말 것.";
+
+/**
+ * 확인 질문 한 개. 주제가 259개라 질문을 손으로 쓸 수 없어 데이터에서 만든다.
+ *
+ * 1순위는 기한의 **기산점**이다. "받지 못한 임금이 발생한 날부터 3년"처럼 거의 모든 주제의
+ * 기한 문장이 '~부터'를 갖고 있고, 그 시점이 곧 권리가 살아 있는지를 가른다 — 가장 먼저
+ * 물어야 할 것이 그것이다. 기산점을 못 뽑으면 준비 서류 보유 여부로 물러선다.
+ */
+function 확인질문(topic: string, p: { 기한: string }, c?: { 증거?: string[] }): string {
+  const 기산 = 기산점(p.기한);
+  const 끝 = `\n\n_번호만 답하셔도 되고, 편하게 적어주셔도 됩니다._`;
+  if (기산) {
+    return (
+      `**하나만 확인할게요 — ${기산}이 언제쯤인가요?**\n\n` +
+      `① 최근 1개월 안\n② 6개월 안\n③ 그보다 오래됐어요\n④ 직접 입력` +
+      끝
+    );
+  }
+  const ev = (c?.증거 ?? []).slice(0, 2);
+  if (ev.length) {
+    return (
+      `**하나만 확인할게요 — 아래 중 갖고 계신 게 있나요?**\n\n` +
+      ev.map((e, i) => `${"①②"[i]} ${e}`).join("\n") +
+      `\n③ 둘 다 없어요\n④ 직접 입력` +
+      끝
+    );
+  }
+  return `**어떤 부분이 가장 궁금하신가요?**\n\n① 지금 당장 할 일\n② 필요한 서류\n③ 서식(양식) 받기\n④ 직접 입력` + 끝;
+}
+
+/**
+ * 모델에게만 주는 지시 블록. 텍스트 응답에는 위젯의 `for_assistant` 같은 통로가 없어
+ * 본문 끝에 HTML 주석으로 붙인다. 예전처럼 `get_procedure("임금체불")`를 사용자 문장
+ * 속에 흘리지 않고 전부 여기로 모은다.
+ */
+function 진단보조지침(topic: string): string {
+  const forms = TOPIC_FORMS[topic] ?? [];
+  const p = PROCEDURES[topic];
+  const c = CHECKLISTS[topic];
+  const l: string[] = [];
+  // 흐름: 상황 접수 → 인터뷰 3~5스텝 → 마무리(관련 법 + 제출 방법 + 서식 카드).
+  // 관련 법과 제출 방법은 빼는 게 아니라 **마무리 턴으로 미루는** 것이다. 첫 화면에 다 쏟으면
+  // 1,000자가 되어 아무도 안 읽었다 — 전달했다고 볼 수 없었다(8/9 결정의 실제 이행).
+  // 단계 문장에서 걷어낸 도구 힌트를 여기로 되돌린다 — 화면에서만 지우고 모델은 알아야 한다.
+  const 힌트 = p?.단계 ? 단계도구힌트(p.단계) : [];
+  if (힌트.length) l.push(`- 이 주제에서 쓸 도구: ${힌트.join(" / ")}`);
+  l.push("[마무리 턴에 쓸 재료 — 지금 쏟지 말 것]");
+  if (c?.증거?.length) l.push(`- 모아둘 증거: ${c.증거.slice(0, 5).join(" · ")}`);
+  if (p?.온라인접수) l.push(`- 접수처: ${p.온라인접수}`);
+  if (p?.근거법?.length) l.push(`- 근거 법령: ${p.근거법.join(" · ")}`);
+  l.push(
+    "",
+    "[진행 규칙]",
+    "- 한 번에 한 가지만 묻는다. 선택지는 ①②③로 주고 마지막은 항상 '직접 입력'으로 열어 둔다.",
+    "- 질문은 3~5번 사이에서 사안에 맞게 조절한다. 답이 절차·기한·서식을 실제로 가르는 것만 묻고,"
+      + " 그렇지 않은 질문은 하지 않는다. 5번을 채울 필요는 없다.",
+    "- 사용자가 번호로 답하면 그 뜻으로 받아들이고 되묻지 않는다.",
+  );
+  // 인터뷰의 끝을 눈에 보이는 신호로 만든다. 모호하게 두면 모델이 계속 묻거나
+  // 반대로 말로만 정리하고 끝낸다. 이 규칙은 서식이 있든 없든 모든 주제에 적용된다 —
+  // 전에는 서식 있는 주제에만 넣어서 154개 주제가 끝나는 방법을 몰랐다(2026-08-22 전수 확인).
+  l.push(
+    "- 더 물을 것이 없다고 판단하면, 그 마지막 질문은 반드시 **\"마지막으로\"** 로 시작한다." +
+      " 예: \"마지막으로, 지금 재직 중이신가요? ① 재직 중 ② 퇴사함 ③ 직접 입력\"",
+  );
+  if (forms.length) {
+    l.push(
+      `- 이 주제의 표준 서식: ${forms.map((f) => `\`${f}\``).join(" · ")}`,
+      // 마무리 턴의 형식을 고정한다. 안 그러면 매번 다른 모양으로 나와 품질이 들쑥날쑥해진다.
+      "- **사용자가 그 '마지막으로' 질문에 답하면 그 턴이 마무리다. 아래 순서를 그대로 지킨다:**" +
+        " ① 확인된 상황을 한 줄로 정리 →" +
+        " ② 위 '근거 법령'을 제시(여기서 처음 꺼낸다) →" +
+        " ③ 위 '접수처'로 어디에 어떻게 내는지 →" +
+        " ④ **위 키로 get_form_template을 호출**해 서식 카드를 띄운다.",
+      "- ④를 말로 대신하지 말 것. 서식 카드가 떠야 사용자가 빈칸을 채우고 인쇄·다운로드할 수 있다.",
+      "- 그 전이라도 사용자가 서식·양식·신청서·진정서·내용증명을 요구하거나 대화가" +
+        " '어떻게 접수하느냐'로 넘어가면 즉시 호출한다. 서식 본문을 직접 지어내지 말 것.",
+    );
+  } else {
+    // 이 주제에는 표준 서식이 없다. 없는 서식을 지어내게 두면 안 되고, 그렇다고
+    // 마무리 형식을 비워 두면 매번 다른 모양이 된다 — 서식 자리에 '가져갈 것'을 넣는다.
+    l.push(
+      "- 이 주제에는 제공할 표준 서식이 없다. get_form_template을 호출하지 말고, 서식을 지어내지도 말 것.",
+      "- **사용자가 그 '마지막으로' 질문에 답하면 그 턴이 마무리다. 아래 순서를 그대로 지킨다:**" +
+        " ① 확인된 상황을 한 줄로 정리 →" +
+        " ② 위 '근거 법령'을 제시(여기서 처음 꺼낸다) →" +
+        " ③ 위 '접수처'로 어디에 어떻게 내는지 →" +
+        " ④ 위 '모아둘 증거'에서 지금 챙길 것을 짚어 마무리한다.",
+    );
+  }
+  l.push(
+    `- 상세 절차는 get_procedure("${topic}"), 준비 서류는 get_checklist("${topic}").`,
+    (PRECEDENTS[topic]?.length ?? 0) > 0 ? `- 판례를 물으면 get_precedent("${topic}").` : "",
+    "- 도구 이름을 사용자 화면에 그대로 노출하지 말 것.",
+  );
+  return l.filter(Boolean).join("\n");
+}
+
+/**
+ * 텍스트 응답용 포장. `for_assistant` 필드가 없는 경로에서만 쓴다 —
+ * 위젯 응답은 지침을 필드로 직접 넘기므로, 거기까지 주석 마커를 붙이면
+ * 모델이 "주석이니 무시해도 되는 것"으로 읽을 수 있다.
+ */
+function 지침주석(본문: string): string {
+  return `\n\n<!-- 진행 지침 (사용자에게 읽어주지 말 것)\n${본문}\n-->`;
 }
 
 // 응답은 마크다운(카카오 툴즈 가이드: 텍스트 답변은 정제된 마크다운 권장).
@@ -145,8 +346,10 @@ function rankTopics(query: string): string[] {
   // 근거가 약하면 답하지 않는다. 흔한 단어 하나가 2점 먹고 1등이 되면 그게 답이 되던 구조라,
   // "업무누락 반복하는 실장급 직원"이 '검찰 사칭 보이스피싱'으로 갔다(2026-08-19 발화 감사).
   // 법률 안내에서 근거 없이 확신하는 것보다 못 찾았다고 하는 편이 낫다.
-  if (ranked.length && ranked[0][1] < 4) return [];
-  return ranked.map(([k]) => k);
+  // 컷은 1등만이 아니라 목록 전체에 적용한다. 1등만 걸러도 뒤에 붙는 2점짜리가
+  // triage의 '더 가까운 주제' 후보로 그대로 나갔다 — "월급을 못 받았어"에 모욕·난민신청이
+  // 붙어 나왔고(2026-08-22 확인), 그 텍스트가 그대로 LLM 입력이 되니 엉뚱한 데로 샌다.
+  return ranked.filter(([, s]) => s >= 4).map(([k]) => k);
 }
 
 export function createServer(baseUrl?: string): McpServer {
@@ -170,7 +373,9 @@ export function createServer(baseUrl?: string): McpServer {
           .string()
           .optional()
           .describe(
-            "문제 유형을 요약한 키워드/짧은 문구 (예: 월세 보증금 미반환 / 갑작스러운 해고 / 보이스피싱 송금). 사용자의 발화 원문 대신, 개인정보를 제외한 요약 키워드로 전달하세요. 비우면 전체 주제 목록 반환.",
+            "문제 유형을 요약한 키워드/짧은 문구 (예: 월세 보증금 미반환 / 갑작스러운 해고 / 보이스피싱 송금). "
+            + "사용자의 발화 원문 대신, 개인정보를 제외한 요약 키워드로 전달하세요. "
+            + "확실하지 않아도 됩니다 — 짧게 적어 호출하면 이 도구가 찾아줍니다. 비우면 전체 주제 목록 반환.",
           ),
         category: z
           .enum(CATEGORIES as [string, ...string[]])
@@ -211,7 +416,21 @@ export function createServer(baseUrl?: string): McpServer {
         return { content: [{ type: "text", text: withDisclaimer(`'${q}'에 맞는 주제를 바로 찾지 못했습니다. query 없이 호출하면 전체 목록(56개 분야)을 볼 수 있습니다. 더 구체적인 표현으로 다시 검색해 주세요.`) }] };
       }
       const body = ranked.map((k) => `- \`${k}\` — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${q}' 관련 주제 (관련도순)\n\n${body}\n\n→ 위 주제 키로 get_procedure(절차)·get_checklist(서류)·get_form_template(서식)·get_precedent(판례)를 호출하세요.`) }] };
+      // 도구 이름은 사용자 화면에서 걷어내고 모델용 주석으로 내린다.
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              withDisclaimer(`## 🔎 '${q}' 관련 주제\n\n${body}`) +
+              `\n\n<!-- 진행 지침 (사용자에게 읽어주지 말 것)\n` +
+              `- 사용자 상황에 가장 가까운 주제 하나를 고르고, 그 키로 get_procedure(절차)·get_checklist(서류)·get_precedent(판례)를 이어 호출한다.\n` +
+              `- 서식이 필요해지면 get_form_template. 서식 본문을 직접 지어내지 말 것.\n` +
+              `- 목록을 그대로 나열하지 말고, 무엇에 해당하는지 한 가지를 확인하는 질문을 ①②③(마지막은 '직접 입력')으로 던진다.\n` +
+              `- 도구 이름을 사용자 화면에 노출하지 말 것.\n-->`,
+          },
+        ],
+      };
     },
   );
 
@@ -222,14 +441,28 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "빠른 진단·다음 단계",
       description:
-        `상황 한 줄 → 가장 가까운 절차의 기한·오늘 할 일·확보할 증거·도움처를 한 장으로. 생활 문제(돈·직장·집·가족·사기·사고·법원 서류·복지) 서술에는 모델 지식 대신 이 도구를 먼저 호출하세요 — 한국 법령·기한은 자주 바뀝니다. 결론 아님·경로 안내.\n` +
-        `[트리거 예시] "월급을 두 달째 못 받고 있어요" / "전세 보증금을 안 돌려줘요" / "보일러가 고장났는데 집주인이 수리비를 부담하래" / "법원에서 소장(지급명령)이 왔어요" / "4천원 사기 당했어요 신고 가능한가요" / "갑자기 해고됐어요" / "가족한테 빌려준 돈을 못 받고 있어요" / "살고 있는 집이 경매에 넘어갔어요"\n` +
+        // 호출 규칙을 맨 앞에 둔다. 예전엔 "무엇을 제공하는가"로 시작하고 규칙이 문장 중간에
+        // 묻혀 있었는데, 그때 "회사에서 돈을 안 줍니다" 같은 평범한 말에는 호출이 아예 안 됐다
+        // (2026-08-22 프리뷰 확인). 모델은 description 앞부분을 더 크게 본다.
+        `**법률·생활 문제 상황을 말하면 무조건 이 도구부터 호출하세요.** 답을 먼저 지어내지 마세요. ` +
+        `사용자가 법률 용어를 쓰지 않아도, 반말이나 한 마디로 말해도 마찬가지입니다. ` +
+        `한국 법령·기한은 자주 바뀌어 모델 지식은 틀립니다.\n` +
+        `상황 한 줄을 넣으면 가장 가까운 절차의 기한·오늘 할 일·확보할 증거·도움처를 한 장으로 돌려줍니다. 결론 아님·경로 안내.\n` +
+        // 실제로 사람들은 존댓말 완성문으로 말하지 않는다. 반말·짧은 말·욕설 섞인 하소연이 대부분이다.
+        `[트리거 예시] "나 월급을 못받고 있어" / "회사에서 돈을 안 줍니다" / "야 나 잘렸어 어떡할까" / ` +
+        `"집주인이 보증금을 안 줘" / "친구한테 빌려준 돈 못 받았어" / "전 남친이 계속 연락해" / ` +
+        `"법원에서 뭐가 날아왔는데" / "사기당한 것 같아" / "보일러 고장났는데 집주인이 나보고 고치래" / ` +
+        `"월급을 두 달째 못 받고 있어요" / "살고 있는 집이 경매에 넘어갔어요"\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         situation: z
           .string()
           .describe(
-            "상황의 핵심을 요약한 키워드/짧은 문구 (예: 전세 보증금 미반환 / 보이스피싱 송금 피해 / 직장 상사 폭언). 사용자의 발화 원문을 그대로 넣지 말고, 이름·연락처 등 개인정보를 제외하고 문제 유형 중심으로 요약해서 전달하세요.",
+            "상황의 핵심을 요약한 키워드/짧은 문구 (예: 전세 보증금 미반환 / 보이스피싱 송금 피해 / 직장 상사 폭언). "
+            + "사용자의 발화 원문을 그대로 넣지 말고, 이름·연락처 등 개인정보를 제외하고 문제 유형 중심으로 요약해 전달하세요. "
+            // 요약을 완벽히 해내야 부를 수 있다고 읽히면 모델이 스스로 분류를 시도하다 그냥 답해버린다.
+            // 분류는 이 도구가 한다는 걸 명시해 호출 문턱을 낮춘다(2026-08-22 프리뷰 확인).
+            + "어떤 유형인지 확실하지 않아도 됩니다 — 들은 문제를 짧게 적어 그대로 호출하세요. 정확한 분류는 이 도구가 합니다.",
           ),
       },
       annotations: { title: "빠른 진단·다음 단계", ...READONLY },
@@ -237,41 +470,40 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ situation }) => {
       const ranked = rankTopics(situation);
       if (!ranked.length) {
-        return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 맞는 주제를 바로 찾지 못했습니다. search_topics로 다시 검색하거나 search_topics를 query 없이 호출해 전체 분야를 확인해 주세요.`) }] };
+        return { content: [{ type: "text", text: withDisclaimer(`'${situation}'에 딱 맞는 주제를 찾지 못했습니다. 조금 더 구체적으로 알려주시면 다시 찾아볼게요.
+
+<!-- 진행 지침: search_topics를 query 없이 호출하면 전체 분야 목록을 받는다. 도구 이름은 노출하지 말 것. -->`) }] };
       }
       const top = ranked[0];
       const p = PROCEDURES[top];
       const c = CHECKLISTS[top];
       // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
+      // 위젯을 반환하면 이 아래 마크다운은 모델에게 가지 않는다. 그래서 진행 지침을
+      // for_assistant로 함께 실어 보낸다 — 이게 없으면 모델이 서식 존재를 모른 채 답한다.
       if (widgetsOn()) {
         const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage", for_assistant: 진단보조지침(top) }) }] };
       }
-      const steps = p.단계.slice(0, 3).map((s) => `- ${s}`).join("\n");
-      const evid = (c?.증거 ?? []).slice(0, 3).map((s) => `- ${s}`).join("\n");
-      const others = ranked.slice(1, 5).map((k) => `- ${k} — [${PROCEDURES[k].category}] ${PROCEDURES[k].제목}`).join("\n");
-      const hasPrec = (PRECEDENTS[top]?.length ?? 0) > 0;
+      // 사용자에게는 주제 '키'가 아니라 제목을 보여준다. 키는 `외국인근로자_임금체불`처럼
+      // 언더바가 든 내부 식별자라 화면에 그대로 나가면 읽히지 않는다.
+      const others = ranked.slice(1, 4).map((k) => PROCEDURES[k].제목).join(" · ");
+      // 한 번에 다 쏟지 않는다. 카톡 화면에서 1,000자를 스크롤하게 만들면 아무도 안 읽는다.
+      // 기한(놓치면 끝나는 것) → 지금 당장 할 일 하나 → 확인 질문 하나. 나머지는 다음 턴에.
       const parts = [
-        `## 🧭 빠른 진단: '${situation}'`,
-        `_특정 결론·행동을 권하는 것이 아니라, 가장 가까운 절차의 기한·단계 정보를 안내합니다._`,
+        `## ${p.제목}`,
         ``,
-        `**가장 가까운 주제**: ${top} — [${p.category}] ${p.제목}`,
+        `⏰ **${p.기한}**`,
         ``,
-        `### ⏰ 기한 (놓치면 권리 소멸 위험)`,
-        p.기한,
-        ``,
-        `### ✅ 지금 할 일 (첫 단계)`,
-        steps,
+        `**지금 먼저** — ${사용자문장(p.단계[0])}`,
       ];
-      if (evid) parts.push(``, `### 📎 먼저 확보할 증거`, evid);
-      parts.push(``, `### 📞 접수·도움받을 곳`, p.온라인접수);
-      parts.push(``, `### ⚖️ 근거 법령`, p.근거법.join(" · "));
-      if (others) parts.push(``, `**상황이 아래에 더 가깝다면 그 주제로 다시 진단/조회하세요:**`, others);
-      parts.push(
-        ``,
-        `→ 더 자세히: get_procedure("${top}") · 서류 get_checklist("${top}") · 표준서식 get_form_template · 기한계산 calculate_amount${hasPrec ? ` · 판례 get_precedent("${top}")` : ""}`,
-      );
-      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) }] };
+      // 접수처는 '다음 행동'이라 빼지 않는다(8/9 결정: 문제 상황 → 관련 법 + 제출 방법).
+      // 다만 섹션 제목을 달아 늘리지 않고 한 줄로 접는다.
+      // 첫 화면은 여기까지다. 증거·접수처·근거법령까지 얹으면 다시 우다다가 된다
+      // (2026-08-22 판단). 빼는 게 아니라 아래 진행 지침으로 내려, 모델이 들고 있다가
+      // 대화가 그 지점에 왔을 때 꺼내게 한다.
+      if (others) parts.push(``, `_상황이 다르다면: ${others}_`);
+      parts.push(``, `---`, ``, 확인질문(top, p, c));
+      return { content: [{ type: "text", text: withDisclaimer(parts.join("\n")) + 지침주석(진단보조지침(top)) }] };
     },
   );
 
@@ -378,7 +610,9 @@ export function createServer(baseUrl?: string): McpServer {
       annotations: { title: "절차 안내", ...READONLY },
     },
     async ({ topic }) => ({
-      content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) }],
+      // 절차를 본 다음 대개 서식이 필요해진다. 어떤 서식인지 키를 함께 주지 않으면
+      // 모델이 서식을 직접 지어내는 쪽으로 샌다 — 진행 지침에 키와 호출 시점을 싣는다.
+      content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }],
     }),
   );
 
@@ -396,7 +630,9 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ topic }) => {
       const c = CHECKLISTS[topic];
       if (!c) {
-        return { content: [{ type: "text", text: withDisclaimer(`'${topic}' 주제의 체크리스트가 없습니다. search_topics로 주제 키를 확인하세요.`) }] };
+        return { content: [{ type: "text", text: withDisclaimer(`'${topic}' 주제의 준비 서류 목록은 아직 없습니다.
+
+<!-- 진행 지침: search_topics로 주제 키를 다시 확인한다. 도구 이름은 노출하지 말 것. -->`) }] };
       }
       const text = [
         `## 🗂️ ${PROCEDURES[topic]?.제목 ?? topic} — 준비 체크리스트`,
@@ -407,7 +643,8 @@ export function createServer(baseUrl?: string): McpServer {
         "### 접수용 준비서류",
         ...c.준비서류.map((s) => `- [ ] ${s}`),
       ].join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      // 준비서류를 확인한 사용자의 다음 행동은 거의 서식 작성이다. 여기서 키를 놓치면 흐름이 끊긴다.
+      return { content: [{ type: "text", text: withDisclaimer(text) + 지침주석(진단보조지침(topic)) }] };
     },
   );
 
@@ -416,8 +653,21 @@ export function createServer(baseUrl?: string): McpServer {
     {
       title: "표준 서식 제공",
       description:
-        `표준 서식 ${FORM_KEYS.length}종의 빈칸 채움 골격 + 작성요령 + 공식 양식 출처 + 제출 접수처. 모바일 미리보기(빈칸을 탭해 입력·인쇄/PDF 저장)와 한글(.hwpx)·워드(.docx)·텍스트 다운로드 제공. 문서를 써야 하거나 보내야 할 때 사용.\n` +
+        // 이 도구의 inputSchema enum에 서식 114종 이름이 그대로 실려 모델 컨텍스트에 들어간다.
+        // 그래서 모델이 "나는 이미 목록을 안다"고 판단해 호출하지 않고 이름만 나열해 버린다 —
+        // "임대차 서식 내놔"에 서식 4종을 말로만 읊고, "1번"이라고 찍어줘야 그제서야 불렀다
+        // (2026-08-22 프리뷰 확인). 그래서 "나열하지 말고 즉시 호출"을 맨 앞에 못 박는다.
+        `**서식·양식 이야기가 나오면 목록을 말로 나열하지 말고 즉시 이 도구를 호출하세요.** ` +
+        `어떤 서식인지 되묻지 말고, 대화 맥락에서 가장 가까운 서식 하나로 먼저 호출하면 됩니다. ` +
+        `카드가 떠야 사용자가 빈칸을 채우고 인쇄·다운로드할 수 있습니다 — 이름만 알려주는 것은 쓸모가 없습니다.\n` +
+        `표준 서식 ${FORM_KEYS.length}종의 빈칸 채움 골격 + 작성요령 + 공식 양식 출처 + 제출 접수처. 모바일 미리보기(빈칸을 탭해 입력·인쇄/PDF 저장)와 한글(.hwpx)·워드(.docx)·텍스트 다운로드 제공.\n` +
         `[트리거 예시] "내용증명 양식 줘" / "고소장 어떻게 써요?" / "차용증 써야 하는데" / "기초연금 신청서 양식 있어?" / "월급 못 받은 거 내용증명 보내고 싶어요"\n` +
+        // 이 서비스의 핵심 산출물이다. 사용자가 '양식'이라는 단어를 쓸 때만 부르면 대부분 놓친다 —
+        // 실제로는 확인 질문이 끝나고 안내를 마무리하는 시점에 필요해진다. 그 시점을 명시한다.
+        `[호출 시점] 사용자가 서식·양식·신청서·진정서·고소장·내용증명·계약서를 요구할 때는 물론, ` +
+        `확인 질문이 끝나 안내를 마무리할 때, 대화가 '어떻게 접수하느냐/뭘 써서 내느냐'로 넘어갈 때도 호출하세요. ` +
+        `서식 키는 triage·get_procedure·get_checklist가 돌려준 진행 지침에 실려 옵니다. ` +
+        `서식 본문을 직접 지어내지 말고 반드시 이 도구로 받으세요.\n` +
         `Service: ${SVC}.`,
       inputSchema: { form: z.enum(FORM_KEYS).describe("서식 키. get_procedure/search_topics에서 안내된 서식명을 사용") },
       annotations: { title: "표준 서식 제공", ...READONLY },
@@ -448,7 +698,9 @@ export function createServer(baseUrl?: string): McpServer {
       }
       // 서식 본문은 코드블록으로 감싸 마크다운 해석(대괄호·번호목록 변형)을 차단하고 원형 유지.
       const text = [...head, "", "```", f.본문, "```", "", ...tail].join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      return { content: [{ type: "text", text: withDisclaimer(text) + `
+
+<!-- 진행 지침: 서식 전문을 다시 출력하지 말고, 사용자가 말한 사실로 채운 초안이나 확인 질문만 제시한다. 도구 이름은 노출하지 말 것. -->` }] };
     },
   );
 
@@ -545,7 +797,7 @@ export function createServer(baseUrl?: string): McpServer {
         return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
       }
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount", for_assistant: 계산보조지침 }) }] };
       }
       const text = [
         `## 🧮 ${a.item} 계산 결과`,
@@ -556,7 +808,9 @@ export function createServer(baseUrl?: string): McpServer {
       ]
         .filter(Boolean)
         .join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      return { content: [{ type: "text", text: withDisclaimer(text) + `
+
+<!-- 진행 지침: ${계산보조지침} -->` }] };
     },
   );
 
@@ -716,10 +970,12 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ claim_amount, parties, track, e_litigation }) => {
       const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost", for_assistant: 계산보조지침 }) }] };
       }
       const text = `## 🧮 소송비용(개략)\n\n- **결과**: ${r.결과}\n- **계산식**: ${r.계산식}\n\n> 💡 ${r.비고}`;
-      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      return { content: [{ type: "text", text: withDisclaimer(text) + `
+
+<!-- 진행 지침: ${계산보조지침} -->` }] };
     },
   );
 
@@ -752,7 +1008,21 @@ export function createServer(baseUrl?: string): McpServer {
           계산식: `기준일 ${start_date} + ${기간표시}`,
           비고: `기산점: ${rule.기산} / ${rule.경고}`,
         });
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "calculate_deadline" }) }] };
+        // 기한은 놓치면 권리가 사라진다 — 남은 일수를 흐리게 말하지 않도록 따로 못 박는다.
+        return {
+          content: [
+            {
+              type: "text",
+              text: kakaoWidgetText({
+                ...kw,
+                name: "calculate_deadline",
+                for_assistant:
+                  `${계산보조지침} 기한이 지났거나 임박했으면(D-30 이내) 그 사실을 첫 문장에서 분명히 말하고, ` +
+                  "지금 당장 할 수 있는 것 한 가지를 제시한다.",
+              }),
+            },
+          ],
+        };
       }
       const text = [
         `## ⏰ 기한 계산: ${deadline_type}`,
@@ -766,7 +1036,9 @@ export function createServer(baseUrl?: string): McpServer {
         ``,
         `> 기산점·중단(청구·압류·승인)·정지 사유에 따라 실제 기한이 달라질 수 있으니 반드시 확인하세요.`,
       ].join("\n");
-      return { content: [{ type: "text", text: withDisclaimer(text) }] };
+      return { content: [{ type: "text", text: withDisclaimer(text) + `
+
+<!-- 진행 지침: ${계산보조지침} 기한이 지났거나 D-30 이내면 첫 문장에서 분명히 말하고 지금 할 수 있는 것 한 가지를 제시한다. -->` }] };
     },
   );
 
@@ -847,7 +1119,11 @@ export function createServer(baseUrl?: string): McpServer {
           return lines.join("\n");
         })
         .join("\n\n");
-      const tail = `\n\n→ 관련 절차는 search_topics("${kw}"), 더 깊은 원문은 국가법령정보센터(law.go.kr) 법령용어·생활법령(easylaw.go.kr).`;
+      const tail =
+        `\n\n더 깊은 원문은 국가법령정보센터(law.go.kr)·생활법령(easylaw.go.kr)에서 볼 수 있습니다.` +
+        `\n\n<!-- 진행 지침 (사용자에게 읽어주지 말 것)\n` +
+        `- 용어만 묻고 끝나는 경우는 드물다. 이 용어가 걸린 상황이 있어 보이면 search_topics("${kw}")로 이어간다.\n` +
+        `- 도구 이름을 사용자 화면에 노출하지 말 것.\n-->`;
       return { content: [{ type: "text", text: withDisclaimer(`## 🔎 '${kw}' 뜻풀이 (${matched.length}건)\n\n${body}${tail}`) }] };
     },
   );
