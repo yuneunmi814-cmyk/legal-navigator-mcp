@@ -1077,6 +1077,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .bar .btn,.menu button{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 .dd .chev{margin-left:6px;transition:transform .16s ease}
 .dd[data-open="1"] .chev{transform:rotate(180deg)}
+.dd[data-open="1"]>.btn{border-color:var(--accent);color:var(--accent)}
 .menu{position:absolute;z-index:70;top:calc(100% + 7px);left:0;min-width:236px;padding:6px;background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.05),0 18px 44px -18px rgba(0,0,0,.34);display:flex;flex-direction:column;gap:2px}
 .menu button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
 .menu button:hover{background:var(--tip-bg)}
@@ -1335,6 +1336,13 @@ ${hwpxClientScript()}
       if(e.key==="ArrowDown"){e.preventDefault();items[(i+1)%items.length].focus();}
       else if(e.key==="ArrowUp"){e.preventDefault();items[(i-1+items.length)%items.length].focus();}
     });
+    // 위젯의 "서식 다운로드"는 이 페이지의 #save로 들어온다. 받는 쪽이 없으면
+    // '빈칸 바로 채우기'와 글자 하나 다르지 않은 화면이 뜬다 — 눌러놓고 뭐가 달라졌는지
+    // 알 수가 없다(8/22 은미님 지적). 들어오자마자 다운로드 메뉴를 펴준다.
+    function openFromHash(){ if(location.hash==="#save") openMenu(true); }
+    openFromHash();
+    window.addEventListener("hashchange",openFromHash);
+
     items.forEach(function(btn){
       btn.addEventListener("click",function(){
         var f=btn.getAttribute("data-fmt");

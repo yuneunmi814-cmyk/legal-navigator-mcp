@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
 import { matchFormsByName } from "../src/server.js";
+import { buildFormWidget } from "../src/widgets.js";
 import {
   SEARCH_SYNONYMS,
   CHECKLISTS,
@@ -451,5 +452,27 @@ describe("서식 이름 검색 (주제 검색이 빌 때의 대비책)", () => {
     for (const key of FORM_KEYS) {
       expect(matchFormsByName(key), `${key} — 제 이름으로도 안 찾힌다`).toContain(key);
     }
+  });
+});
+
+// 위젯 버튼 두 개가 같은 곳으로 가면 안 된다 — 8/22에 실제로 그랬다.
+describe("서식 위젯 버튼", () => {
+  const base = "https://x.test";
+  const card = buildFormWidget(
+    "임금체불진정서",
+    { 제목: "임금체불 진정서", 용도: "고용노동부에 진정" },
+    base,
+    { url: "https://labor.moel.go.kr", 관할: "관할 지방고용노동청" },
+  );
+  const urls = (card.widget as { children: { type: string; onClickAction?: { payload: { target: { url: string } } } }[] }).children
+    .filter((c) => c.type === "Button")
+    .map((c) => c.onClickAction!.payload.target.url);
+
+  it("버튼마다 가는 곳이 다르다", () => {
+    expect(new Set(urls).size).toBe(urls.length);
+  });
+
+  it("서식 다운로드는 #save로 간다 (도착하면 다운로드 메뉴가 열린다)", () => {
+    expect(urls.some((u) => u.endsWith("#save"))).toBe(true);
   });
 });

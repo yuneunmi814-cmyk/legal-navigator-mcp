@@ -253,6 +253,9 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(exportCode).not.toMatch(/fetch\(|XMLHttpRequest|navigator\.sendBeacon/);
     // hidden 속성이 display 지정에 밀리면 메뉴가 열린 채로 뜬다 — 8/21에 실제로 그랬다
     expect(html).toMatch(/\[hidden\]\{display:none!important\}/);
+    // 위젯의 '서식 다운로드'는 #save로 들어온다. 받는 쪽이 없으면 '빈칸 채우기'와
+    // 똑같은 화면이 떠서 버튼이 두 개인 의미가 없어진다(8/22 지적).
+    expect(html).toContain('location.hash==="#save"');
   });
 
   it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
