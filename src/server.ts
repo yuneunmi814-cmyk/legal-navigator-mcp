@@ -1096,8 +1096,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </style></head><body>
 <div class="bar">
   <button class="btn pri" id="printBtn" type="button">인쇄 · PDF로 저장</button>
-  <button class="btn" id="hwpBtn" type="button">한글(HWP)로 내보내기</button>
-  <button class="btn" id="docBtn" type="button">워드(DOC)로 내보내기</button>
+  <button class="btn" id="docBtn" type="button">한글 · 워드로 내보내기</button>
   <a class="btn" href="${txtHref}">텍스트 파일</a>
   <span class="sp"></span>
   <button class="btn" id="resetBtn" type="button">빈칸 비우기</button>
@@ -1109,7 +1108,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <p class="use">${purpose}</p>
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
-  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글(HWP)</b>·<b>워드(DOC)</b> 버튼으로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
+  <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>한글·워드로 내보내기</b>로 작성한 내용을 문서 파일로 받아 이어서 편집할 수 있습니다.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -1162,15 +1161,14 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   doc.addEventListener("input",function(e){autoGrow(e.target);save();});
   restore();
   document.getElementById("printBtn").addEventListener("click",function(){window.print();});
-  // 한글(.hwpx)·워드(.docx)로 내보내기 — 채운 값 그대로 담은 진짜 문서 파일을 브라우저에서 만들어 내려받는다.
+  // 한글·워드로 내보내기 — 채운 값 그대로 담은 진짜 .docx(OOXML)를 브라우저에서 만들어 내려받는다.
   // 서버로는 아무것도 보내지 않는다(개인정보 미수집 원칙).
   // .doc(HTML) 방식은 Word 없는 환경(맥 미리보기·텍스트편집기)에서 소스가 그대로 보여 폐기했다.
-  // DOCX·HWPX 둘 다 ZIP(무압축 저장) + XML 파트라서 zipStore·collect()를 그대로 공유한다.
-  // 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
+  // DOCX = ZIP(무압축 저장) + 최소 3파트. 외부 라이브러리 없이 CRC32·ZIP을 직접 만든다.
   (function(){
     var crcT=(function(){var t=new Uint32Array(256);for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
     function crc32(u8){var c=0xFFFFFFFF;for(var i=0;i<u8.length;i++)c=crcT[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
-    function zipStore(files,mime){
+    function zipStore(files){
       var enc=new TextEncoder(),parts=[],central=[],offset=0;
       function u32(v){return [v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];}
       function u16(v){return [v&255,(v>>>8)&255];}
@@ -1183,7 +1181,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       });
       var cdSize=central.reduce(function(a,b){return a+b.length;},0);
       var eocd=[80,75,5,6].concat(u16(0),u16(0),u16(files.length),u16(files.length),u32(cdSize),u32(offset),u16(0));
-      return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:mime});
+      return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
     }
     function xe(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
     // 화면의 서식(빈칸·체크박스·굵은 라벨)을 문단·런 구조로 옮긴다.
@@ -1211,157 +1209,29 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       });
       return paras;
     }
-
-    // ── 관공서 서식 배치 ─────────────────────────────────────────────
-    // 공식 서식(법원 '지급명령에 대한 이의신청서' 등)의 배치를 문단 텍스트에서 되살린다.
-    //   · 첫 줄(제목)        → 가운데·굵게·15pt, 아래 여백
-    //   · '○○법원 귀중'      → 우측·굵게·13pt, 위 여백 크게
-    //   · 날짜 / '(인)' 줄    → 가운데
-    //   · '1.' '가.' 항목     → 내어쓰기(둘째 줄이 번호 밑으로 내려가지 않게)
-    // 마무리 줄은 데이터에 "작성일자 …  신청인 … (인)  ○○법원 귀중"처럼 한 줄로
-    // 뭉쳐 있어, 공백 2칸 이상에서 끊어 각각 제 자리에 앉힌다. 끊기·정렬은 문서
-    // 끝 6문단 안에서만 한다 — 본문 중간의 '(인)'(상속재산분할협의서의 당사자란 등)까지
-    // 가운데로 밀어버리지 않기 위해서다.
-    var RE_귀중=/(귀중|귀하)\\s*$/, RE_도장=/\\((인|서명)/, RE_날짜=/^\\s*(작성일|신청일|20\\s*[.\\d[]|\\d{4}\\s*[.\\-년])/;
-    function 문단글(runs){return runs.map(function(r){return r.t;}).join("");}
-    // 공백 2칸 이상에서 문단을 끊는다. 밑줄 런(사용자가 채운 값)은 쪼개지 않는다.
-    function split2(runs){
-      var g=[[]];
-      runs.forEach(function(r){
-        if(r.s.u){g[g.length-1].push(r);return;}
-        r.t.split(/\\s{2,}/).forEach(function(part,i){
-          if(i>0)g.push([]);
-          if(part)g[g.length-1].push({t:part,s:r.s});
-        });
-      });
-      return g.filter(function(x){return x.length;});
-    }
-    function layout(paras){
-      var out=[],titled=false,tail=paras.length-6;
-      paras.forEach(function(runs,i){
-        var t=문단글(runs), 끝=i>=tail;
-        var group=(끝&&/\\S\\s{2,}\\S/.test(t)&&(RE_귀중.test(t)||RE_도장.test(t)||RE_날짜.test(t)))?split2(runs):[runs];
-        group.forEach(function(rs){
-          var s=문단글(rs), st={};
-          if(!s.trim()){out.push({r:rs,s:{}});return;}
-          if(!titled){titled=true;st={a:"CENTER",sz:30,b:true,after:600,title:true};}
-          else if(끝&&RE_귀중.test(s))st={a:"CENTER",sz:26,b:true,before:1200,right:true};
-          else if(끝&&RE_도장.test(s))st={a:"CENTER",before:200};
-          else if(끝&&RE_날짜.test(s))st={a:"CENTER",before:600};
-          else if(/^\\s*(\\d+|[가-힣])\\s*[.)]\\s/.test(s))st={hang:true};
-          out.push({r:rs,s:st});
-        });
-      });
-      return out;
-    }
-    function docXml(items){
-      var body=items.map(function(p){
-        var st=p.s||{};
-        var rs=p.r.map(function(r){
-          var pr='<w:rPr><w:rFonts w:ascii="Batang" w:eastAsia="Batang" w:hAnsi="Batang"/><w:sz w:val="'+(st.sz||23)+'"/>'+((r.s.b||st.b)?"<w:b/>":"")+(r.s.u?'<w:u w:val="single"/>':"")+"</w:rPr>";
+    function docXml(paras){
+      var body=paras.map(function(runs){
+        var rs=runs.map(function(r){
+          var pr='<w:rPr><w:rFonts w:ascii="Batang" w:eastAsia="Batang" w:hAnsi="Batang"/><w:sz w:val="23"/>'+(r.s.b?"<w:b/>":"")+(r.s.u?'<w:u w:val="single"/>':"")+"</w:rPr>";
           return "<w:r>"+pr+'<w:t xml:space="preserve">'+xe(r.t)+"</w:t></w:r>";
         }).join("");
-        var ppr='<w:spacing w:before="'+(st.before||0)+'" w:after="'+(st.after||0)+'" w:line="300" w:lineRule="auto"/>'+
-          (st.a?'<w:jc w:val="'+(st.right?"right":st.a.toLowerCase())+'"/>':"")+
-          (st.hang?'<w:ind w:left="400" w:hanging="400"/>':"");
-        return '<w:p><w:pPr>'+ppr+'</w:pPr>'+rs+"</w:p>";
+        return '<w:p><w:pPr><w:spacing w:after="0" w:line="300" w:lineRule="auto"/></w:pPr>'+rs+"</w:p>";
       }).join("");
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
     }
-    var FNAME=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
-    function dl(blob,ext){
-      var a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download=FNAME.replace(/[\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+ext;
-      document.body.appendChild(a);a.click();
-      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
-    }
     document.getElementById("docBtn").addEventListener("click",function(){
-      dl(zipStore([
+      var fname=${JSON.stringify(f.제목.replace(/\s*\([^()]*\)\s*$/, "").trim())};
+      var blob=zipStore([
         {name:"[Content_Types].xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'},
         {name:"_rels/.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'},
-        {name:"word/document.xml",data:docXml(layout(collect()))}
-      ],"application/vnd.openxmlformats-officedocument.wordprocessingml.document"),".docx");
-    });
-
-    // ── 한글(HWPX) ────────────────────────────────────────────────────────
-    // HWPX = ZIP + OWPML(KS X 6101). 파트 구성·속성값은 official_forms 의 실제
-    // 한글 저장 파일(사회보장급여_신청서.hwpx)에서 그대로 따왔다 — 스펙을 추측하지 않는다.
-    // mimetype 은 반드시 첫 엔트리·무압축(zipStore 가 배열 순서대로 STORE 로 쓴다).
-    // 참조표(header.xml)는 최소 1벌만 만든다: 글꼴 1종 + 굵게/밑줄 4조합 + 문단모양 1종.
-    var HNS='xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section"';
-    function s7(v){return 'hangul="'+v+'" latin="'+v+'" hanja="'+v+'" japanese="'+v+'" other="'+v+'" symbol="'+v+'" user="'+v+'"';}
-    function hwpHeader(){
-      var ff=["HANGUL","LATIN","HANJA","JAPANESE","OTHER","SYMBOL","USER"].map(function(l){
-        return '<hh:fontface lang="'+l+'" fontCnt="1"><hh:font id="0" face="함초롬바탕" type="TTF" isEmbedded="0"><hh:typeInfo familyType="FCAT_GOTHIC" weight="6" proportion="0" contrast="0" strokeVariation="1" armStyle="1" letterform="1" midline="1" xHeight="1"/></hh:font></hh:fontface>';
-      }).join("");
-      // charPr id 는 비트마스크: 1=굵게, 2=밑줄. 아래 run 의 charPrIDRef 계산과 짝을 이룬다.
-      // id 0~3 은 비트마스크(1=굵게, 2=밑줄) — 아래 run 의 charPrIDRef 계산과 짝이다.
-      // id 4 = 제목(15pt 굵게), id 5 = '○○법원 귀중'(13pt 굵게). height 단위는 1/100pt.
-      function charPr(id,h,b,u){
-        return '<hh:charPr id="'+id+'" height="'+h+'" textColor="#000000" shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">'+
-          '<hh:fontRef '+s7(0)+'/><hh:ratio '+s7(100)+'/><hh:spacing '+s7(0)+'/><hh:relSz '+s7(100)+'/><hh:offset '+s7(0)+'/>'+
-          (b?"<hh:bold/>":"")+'<hh:underline type="'+(u?"BOTTOM":"NONE")+'" shape="SOLID" color="#000000"/>'+
-          '<hh:strikeout shape="NONE" color="#000000"/><hh:outline type="NONE"/><hh:shadow type="NONE" color="#B2B2B2" offsetX="10" offsetY="10"/></hh:charPr>';
-      }
-      var cp="";
-      for(var i=0;i<4;i++)cp+=charPr(i,1000,i&1,i&2);
-      cp+=charPr(4,1500,1,0)+charPr(5,1300,1,0);
-      var heads="";
-      for(var L=1;L<=7;L++)heads+='<hh:paraHead start="1" level="'+L+'" align="LEFT" useInstWidth="1" autoIndent="1" widthAdjust="0" textOffsetType="PERCENT" textOffset="50" numFormat="DIGIT" charPrIDRef="4294967295" checkable="0">^'+L+'.</hh:paraHead>';
-      // 문단모양 5벌 — layout() 의 역할과 1:1. 단위 HWPUNIT(1pt = 100).
-      //  0 본문(왼쪽) · 1 가운데(날짜·서명, 위 12pt) · 2 우측(귀중, 위 60pt)
-      //  3 내어쓰기(번호 항목) · 4 제목(가운데, 아래 30pt)
-      function paraPr(id,al,intent,left,prev,next){
-        return '<hh:paraPr id="'+id+'" tabPrIDRef="0" condense="0" fontLineHeight="0" snapToGrid="1" suppressLineNumbers="0" checked="0"><hh:align horizontal="'+al+'" vertical="BASELINE"/><hh:heading type="NONE" idRef="0" level="0"/><hh:breakSetting breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD" widowOrphan="0" keepWithNext="0" keepLines="0" pageBreakBefore="0" lineWrap="BREAK"/><hh:autoSpacing eAsianEng="0" eAsianNum="0"/><hh:margin><hc:intent value="'+intent+'" unit="HWPUNIT"/><hc:left value="'+left+'" unit="HWPUNIT"/><hc:right value="0" unit="HWPUNIT"/><hc:prev value="'+prev+'" unit="HWPUNIT"/><hc:next value="'+next+'" unit="HWPUNIT"/></hh:margin><hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/><hh:border borderFillIDRef="1" offsetLeft="0" offsetRight="0" offsetTop="0" offsetBottom="0" connect="0" ignoreMargin="0"/></hh:paraPr>';
-      }
-      var pp=paraPr(0,"LEFT",0,0,0,0)+paraPr(1,"CENTER",0,0,1200,0)+paraPr(2,"RIGHT",0,0,6000,0)+
-             paraPr(3,"LEFT",-1400,1400,0,0)+paraPr(4,"CENTER",0,0,0,3000);
-      return '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hh:head '+HNS+' version="1.4" secCnt="1">'+
-        '<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList>'+
-        '<hh:fontfaces itemCnt="7">'+ff+'</hh:fontfaces>'+
-        '<hh:borderFills itemCnt="1"><hh:borderFill id="1" threeD="0" shadow="0" centerLine="NONE" breakCellSeparateLine="0"><hh:slash type="NONE" Crooked="0" isCounter="0"/><hh:backSlash type="NONE" Crooked="0" isCounter="0"/><hh:leftBorder type="NONE" width="0.1 mm" color="#000000"/><hh:rightBorder type="NONE" width="0.1 mm" color="#000000"/><hh:topBorder type="NONE" width="0.1 mm" color="#000000"/><hh:bottomBorder type="NONE" width="0.1 mm" color="#000000"/><hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/></hh:borderFill></hh:borderFills>'+
-        '<hh:charProperties itemCnt="6">'+cp+'</hh:charProperties>'+
-        '<hh:tabProperties itemCnt="1"><hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/></hh:tabProperties>'+
-        '<hh:numberings itemCnt="1"><hh:numbering id="1" start="0">'+heads+'</hh:numbering></hh:numberings>'+
-        '<hh:paraProperties itemCnt="5">'+pp+'</hh:paraProperties>'+
-        '<hh:styles itemCnt="1"><hh:style id="0" type="PARA" name="바탕글" engName="Normal" paraPrIDRef="0" charPrIDRef="0" nextStyleIDRef="0" langID="1042" lockForm="0"/></hh:styles>'+
-        '</hh:refList><hh:compatibleDocument targetProgram="HWP201X"><hh:layoutCompatibility/></hh:compatibleDocument>'+
-        '<hh:docOption><hh:linkinfo path="" pageInherit="0" footnoteInherit="0"/></hh:docOption></hh:head>';
-    }
-    // 용지·여백은 A4 세로 20mm(HWPUNIT = 1/7200인치). 첫 문단의 ctrl 에만 들어간다.
-    var HSEC='<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0"><hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/><hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/><hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/><hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/><hp:pagePr landscape="WIDELY" width="59527" height="84188" gutterType="LEFT_ONLY"><hp:margin header="0" footer="0" gutter="0" left="5669" right="5669" top="4251" bottom="4252"/></hp:pagePr><hp:footNotePr><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/><hp:noteLine length="-1" type="SOLID" width="0.12 mm" color="#000000"/><hp:noteSpacing betweenNotes="283" belowLine="567" aboveLine="850"/><hp:numbering type="CONTINUOUS" newNum="1"/><hp:placement place="EACH_COLUMN" beneathText="0"/></hp:footNotePr><hp:endNotePr><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/><hp:noteLine length="14692344" type="SOLID" width="0.12 mm" color="#000000"/><hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/><hp:numbering type="CONTINUOUS" newNum="1"/><hp:placement place="END_OF_DOCUMENT" beneathText="0"/></hp:endNotePr><hp:pageBorderFill type="BOTH" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill><hp:pageBorderFill type="EVEN" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill><hp:pageBorderFill type="ODD" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill></hp:secPr><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/>';
-    // 문단 스타일 → header.xml 의 paraPr/charPr id. layout() 이 정한 역할을 그대로 옮긴다.
-    function ppRef(st){return st.title?4:st.right?2:st.a==="CENTER"?1:st.hang?3:0;}
-    function cpRef(st,r){return st.sz===30?4:st.sz===26?5:((r.s.b?1:0)|(r.s.u?2:0));}
-    function hwpSection(items){
-      var body=items.map(function(p,i){
-        var st=p.s||{};
-        var rs=(i===0?'<hp:run charPrIDRef="0"><hp:ctrl>'+HSEC+'</hp:ctrl></hp:run>':"")+
-          p.r.map(function(r){
-            return '<hp:run charPrIDRef="'+cpRef(st,r)+'"><hp:t>'+xe(r.t)+'</hp:t></hp:run>';
-          }).join("");
-        return '<hp:p id="'+i+'" paraPrIDRef="'+ppRef(st)+'" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">'+rs+
-          '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="48188" flags="393216"/></hp:linesegarray></hp:p>';
-      }).join("");
-      return '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hs:sec '+HNS+'>'+body+'</hs:sec>';
-    }
-    document.getElementById("hwpBtn").addEventListener("click",function(){
-      var items=layout(collect());
-      var prv=items.map(function(p){return 문단글(p.r);}).join("\\n");
-      dl(zipStore([
-        {name:"mimetype",data:"application/hwp+zip"},
-        {name:"version.xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hv:HCFVersion xmlns:hv="http://www.hancom.co.kr/hwpml/2011/version" tagetApplication="WORDPROCESSOR" major="5" minor="1" micro="0" buildNumber="1" os="1" xmlVersion="1.4" application="Hancom Office Hangul" appVersion="11, 0, 0, 8362 WIN32LEWindows_10"/>'},
-        {name:"META-INF/container.xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><ocf:container xmlns:ocf="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf"><ocf:rootfiles><ocf:rootfile full-path="Contents/content.hpf" media-type="application/hwpml-package+xml"/><ocf:rootfile full-path="Preview/PrvText.txt" media-type="text/plain"/><ocf:rootfile full-path="META-INF/container.rdf" media-type="application/rdf+xml"/></ocf:rootfiles></ocf:container>'},
-        {name:"META-INF/container.rdf",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about=""><ns0:hasPart xmlns:ns0="http://www.hancom.co.kr/hwpml/2016/meta/pkg#" rdf:resource="Contents/header.xml"/></rdf:Description><rdf:Description rdf:about="Contents/header.xml"><rdf:type rdf:resource="http://www.hancom.co.kr/hwpml/2016/meta/pkg#HeaderFile"/></rdf:Description><rdf:Description rdf:about=""><ns0:hasPart xmlns:ns0="http://www.hancom.co.kr/hwpml/2016/meta/pkg#" rdf:resource="Contents/section0.xml"/></rdf:Description><rdf:Description rdf:about="Contents/section0.xml"><rdf:type rdf:resource="http://www.hancom.co.kr/hwpml/2016/meta/pkg#SectionFile"/></rdf:Description><rdf:Description rdf:about=""><rdf:type rdf:resource="http://www.hancom.co.kr/hwpml/2016/meta/pkg#Document"/></rdf:Description></rdf:RDF>'},
-        {name:"META-INF/manifest.xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><odf:manifest xmlns:odf="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"/>'},
-        {name:"Contents/content.hpf",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package xmlns:opf="http://www.idpf.org/2007/opf/" xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="" unique-identifier="" id=""><opf:metadata><opf:title>'+xe(FNAME)+'</opf:title><opf:language>ko</opf:language><opf:meta name="creator" content="text">법률 절차 길잡이</opf:meta><opf:meta name="CreatedDate" content="text">'+new Date().toISOString().replace(/\\.\\d+Z$/,"Z")+'</opf:meta></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/><opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="header" linear="yes"/><opf:itemref idref="section0" linear="yes"/></opf:spine></opf:package>'},
-        {name:"Contents/header.xml",data:hwpHeader()},
-        {name:"Contents/section0.xml",data:hwpSection(items)},
-        {name:"Preview/PrvText.txt",data:prv},
-        {name:"settings.xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><ha:HWPApplicationSetting xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"><ha:CaretPosition listIDRef="0" paraIDRef="0" pos="0"/></ha:HWPApplicationSetting>'}
-      ],"application/hwp+zip"),".hwpx");
+        {name:"word/document.xml",data:docXml(collect())}
+      ]);
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=fname.replace(/[\\/:*?"<>|]/g,"").replace(/\\s+/g,"_")+".docx";
+      document.body.appendChild(a);a.click();
+      setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);
     });
   })();
   document.getElementById("resetBtn").addEventListener("click",function(){
