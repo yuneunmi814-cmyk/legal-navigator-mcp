@@ -480,6 +480,28 @@ describe("서식 배치(formlayout)", () => {
     expect(당사자.s).toEqual({});
   });
 
+  // 화면에서는 "○○지방법원"의 ○○ 가 입력 칸(밑줄 런)으로 바뀐다. 그래서 넓은 공백이
+  // " (인)   " 런의 *맨 끝*에 걸리고, 그 자리에서 잘린 조각은 빈 문자열이다.
+  // 바로 끊으면 분리 지점이 사라져 "신청인 … (인)  ○○지방법원 귀중"이 한 줄로 붙었다.
+  it("넓은 공백이 런 끝에 걸려도 다음 내용에서 끊는다 (실제 페이지의 ○○ 입력칸)", () => {
+    const 실제 = layoutParas([
+      [{ t: "제목" }], [{ t: "가" }], [{ t: "나" }], [{ t: "다" }], [{ t: "라" }],
+      [
+        { t: "작성일자 " }, { t: "2026. 8. 22.", u: true },
+        { t: "   신청인 " }, { t: "윤은미", u: true },
+        { t: " (인)   " }, { t: "        ", u: true }, { t: "지방법원 귀중" },
+      ],
+    ]);
+    const 글 = (p: { r: { t: string }[] }) => p.r.map((r) => r.t).join("");
+    const 끝세줄 = 실제.slice(-3).map(글);
+    expect(끝세줄[0]).toBe("작성일자 2026. 8. 22.");
+    expect(끝세줄[1]).toBe("신청인 윤은미 (인)");
+    expect(끝세줄[2].trim()).toBe("지방법원 귀중");
+    expect(실제[실제.length - 1].s.align).toBe("RIGHT");
+    expect(실제[실제.length - 2].s.align).toBe("CENTER");
+    expect(실제[실제.length - 3].s.align).toBe("CENTER");
+  });
+
   it("사용자가 채운 값(밑줄 런)은 쪼개지지 않는다", () => {
     const 채운것 = layoutParas([
       [{ t: "제목" }],

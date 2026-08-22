@@ -58,10 +58,19 @@ const rtrim = (s: string) => { let i = s.length; while (i > 0 && s.charAt(i - 1)
  */
 function 넓은공백으로쪼개기<R extends { t: string }>(runs: R[]): R[][] {
   const g: R[][] = [[]];
+  // 끊을 자리를 만났다는 표시. 바로 끊지 않고 '다음 내용이 올 때' 끊는다 —
+  // 넓은 공백이 런의 맨 끝에 걸리면(" (인)   " + [○○ 입력칸] + "지방법원 귀중")
+  // 그 자리에서 잘린 조각이 빈 문자열이라, 바로 끊으면 분리 지점이 사라진다.
+  let 끊을차례 = false;
+  const put = (r: R) => {
+    if (끊을차례 && g[g.length - 1].length) g.push([]);
+    끊을차례 = false;
+    g[g.length - 1].push(r);
+  };
   for (const r of runs) {
     const u = (r as { u?: boolean }).u || ((r as { s?: { u?: boolean } }).s || {}).u;
     if (u) {
-      g[g.length - 1].push(r);
+      put(r); // 사용자가 채운 값은 쪼개지 않는다
       continue;
     }
     // 끊긴 자리에 붙은 공백만 떼고, 런 사이의 한 칸 띄어쓰기는 살린다
@@ -71,9 +80,9 @@ function 넓은공백으로쪼개기<R extends { t: string }>(runs: R[]): R[][] 
       let v = parts[i];
       if (i > 0) v = ltrim(v);
       if (i < parts.length - 1) v = rtrim(v);
+      if (i > 0) 끊을차례 = true;
       if (!v) continue;
-      if (i > 0 && g[g.length - 1].length) g.push([]);
-      g[g.length - 1].push(Object.assign({}, r, { t: v }));
+      put(Object.assign({}, r, { t: v }));
     }
   }
   return g.filter((x) => x.length);
@@ -137,18 +146,23 @@ export function formLayoutClientScript(): string {
   function ltrim(s){var i=0;while(s.charAt(i)===" ")i++;return s.slice(i);}
   function rtrim(s){var i=s.length;while(i>0&&s.charAt(i-1)===" ")i--;return s.slice(0,i);}
   function 넓은공백으로쪼개기(runs){
-    var g=[[]];
+    var g=[[]],끊을차례=false;
+    function put(r){
+      if(끊을차례&&g[g.length-1].length)g.push([]);
+      끊을차례=false;
+      g[g.length-1].push(r);
+    }
     runs.forEach(function(r){
-      if(r.u||(r.s&&r.s.u)){g[g.length-1].push(r);return;}
+      if(r.u||(r.s&&r.s.u)){put(r);return;}
       var parts=r.t.split("  ");
       parts.forEach(function(part,i){
         var v=part;
         if(i>0)v=ltrim(v);
         if(i<parts.length-1)v=rtrim(v);
+        if(i>0)끊을차례=true;
         if(!v)return;
-        if(i>0&&g[g.length-1].length)g.push([]);
         var c={};for(var k in r)c[k]=r[k];c.t=v;
-        g[g.length-1].push(c);
+        put(c);
       });
     });
     return g.filter(function(x){return x.length;});
