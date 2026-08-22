@@ -67,6 +67,9 @@ const SERVER_INSTRUCTIONS =
   "마지막 질문은 반드시 \"마지막으로\"로 시작하세요. 사용자가 그 질문에 답하면 인터뷰는 끝입니다. " +
   // 전체 흐름을 한 줄로 고정한다. 이게 없으면 매 호출마다 답변 모양이 달라진다.
   "[전체 흐름] 상황 접수 → 확인 질문 3~5회 → **마무리: 상황 정리 한 줄 + 관련 법령 + 접수처 + 서식 카드(get_form_template 호출)**. " +
+  // 한 대화에서 진단은 한 번뿐이다. 인터뷰 중 재진단은 맥락을 잃는다.
+  "**진단(triage)은 대화 한 건에 한 번만 합니다.** 인터뷰를 진행하는 중에는 다시 호출하지 마세요 — " +
+  "요약해서 다시 넣는 과정에서 처음 말한 맥락이 사라져 전혀 다른 주제가 나옵니다. 사용자가 새로운 문제를 꺼냈을 때만 다시 진단합니다. " +
   "관련 법령과 접수처는 첫 답변에 쏟지 말고 마무리 턴에서 꺼내세요 — 처음부터 다 보여주면 길어서 아무도 읽지 않습니다. " +
   "질문에 답하지 않고 넘어가도 안내는 이어져야 합니다 — 질문은 관문이 아니라 선택입니다. " +
   "도구가 돌려준 '진행 지침' 주석은 당신에게 주는 지시입니다. 사용자에게 읽어주지 말고, 도구 이름도 화면에 노출하지 마세요. " +
@@ -220,6 +223,12 @@ function 진단보조지침(topic: string): string {
   l.push(
     "",
     "[진행 규칙]",
+    // 실제 사고: 스토킹 상담으로 시작해 인터뷰를 잘 진행하고는, 마지막 답을 받은 뒤
+    // triage를 다시 호출했다. 그때 넣은 요약에 '스토킹'이 빠져 상속재산분할이 나왔다
+    // (2026-08-22 실사용). 주제는 첫 호출에서 이미 정해졌다 — 다시 묻지 않는다.
+    `- **주제는 이미 "${topic}"으로 정해졌다. 이 대화에서 triage나 search_topics를 다시 호출하지 말 것.**` +
+      " 인터뷰 중에 다시 부르면 사용자가 말한 맥락이 요약되면서 사라져 엉뚱한 주제로 바뀐다." +
+      " 사용자가 전혀 다른 문제를 새로 꺼냈을 때만 다시 진단한다.",
     "- 한 번에 한 가지만 묻는다. 선택지는 ①②③로 주고 마지막은 항상 '직접 입력'으로 열어 둔다.",
     "- 질문은 3~5번 사이에서 사안에 맞게 조절한다. 답이 절차·기한·서식을 실제로 가르는 것만 묻고,"
       + " 그렇지 않은 질문은 하지 않는다. 5번을 채울 필요는 없다.",
@@ -234,7 +243,12 @@ function 진단보조지침(topic: string): string {
   );
   if (forms.length) {
     l.push(
-      `- 이 주제의 표준 서식: ${forms.map((f) => `\`${f}\``).join(" · ")}`,
+      // 키만 나열하면 여러 개일 때 아무거나 고른다. 임금체불은 진정서·내용증명·대지급금
+      // 셋인데 상황이 전혀 다르다. 무엇에 쓰는 서식인지 함께 줘야 맞는 걸 고른다.
+      `- 이 주제의 표준 서식(용도가 다르니 상황에 맞는 것 하나를 고른다):`,
+      ...forms.map((f) => `    · \`${f}\` — ${FORMS[f]?.용도 ?? FORMS[f]?.제목 ?? ""}`),
+      "- 사용자가 말한 상황에 맞는 서식이 위에 없으면 **호출하지 말고**, 없다고 밝힌다." +
+        " 비슷해 보인다고 아무거나 내밀지 말 것 — 잘못된 서식은 없는 것보다 나쁘다.",
       // 마무리 턴의 형식을 고정한다. 안 그러면 매번 다른 모양으로 나와 품질이 들쑥날쑥해진다.
       "- **사용자가 그 '마지막으로' 질문에 답하면 그 턴이 마무리다. 아래 순서를 그대로 지킨다:**" +
         " ① 확인된 상황을 한 줄로 정리 →" +
@@ -318,8 +332,18 @@ function rankTopics(query: string): string[] {
   const nQ = Q.replace(/\s/g, "");
   const words = [...new Set(Q.split(/\s+/).filter((w) => w.length >= 2))];
   const score = new Map<string, number>();
-  const add = (k: string, n: number) => {
-    if (PROCEDURES[k]) score.set(k, (score.get(k) ?? 0) + n);
+  // 점수만으로는 "무엇 때문에 뽑혔는지"를 알 수 없다. 제목에 흔한 낱말 하나가 걸려 4점을 먹으면
+  // 그것만으로 1등이 됐다 — "친하지 않은 사람이 계속 친한 척 연락함"이 '계속'이라는 두 글자로
+  // 헬스장 중도해지 환불로, '연락'이 불법추심으로 갔다(2026-08-22 실사용 확인).
+  // 그래서 근거의 **종류**를 함께 센다. 강한 근거(동의어·주제키·법령명)가 하나라도 있거나,
+  // 약한 근거(낱말 일치)가 둘 이상 겹칠 때만 답한다.
+  const strong = new Map<string, number>();
+  const weak = new Map<string, number>();
+  const add = (k: string, n: number, kind: "강" | "약" = "강") => {
+    if (!PROCEDURES[k]) return;
+    score.set(k, (score.get(k) ?? 0) + n);
+    const m = kind === "강" ? strong : weak;
+    m.set(k, (m.get(k) ?? 0) + 1);
   };
   for (const syn of SEARCH_SYNONYMS) {
     if (syn.q.some((ph) => nQ.includes(ph.replace(/\s/g, "")) || Q.includes(ph))) {
@@ -337,9 +361,9 @@ function rankTopics(query: string): string[] {
     }
     const hay = `${p.적용대상} ${p.근거법.join(" ")}`;
     for (const w of words) {
-      if (p.제목.includes(w)) add(k, 4);
-      else if (p.category.includes(w)) add(k, 3);
-      else if (hay.includes(w)) add(k, 2);
+      if (p.제목.includes(w)) add(k, 4, "약");
+      else if (p.category.includes(w)) add(k, 3, "약");
+      else if (hay.includes(w)) add(k, 2, "약");
     }
   }
   const ranked = [...score.entries()].sort((a, b) => b[1] - a[1]);
@@ -349,7 +373,10 @@ function rankTopics(query: string): string[] {
   // 컷은 1등만이 아니라 목록 전체에 적용한다. 1등만 걸러도 뒤에 붙는 2점짜리가
   // triage의 '더 가까운 주제' 후보로 그대로 나갔다 — "월급을 못 받았어"에 모욕·난민신청이
   // 붙어 나왔고(2026-08-22 확인), 그 텍스트가 그대로 LLM 입력이 되니 엉뚱한 데로 샌다.
-  return ranked.filter(([, s]) => s >= 4).map(([k]) => k);
+  // 점수 컷에 더해 근거의 종류를 본다. 낱말 하나만 걸린 것으로는 법률 주제를 단정하지 않는다.
+  return ranked
+    .filter(([k, s]) => s >= 4 && ((strong.get(k) ?? 0) > 0 || (weak.get(k) ?? 0) >= 2))
+    .map(([k]) => k);
 }
 
 export function createServer(baseUrl?: string): McpServer {
