@@ -1,6 +1,7 @@
 // 데이터 정합성 불변식. index.ts import 자체가 mergeStrict(키 충돌 시 throw)를 실행 → 충돌 시 이 파일이 실패.
 import { describe, it, expect } from "vitest";
 import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
+import { formLayoutClientScript, layoutParas } from "../src/formlayout.js";
 import { matchFormsByName } from "../src/server.js";
 import { buildFormWidget } from "../src/widgets.js";
 import {
@@ -404,11 +405,11 @@ describe("HWPX 내보내기", () => {
   // 스크립트가 통째로 죽은 적이 두 번 있다. 이 스크립트는 런타임에 끼워 넣는 값이라 그 함정은
   // 없지만, 결과물이 실제로 돌아가는지는 여기서 확인한다(페이지 전체는 server.test.ts가 본다).
   it("클라이언트 스크립트가 문법적으로 살아있다", () => {
-    expect(() => new Function("xe", hwpxClientScript() + "; return hwpxFiles;")).not.toThrow();
+    expect(() => new Function("xe", formLayoutClientScript() + hwpxClientScript() + "; return hwpxFiles;")).not.toThrow();
   });
 
   it("브라우저에서 만든 결과가 서버 쪽 결과와 같다", () => {
-    const make = new Function("xe", hwpxClientScript() + "; return hwpxFiles;")(
+    const make = new Function("xe", formLayoutClientScript() + hwpxClientScript() + "; return hwpxFiles;")(
       (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
     );
     const browser = make("임금체불 진정서", paras.map((r) => r.map((x) => ({ t: x.t, s: { b: x.b, u: x.u } }))));
@@ -417,6 +418,79 @@ describe("HWPX 내보내기", () => {
     for (let i = 0; i < server.length; i++) {
       expect(browser[i].data, `${server[i].name} 불일치`).toBe(server[i].data);
     }
+  });
+});
+
+// ── 관공서 서식 배치 ────────────────────────────────────────────────
+// 내보낸 파일이 밑줄 친 평문 나열이라 실제 서식과 안 닮았던 문제(2026-08-22).
+// 기준은 법원 공식 서식 원본(지급명령에 대한 이의신청서).
+describe("서식 배치(formlayout)", () => {
+  const P = (lines: string[]): HwpxRun[][] => lines.map((t) => [{ t }]);
+  const 글 = (p: { r: { t: string }[] }) => p.r.map((r) => r.t).join("");
+  const laid = layoutParas(
+    P([
+      "내 용 증 명",
+      "",
+      "발신인: 홍길동 (주소: 서울)",
+      "1. 발신인은 수신인과 위 부동산에 관하여 임대차계약을 체결하였습니다.",
+      "2. 위 임대차는 종료되었으나 보증금을 반환하지 않고 있습니다.",
+      "",
+      "작성일자 2026-08-22   발신인 홍길동 (인)   ○○지방법원 귀중",
+    ]),
+  );
+  const 찾기 = (re: RegExp) => laid.find((p) => re.test(글(p)))!;
+
+  it("제목은 가운데·굵게·큰 글씨", () => {
+    expect(laid[0].s).toEqual({ align: "CENTER", size: "TITLE", bold: true });
+  });
+
+  it("한 줄에 뭉친 마무리 줄을 날짜·서명·귀중 셋으로 끊는다", () => {
+    expect(찾기(/^작성일자 2026-08-22$/)).toBeTruthy();
+    expect(찾기(/^발신인 홍길동 \(인\)$/)).toBeTruthy();
+    expect(찾기(/^○○지방법원 귀중$/)).toBeTruthy();
+  });
+
+  it("귀중은 우측, 날짜·서명은 가운데", () => {
+    expect(찾기(/귀중$/).s.align).toBe("RIGHT");
+    expect(찾기(/^작성일자/).s.align).toBe("CENTER");
+    expect(찾기(/^발신인 홍길동/).s.align).toBe("CENTER");
+  });
+
+  it("번호 항목은 내어쓰기, 본문 줄은 건드리지 않는다", () => {
+    expect(찾기(/^1\. 발신인은/).s.hang).toBe(true);
+    expect(찾기(/^발신인: 홍길동/).s).toEqual({});
+  });
+
+  it("본문 한가운데의 '(인)'은 끊지도 정렬하지도 않는다", () => {
+    // 상속재산분할협의서의 당사자란처럼 마무리 블록이 아닌 곳
+    const 긴서식 = layoutParas(
+      P([
+        "상속재산분할협의서",
+        "공동상속인  성명 홍길동 (인)  주소 서울",
+        "1. 아래와 같이 협의한다.",
+        "2. 부동산은 갑이 취득한다.",
+        "3. 예금은 을이 취득한다.",
+        "4. 이상을 증명한다.",
+        "5. 각자 1통씩 보관한다.",
+        "작성일자 2026-08-22   상속인 홍길동 (인)",
+      ]),
+    );
+    const 당사자 = 긴서식.find((p) => 글(p).indexOf("공동상속인") === 0)!;
+    expect(글(당사자)).toBe("공동상속인  성명 홍길동 (인)  주소 서울"); // 그대로
+    expect(당사자.s).toEqual({});
+  });
+
+  it("사용자가 채운 값(밑줄 런)은 쪼개지지 않는다", () => {
+    const 채운것 = layoutParas([
+      [{ t: "제목" }],
+      [{ t: "가" }],
+      [{ t: "나" }],
+      [{ t: "다" }],
+      [{ t: "라" }],
+      [{ t: "작성일자 " }, { t: "2026  08  22", u: true }, { t: "   발신인 홍길동 (인)" }],
+    ]);
+    const 값 = 채운것.flatMap((p) => p.r).find((r) => r.u)!;
+    expect(값.t).toBe("2026  08  22"); // 넓은 공백이 있어도 그대로
   });
 });
 
