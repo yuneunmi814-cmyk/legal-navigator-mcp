@@ -211,6 +211,16 @@ describe("핵심 동작", () => {
       expect(open, k).toBe(close);
     }
   });
+  // 내보내기(docx·hwpx) 스크립트는 TS 템플릿 리터럴 안에 문자열로 들어 있어서
+  // 정규식의 백슬래시를 하나만 쓰면 리터럴이 먹어버린다(/\s/ → /s/). 문법 오류가
+  // 나지 않고 조용히 오작동하므로 렌더된 결과에서 직접 확인한다.
+  it("서식 내보내기 스크립트: 정규식 이스케이프가 살아 있고 문법이 유효하다", async () => {
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("보증금반환_내용증명")}`)).text();
+    expect(html).toContain(String.raw`RE_귀중=/(귀중|귀하)\s*$/`);
+    expect(html).toContain(String.raw`/^\s*(\d+|[가-힣])\s*[.)]\s/`);
+    const script = html.split("<script>")[1].split("</script>")[0];
+    expect(() => new Function(script)).not.toThrow(); // 실행은 하지 않고 파싱만
+  });
   it("서식 미리보기는 사용자 입력값을 서버에 저장하지 않는다(무상태·정적)", async () => {
     const a = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
@@ -234,7 +244,8 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
     const html = await res.text();
     expect(html).toContain('id="docBtn"');
-    expect(html).toContain("한글 · 워드로 내보내기");
+    expect(html).toContain("한글(HWP)로 내보내기");
+    expect(html).toContain("워드(DOC)로 내보내기");
     expect(html).toContain("@page{size:A4");
     // 내보내기는 브라우저 안에서만 — 서버 전송 코드(fetch/XMLHttpRequest)가 핸들러에 없어야 한다
     const handler = html.slice(html.indexOf('getElementById("docBtn")'), html.indexOf('getElementById("resetBtn")'));
