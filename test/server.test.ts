@@ -345,6 +345,37 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(t).toContain("주제 목록");
     expect(t).toContain("### 노동");
   });
+  // 동의어가 낱말 사이에 말이 끼면 안 걸리던 문제. "계속 찾아"는 "계속 집 앞에 찾아와요"도
+  // 잡으라고 적어둔 말인데 붙어 있을 때만 재고 있었다 — 스토킹 신고의 가장 전형적인 문장이
+  // 라이브에서 0건이었다(2026-08-23). 폭력 사안에서 놓치면 그 사람은 그냥 돌아간다.
+  it("스토킹: 사이에 말이 끼어도 잡는다", async () => {
+    for (const q of [
+      "헤어진 사람이 계속 집 앞에 찾아와요",
+      "전 남자친구가 계속 찾아와요",
+      "계속 친한 척 연락함",
+      "자꾸 연락이 와요 무서워요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, `'${q}' 가 0건이다`).toContain("스토킹");
+    }
+  });
+
+  // 느슨하게 잡으면 엉뚱한 데로 간다 — 8/19에 "업무누락 반복하는 실장급 직원"이
+  // 검찰 사칭 보이스피싱으로 갔다. 넓히는 변경마다 이쪽도 같이 본다.
+  it("스토킹이 아닌 것은 스토킹으로 가지 않는다", async () => {
+    for (const q of [
+      "업무누락 반복하는 실장급 직원",
+      "집주인이 찾아와서 나가라고 해요",
+      "동사무소에 계속 찾아갔는데 서류를 안 줘요",
+      "보일러가 고장났는데 집주인이 수리비를 부담하래",
+      "월급을 두 달째 못 받고 있어요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      const 첫줄 = (t.split("\n").find((l) => l.trim().startsWith("- `")) ?? "").trim();
+      expect(첫줄, `'${q}' 의 1순위가 스토킹이다`).not.toContain("스토킹");
+    }
+  });
+
   it("search_topics category 필터만 → 해당 분야 목록", async () => {
     const t = await callText("search_topics", { category: "노동" });
     expect(t).toContain("### 노동");
