@@ -15,7 +15,7 @@ PlayMCP 개발가이드 규격을 준수하며 Claude·ChatGPT·카카오톡(Pla
 npm install
 npm run dev          # http://localhost:4100/mcp  (Streamable HTTP, stateless)
 npm run typecheck
-npm test             # vitest 189개 (계산 결정성·데이터 불변식·인용검증 회귀·통합)
+npm test             # vitest 193개 (계산 결정성·데이터 불변식·인용검증 회귀·통합)
 npm run build && npm start
 ```
 
@@ -111,7 +111,7 @@ npm run build && PORT=8080 node dist/server.js  # 컨테이너 CMD와 동일
   구조는 실물 `.hwpx`를 뜯어 맞췄고(`src/hwpx.ts` 주석 참고), 회귀 테스트 9종이 지킨다.
 - [x] 법률용어 풀이 사전(`src/data/glossary.ts`, 125개·9분류) — 일상어↔법률어 + 헷갈리는 쌍 구별, easylaw·law.go.kr·대법원·헌재 검증. `explain_term` 도구
 - [x] 원문 연결 강화 — `get_precedent` 사건번호별 casenote 딥링크, `get_statute`에 더 깊은 원문(조문 전문·신구조문) 안내
-- [x] 자동 테스트(`test/`, vitest 189개) — 계산 결정성·데이터 정합성 불변식·할루시네이션 재발 가드(미실존 사건번호·비표준 조문)·코드리뷰가 잡은 버그 회귀·통합(도구 규격·면책·다운로드)
+- [x] 자동 테스트(`test/`, vitest 193개) — 계산 결정성·데이터 정합성 불변식·할루시네이션 재발 가드(미실존 사건번호·비표준 조문)·코드리뷰가 잡은 버그 회귀·통합(도구 규격·면책·다운로드)
 - [x] 판례 전수 재검증 — 전 사건번호를 casenote·law.go.kr로 대조(미실존 3건 제거·오기 2건 정정), 회귀 테스트로 재발 차단
 - [~] 법제처 국가법령정보 Open API 라이브(`src/lawapi.ts`, `LAW_OC` 키 필요·선택, 응답속도 위해 핫패스 미사용)
 - [ ] 가이드형 서식 작성 인터뷰(대화로 빈칸 한 칸씩 채우기, declaw 경계 유지)
