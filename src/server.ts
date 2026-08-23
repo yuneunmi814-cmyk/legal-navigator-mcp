@@ -1,4 +1,5 @@
 import express from "express";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -39,6 +40,7 @@ import {
   calcDeadline,
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
+import { logCall, recentLogs, debugLogEnabled } from "./debugLog.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
 import { formLayoutClientScript, layoutParas } from "./formlayout.js";
@@ -400,6 +402,35 @@ export function createServer(baseUrl?: string): McpServer {
     { instructions: SERVER_INSTRUCTIONS },
   );
 
+  // 도구 호출 기록 — registerTool을 여기서 한 번만 감싸 아래 16개 도구에 자동 적용한다(개별 도구는 그대로).
+  // 남기는 것: 도구명·소요시간·성공여부·인자의 키 이름. 남기지 않는 것: 인자의 값(자유 텍스트).
+  // 예외적으로 응답이 "찾지 못했습니다"인 매칭 실패만 원인 파악을 위해 값을 남긴다(마스킹·200자 제한은 debugLog.ts).
+  // 켜고 끄기·저장 범위는 전부 debugLog.ts가 판단한다 — 여기서는 무엇이 일어났는지만 넘긴다.
+  // SDK의 registerTool은 인자 스키마별 제네릭 오버로드가 많아 타입을 그대로 흉내 내기 어렵다 →
+  // 런타임 동작만 필요하므로 any로 우회한다(감싸는 지점이 이 한 곳뿐이라 영향 범위가 좁다).
+  const rawRegisterTool = server.registerTool.bind(server) as (...a: any[]) => any;
+  (server as any).registerTool = (name: string, config: any, handler: (...a: any[]) => any) =>
+    rawRegisterTool(name, config, async (...a: any[]) => {
+      const t0 = Date.now();
+      try {
+        const result = await handler(...a);
+        const text = (result?.content ?? [])
+          .filter((c: any) => c?.type === "text")
+          .map((c: any) => c?.text ?? "")
+          .join("\n");
+        logCall({
+          tool: name,
+          args: a[0],
+          ms: Date.now() - t0,
+          ok: true,
+          flag: text.includes("찾지 못했습니다") ? "no_match" : undefined,
+        });
+        return result;
+      } catch (err) {
+        logCall({ tool: name, args: a[0], ms: Date.now() - t0, ok: false, error: err instanceof Error ? err.message : String(err) });
+        throw err;
+      }
+    });
 
   // 자연어 통합검색 — 일상어 상황 설명을 주제 키로 매핑(접근성).
   server.registerTool(
@@ -1204,6 +1235,7 @@ export function createServer(baseUrl?: string): McpServer {
 
 export const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: false })); // 관리자 로그인 폼(/admin/login) 파싱용
 
 app.get("/", (_req, res) => {
   res.type("text/plain").send("법률 절차 길잡이 MCP 서버 — POST /mcp (Streamable HTTP)");
@@ -1849,6 +1881,225 @@ ${hwpxClientScript()}
 </script>
 </body></html>`;
 }
+
+// ── 관리자 인증 ────────────────────────────────────────────────────────────────
+// 아이디 없이 비밀번호 하나. 계정 저장소도 세션 저장소도 만들지 않는다 —
+// 맞으면 "비밀번호의 해시"를 쿠키에 넣고, 요청마다 그 값과 대조할 뿐이다(무상태 유지).
+// 운영 배포에서는 ADMIN_PASS 환경변수로 반드시 바꿀 것(기본값은 소스에 그대로 보인다).
+const ADMIN_COOKIE = "admin";
+function timingSafeStrEqual(a: string, b: string): boolean {
+  // 길이·내용이 다를 때 응답 시간 차이로 비밀번호를 한 글자씩 알아내지 못하도록 상수시간 비교.
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
+}
+function adminPass(): string {
+  return process.env.ADMIN_PASS || "세일러문";
+}
+function adminCookieValue(): string {
+  return createHash("sha256").update(adminPass()).digest("hex");
+}
+function getCookie(req: express.Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return undefined;
+}
+function isAdminAuthed(req: express.Request): boolean {
+  const token = getCookie(req, ADMIN_COOKIE);
+  return !!token && timingSafeStrEqual(token, adminCookieValue());
+}
+function isLocalHost(req: express.Request): boolean {
+  const host = (req.headers.host || "").split(":")[0].toLowerCase();
+  return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(host);
+}
+
+// 관리자 화면 공통 스타일 — 서식 화면(renderFormHtml)과 같은 색 토큰을 쓴다.
+const ADMIN_CSS = `
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.6;}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 16px 60px;}
+h1{font-size:22px;margin:0 0 6px}
+.sub{color:var(--ink2);font-size:13.5px;margin:0 0 20px}
+a{color:var(--accent)}`;
+
+function renderAdminLoginHtml(error?: string): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 로그인 · 법률 절차 길잡이</title>
+<style>${ADMIN_CSS}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center}
+form{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:28px 26px;width:min(320px,90vw);text-align:center;}
+h1{font-size:16px;margin:0 0 16px}
+input{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);margin:0 0 10px}
+button{width:100%;font:inherit;font-size:14px;font-weight:700;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+.err{color:#e0392b;font-size:12.5px;margin:0 0 10px}
+</style>
+</head><body>
+<form method="post" action="/admin/login">
+<h1>비밀번호를 입력하세요</h1>
+${error ? `<p class="err">${htmlEscape(error)}</p>` : ""}
+<input type="password" name="pw" autofocus required>
+<button type="submit">입장</button>
+</form>
+</body></html>`;
+}
+
+// 로그인 처리 — /forms와 /admin/logs가 같은 비밀번호를 쓴다(관리자 화면은 하나의 문으로 들어간다).
+app.post("/admin/login", (req, res) => {
+  const given = typeof req.body?.pw === "string" ? req.body.pw : "";
+  if (!timingSafeStrEqual(given, adminPass())) {
+    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml("비밀번호가 올바르지 않습니다."));
+    return;
+  }
+  res.cookie(ADMIN_COOKIE, adminCookieValue(), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: !isLocalHost(req), // 로컬 개발(http)에서는 secure를 끄지 않으면 쿠키가 저장되지 않는다
+    maxAge: 1000 * 60 * 60 * 12,
+  });
+  const to = typeof req.body?.next === "string" && req.body.next.startsWith("/") ? req.body.next : "/forms";
+  res.redirect(303, to);
+});
+
+// 서식 전체 목록 — 관리자가 링크만 눌러 들어가는 인덱스. 읽기전용·무상태.
+function renderFormsIndexHtml(baseUrl: string): string {
+  const byCategory = new Map<string, { key: string; title: string }[]>();
+  for (const key of FORM_KEYS) {
+    const topic = FORM_TOPIC[key];
+    const cat = (topic ? PROCEDURES[topic]?.category : undefined) || "기타";
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push({ key, title: FORMS[key].제목 });
+  }
+  const sections = [...CATEGORIES, "기타"]
+    .filter((cat) => byCategory.has(cat))
+    .map((cat) => {
+      const items = byCategory.get(cat)!;
+      const lis = items
+        .map(({ key, title }) => `<li><a href="${baseUrl}/forms/${encodeURIComponent(key)}">${htmlEscape(title)}</a></li>`)
+        .join("");
+      return `<section><h2>${htmlEscape(cat)} <span class="cnt">${items.length}</span></h2><ul>${lis}</ul></section>`;
+    })
+    .join("");
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>서식 전체 목록 · 법률 절차 길잡이</title>
+<style>${ADMIN_CSS}
+.wrap{max-width:820px}
+section{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:0 0 14px}
+h2{font-size:15px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.cnt{font-size:12px;font-weight:400;color:var(--ink2);background:var(--bg);border-radius:999px;padding:1px 8px}
+ul{margin:0;padding:0;list-style:none;display:grid;gap:2px}
+li a{display:block;padding:7px 4px;color:var(--ink);text-decoration:none;font-size:14px;border-radius:6px}
+li a:hover{background:var(--bg);color:var(--accent)}
+</style>
+</head><body><div class="wrap">
+<h1>서식 전체 목록</h1>
+<p class="sub">총 ${FORM_KEYS.length}개 · 클릭하면 빈칸 채우기 미리보기로 이동</p>
+<p class="sub"><a href="/admin/logs">도구 호출 디버그 로그 보기 →</a></p>
+${sections}
+</div></body></html>`;
+}
+
+app.get("/forms", (req, res) => {
+  if (!isAdminAuthed(req)) {
+    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return;
+  }
+  res.type("text/html; charset=utf-8").send(renderFormsIndexHtml(getBaseUrl(req)));
+});
+
+// ── 도구 호출 디버그 로그 화면 ─────────────────────────────────────────────────
+// 정상 호출 줄에는 인자의 "키 이름"만 뜬다. 사용자가 쓴 문장은 매칭 실패 줄에만,
+// 그것도 마스킹·200자 제한을 거친 뒤에 뜬다(이유는 debugLog.ts 머리말 참고).
+function renderAdminLogsHtml(): string {
+  const logs = recentLogs(200);
+  const errors = logs.filter((l) => !l.ok);
+  const noMatches = logs.filter((l) => l.flag === "no_match");
+  const row = (l: (typeof logs)[number]) => {
+    const badge = !l.ok
+      ? `<span class="bad">에러</span>`
+      : l.flag === "no_match"
+        ? `<span class="warn">매칭실패</span>`
+        : `<span class="ok">성공</span>`;
+    const free = l.error ?? (l.args ? JSON.stringify(l.args) : "");
+    return `<tr><td>${htmlEscape(l.ts)}</td><td>${htmlEscape(l.tool)}</td><td>${badge}</td><td>${l.ms}ms</td><td>${htmlEscape(l.argKeys.join(", "))}</td><td class="detail">${htmlEscape(free)}</td></tr>`;
+  };
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>디버그 로그 · 법률 절차 길잡이</title>
+<style>${ADMIN_CSS}
+.stats{display:flex;gap:10px;margin:0 0 20px;flex-wrap:wrap}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:13px}
+.stat b{display:block;font-size:20px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+td.detail{max-width:420px;white-space:normal;word-break:break-all;color:var(--ink2)}
+.ok{color:#0a9;font-weight:600}.warn{color:#e0952b;font-weight:600}.bad{color:#e0392b;font-weight:600}
+.note{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--ink2)}
+</style>
+</head><body><div class="wrap">
+<h1>디버그 로그</h1>
+<p class="sub">최근 ${logs.length}건 · 메모리에만 보관하므로 재배포하면 사라집니다 · <a href="/admin/logs?format=json">JSON으로 보기</a> · <a href="/forms">서식 목록으로</a></p>
+<div class="stats">
+<div class="stat"><b>${logs.length}</b>전체 호출</div>
+<div class="stat"><b>${errors.length}</b>에러</div>
+<div class="stat"><b>${noMatches.length}</b>주제 매칭 실패</div>
+</div>
+<div class="tablewrap">
+<table><thead><tr><th>시각</th><th>도구</th><th>결과</th><th>소요</th><th>인자 키</th><th>매칭실패 내용 / 에러</th></tr></thead>
+<tbody>${logs.map(row).join("") || `<tr><td colspan="6">아직 기록된 호출이 없습니다.</td></tr>`}</tbody></table>
+</div>
+<p class="sub" style="margin-top:16px">사용자가 쓴 문장은 ‘매칭실패’ 줄에만 남고, 그것도 주민번호·전화번호·이메일을 가리고 200자로 잘라 저장합니다. 정상 호출은 인자의 키 이름만 남습니다.</p>
+</div></body></html>`;
+}
+
+function renderLogsOffHtml(): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>디버그 로그 · 법률 절차 길잡이</title>
+<style>${ADMIN_CSS}
+.note{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;font-size:14px;color:var(--ink2)}
+code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+</style>
+</head><body><div class="wrap">
+<h1>디버그 로그가 꺼져 있습니다</h1>
+<p class="sub"><a href="/forms">서식 목록으로</a></p>
+<div class="note">
+<p>지금은 도구 호출을 <b>수집하지도, 보여주지도 않습니다.</b> 심사·투표 기간처럼 기록을 남기지 않아야 할 때의 기본 상태입니다.</p>
+<p>켜려면 서버 환경변수에 <code>DEBUG_LOG=on</code> 을 준 뒤 서버를 다시 시작하세요. 끌 때는 이 값을 지우면 됩니다.</p>
+<p>기록은 메모리에만 쌓이므로 서버를 다시 시작하면 그때까지의 기록도 함께 사라집니다.</p>
+</div>
+</div></body></html>`;
+}
+
+app.get("/admin/logs", (req, res) => {
+  if (!isAdminAuthed(req)) {
+    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return;
+  }
+  // 꺼져 있으면 조회도 하지 않는다 — 화면에는 "꺼져 있음"만 안내한다.
+  if (!debugLogEnabled()) {
+    if (req.query.format === "json") {
+      res.json({ enabled: false, entries: [] });
+      return;
+    }
+    res.type("text/html; charset=utf-8").send(renderLogsOffHtml());
+    return;
+  }
+  if (req.query.format === "json") {
+    res.json({ enabled: true, entries: recentLogs(500) });
+    return;
+  }
+  res.type("text/html; charset=utf-8").send(renderAdminLogsHtml());
+});
 
 // 서식 라우트 — 확장자 없음/.html은 시각화 미리보기(빈칸 채움),
 // .txt/.hwpx/.docx는 파일이 바로 떨어진다(빈 서식). 읽기전용·무상태·인메모리.
