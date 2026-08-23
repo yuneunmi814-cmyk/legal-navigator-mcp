@@ -22,7 +22,8 @@ export type ParaStyle = {
   hang?: boolean;
 };
 
-export type LaidPara<R> = { r: R[]; s: ParaStyle };
+/** i = 이 조각이 나온 원본 문단 인덱스. 마무리 줄은 한 문단이 여러 조각으로 갈린다. */
+export type LaidPara<R> = { r: R[]; s: ParaStyle; i: number };
 
 const 끝맺음 = (t: string) => {
   const s = t.trim();
@@ -106,7 +107,7 @@ export function layoutParas<R extends { t: string }>(paras: R[][]): LaidPara<R>[
       const s = 글(rs);
       let st: ParaStyle = {};
       if (!s.trim()) {
-        out.push({ r: rs, s: {} });
+        out.push({ r: rs, s: {}, i });
         continue;
       }
       if (!titled) {
@@ -115,7 +116,7 @@ export function layoutParas<R extends { t: string }>(paras: R[][]): LaidPara<R>[
       } else if (끝 && 끝맺음(s)) st = { align: "RIGHT", size: "SUB", bold: true };
       else if (끝 && (도장(s) || 날짜(s))) st = { align: "CENTER" };
       else if (번호항목(s)) st = { hang: true };
-      out.push({ r: rs, s: st });
+      out.push({ r: rs, s: st, i });
     }
   });
   return out;
