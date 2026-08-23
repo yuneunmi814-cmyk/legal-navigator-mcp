@@ -30,11 +30,25 @@ const MAX_ENTRIES = 500;
 /** 자유 텍스트 저장 상한. server.ts의 MAX_FREE_TEXT와 같은 값(입력 처리 상한과 맞춘다). */
 const MAX_TEXT = 200;
 
+let 화면에서켬 = false;
+/** 관리자 화면의 켜기/끄기. 서버 재시작 시 꺼진 상태로 돌아간다. */
+export function setCollecting(on: boolean): void {
+  화면에서켬 = on;
+  if (!on) ring.length = 0; // 끄면 이미 모인 것도 지운다 — 꺼져 있는데 남아 있으면 안 된다.
+}
+/** 지금 수집 중인가 (환경변수 또는 화면 스위치). */
+export function collectingBy(): "env" | "screen" | "off" {
+  if (process.env.DEBUG_LOG === "on") return "env";
+  return 화면에서켬 ? "screen" : "off";
+}
+
 const ring: LogEntry[] = [];
 
 /** 기본 꺼짐. 호출 시점에 평가하므로 환경변수를 켜고 끄면 즉시 반영된다. */
 export function debugLogEnabled(): boolean {
-  return process.env.DEBUG_LOG === "on";
+  // 환경변수를 못 쓰는 배포 환경이 있어(2026-08-24 PlayMCP in KC 확인) 관리자 화면에서도 켤 수 있게 한다.
+  // 켠 상태는 메모리에만 있으므로 서버가 다시 뜨면 꺼진 상태로 돌아간다 — 켜둔 채 잊는 일이 없다.
+  return process.env.DEBUG_LOG === "on" || 화면에서켬;
 }
 
 // 노출 위험이 가장 큰 식별자만 가린다. 완전 익명화는 아니지만("남편이 때려요"는 그대로 남는다)

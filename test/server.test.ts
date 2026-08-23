@@ -891,20 +891,22 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(bad.headers.get("set-cookie")).toBeNull();
   });
 
-  it("ADMIN_PASS가 없으면 관리자 화면 자체가 열리지 않는다 (503)", async () => {
-    // 저장소가 공개라 소스에 기본 비밀번호를 두지 않는다 — 적혀 있으면 아무나 아는 값이라
-    // 비밀번호가 아니다. 환경변수가 없으면 로그인 화면도 띄우지 않고 문을 아예 닫는다.
+  it("ADMIN_PASS가 없으면 소스에 없는 임시 비밀번호를 만들어 쓴다 — 알려진 값으로는 못 들어온다", async () => {
+    // 저장소가 공개라 소스에 기본 비밀번호를 둘 수 없다. 그렇다고 문을 아예 닫으면
+    // 환경변수를 못 주는 배포 환경(PlayMCP in KC는 서버 생성 시에만 환경변수를 받는다)에서
+    // 관리자 화면을 영영 못 연다. 그래서 시작할 때 무작위로 만들고 서버 로그에만 찍는다.
+    // 콘솔 로그를 볼 수 있는 사람 = 환경변수를 넣을 수 있는 사람이라 보호 수준은 같다.
     delete process.env.ADMIN_PASS;
     try {
       for (const path of ["/admin/logs", "/forms"]) {
-        // 이미 받아 둔 쿠키가 있어도 통과하지 못해야 한다
+        // 다른 비밀번호로 받아 둔 쿠키는 통하지 않는다 — 로그인 화면이 뜬다.
         const res = await fetch(`${base}${path}`, { headers: { Cookie: cookie } });
-        expect(res.status).toBe(503);
+        expect(res.status).toBe(401);
         const html = await res.text();
-        expect(html).toContain("관리자 화면이 꺼져 있습니다");
-        expect(html).not.toContain("비밀번호를 입력하세요"); // 로그인도 받지 않는다
+        expect(html).toContain("비밀번호를 입력하세요");
       }
-      // 어떤 비밀번호로도 로그인할 수 없다(빈 값 포함)
+      // 옛 기본값·빈 값·아무 문자열 어느 것으로도 로그인되지 않는다.
+      // (임시 비밀번호는 서버 로그에만 있고 소스·응답 어디에도 없다.)
       for (const pw of ["", "세일러문", "아무거나"]) {
         const res = await fetch(`${base}/admin/login`, {
           method: "POST",
@@ -912,14 +914,13 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
           body: new URLSearchParams({ pw }).toString(),
           redirect: "manual",
         });
-        expect(res.status).toBe(503);
+        expect(res.status).toBe(401);
         expect(res.headers.get("set-cookie")).toBeNull();
       }
     } finally {
       process.env.ADMIN_PASS = ADMIN_PW;
     }
   });
-
   it("정상 호출은 인자의 값을 남기지 않는다 — 키 이름만", async () => {
     process.env.DEBUG_LOG = "on";
     clearLogs();

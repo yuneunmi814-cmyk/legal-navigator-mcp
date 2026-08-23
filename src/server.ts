@@ -1,5 +1,5 @@
 import express from "express";
-import { timingSafeEqual, createHash } from "node:crypto";
+import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -40,7 +40,7 @@ import {
   calcDeadline,
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
-import { logCall, recentLogs, debugLogEnabled } from "./debugLog.js";
+import { logCall, recentLogs, debugLogEnabled, setCollecting, collectingBy } from "./debugLog.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
 import { formLayoutClientScript, layoutParas } from "./formlayout.js";
@@ -1896,10 +1896,34 @@ function timingSafeStrEqual(a: string, b: string): boolean {
   const bBuf = Buffer.from(b);
   return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
 }
-/** 설정된 관리자 비밀번호. 환경변수가 없거나 비어 있으면 undefined = 관리자 화면 비활성. */
-function adminPass(): string | undefined {
+// 환경변수를 못 쓰는 배포 환경(PlayMCP in KC는 서버를 만들 때만 환경변수를 받고, 만든 뒤에는
+// 수정 화면이 없다 — 2026-08-24 콘솔 확인)에서도 관리자 화면을 열 수 있어야 한다.
+// 그렇다고 비밀번호를 소스에 둘 수는 없다(공개 저장소). 그래서 시작할 때 무작위로 하나 만들고
+// 서버 로그에 한 번만 찍는다. 콘솔 '모니터링'에 들어갈 수 있는 사람 = 환경변수를 넣을 수 있는
+// 사람이므로 보호 수준은 같고, 저장소에는 아무 값도 남지 않는다. 재배포하면 새 값이 나온다.
+const 자동생성비밀번호 = randomBytes(18).toString("base64url");
+let 비밀번호출처: "env" | "auto" = "env";
+
+/** 설정된 관리자 비밀번호. 환경변수가 있으면 그것을, 없으면 시작 시 만든 무작위 값을 쓴다. */
+function adminPass(): string {
   const pass = process.env.ADMIN_PASS?.trim();
-  return pass ? pass : undefined;
+  if (pass) {
+    비밀번호출처 = "env";
+    return pass;
+  }
+  비밀번호출처 = "auto";
+  return 자동생성비밀번호;
+}
+
+/** 서버가 뜰 때 한 번. 자동 생성했을 때만 값을 알려준다(환경변수를 준 경우엔 찍지 않는다). */
+export function 관리자비밀번호안내(): string {
+  const envPass = process.env.ADMIN_PASS?.trim();
+  if (envPass) return "[관리자] ADMIN_PASS 환경변수를 사용합니다.";
+  return (
+    "[관리자] ADMIN_PASS 환경변수가 없어 이번 실행용 비밀번호를 만들었습니다.\n" +
+    `[관리자] 비밀번호: ${자동생성비밀번호}\n` +
+    "[관리자] /admin/logs 로그인에 쓰세요. 서버를 다시 시작하면 새 값이 만들어집니다."
+  );
 }
 function adminCookieValue(pass: string): string {
   return createHash("sha256").update(pass).digest("hex");
@@ -2061,6 +2085,19 @@ app.get("/forms", (req, res) => {
 // ── 도구 호출 디버그 로그 화면 ─────────────────────────────────────────────────
 // 정상 호출 줄에는 인자의 "키 이름"만 뜬다. 사용자가 쓴 문장은 매칭 실패 줄에만,
 // 그것도 마스킹·200자 제한을 거친 뒤에 뜬다(이유는 debugLog.ts 머리말 참고).
+/** 로그 화면 상단의 스위치 안내. 화면에서 켠 경우에만 '끄기' 버튼을 보여준다.
+ *  (템플릿 리터럴 안에 중첩 백틱을 두지 않으려고 함수로 뺐다.) */
+function 수집스위치안내(): string {
+  if (collectingBy() === "screen") {
+    return (
+      '<form method="post" action="/admin/logs/toggle">' +
+      '<button class="btn" type="submit" name="on" value="0">수집 끄기</button>' +
+      '<span class="sub"> 화면에서 켠 상태입니다 — 서버가 다시 뜨면 저절로 꺼집니다.</span></form>'
+    );
+  }
+  return '<p class="sub">환경변수 <code>DEBUG_LOG=on</code> 으로 켜져 있습니다. 끄려면 그 값을 지우고 다시 시작하세요.</p>';
+}
+
 function renderAdminLogsHtml(): string {
   const logs = recentLogs(200);
   const errors = logs.filter((l) => !l.ok);
@@ -2091,6 +2128,7 @@ td.detail{max-width:420px;white-space:normal;word-break:break-all;color:var(--in
 </head><body><div class="wrap">
 <h1>디버그 로그</h1>
 <p class="sub">최근 ${logs.length}건 · 메모리에만 보관하므로 재배포하면 사라집니다 · <a href="/admin/logs?format=json">JSON으로 보기</a> · <a href="/forms">서식 목록으로</a></p>
+${수집스위치안내()}
 <div class="stats">
 <div class="stat"><b>${logs.length}</b>전체 호출</div>
 <div class="stat"><b>${errors.length}</b>에러</div>
@@ -2117,11 +2155,21 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding
 <p class="sub"><a href="/forms">서식 목록으로</a></p>
 <div class="note">
 <p>지금은 도구 호출을 <b>수집하지도, 보여주지도 않습니다.</b> 심사·투표 기간처럼 기록을 남기지 않아야 할 때의 기본 상태입니다.</p>
-<p>켜려면 서버 환경변수에 <code>DEBUG_LOG=on</code> 을 준 뒤 서버를 다시 시작하세요. 끌 때는 이 값을 지우면 됩니다.</p>
+<form method="post" action="/admin/logs/toggle"><button class="btn" type="submit" name="on" value="1">지금 켜기</button></form>
+<p>켜면 이 서버가 다시 시작될 때까지만 수집합니다 — 켠 채로 잊더라도 재배포하면 저절로 꺼집니다.
+환경변수를 쓸 수 있는 환경이라면 <code>DEBUG_LOG=on</code> 을 줘도 됩니다.</p>
 <p>기록은 메모리에만 쌓이므로 서버를 다시 시작하면 그때까지의 기록도 함께 사라집니다.</p>
 </div>
 </div></body></html>`;
 }
+
+// 관리자 화면에서 수집을 켜고 끈다. 환경변수를 못 쓰는 배포 환경 때문에 둔 스위치라,
+// 켠 상태는 메모리에만 있고 서버가 다시 뜨면 꺼진 상태로 돌아간다.
+app.post("/admin/logs/toggle", (req, res) => {
+  if (blockAdmin(req, res)) return;
+  setCollecting(req.body?.on === "1");
+  res.redirect(303, "/admin/logs");
+});
 
 app.get("/admin/logs", (req, res) => {
   if (blockAdmin(req, res)) return;
@@ -2278,5 +2326,7 @@ const PORT = Number(process.env.PORT ?? 4100);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.error(`법률 절차 길잡이 MCP listening on http://localhost:${PORT}/mcp`);
+    // 관리자 비밀번호 안내 — 자동 생성했을 때만 값이 찍힌다. 콘솔 '모니터링'에서 읽는다.
+    console.error(관리자비밀번호안내());
   });
 }
