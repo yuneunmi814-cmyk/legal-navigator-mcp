@@ -407,6 +407,28 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     }
   });
 
+  // 상담창 시작 화면의 예시 문장은 하나라도 0건이면 첫인상이 무너진다.
+  // "중고거래로 사기를 당했어요"가 실제로 0건이었다(2026-08-24, 은미님 폰에서 발견).
+  it("상담창 예시 문장이 전부 주제를 찾는다", async () => {
+    for (const q of [
+      "월급을 두 달째 못 받고 있어요",
+      "전세 보증금을 안 돌려줘요",
+      "헤어진 사람이 계속 집 앞에 찾아와요",
+      "법원에서 지급명령이 왔어요",
+      "중고거래로 사기를 당했어요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, `'${q}' 가 0건이다`).not.toContain("찾지 못했습니다");
+    }
+  });
+
+  // "사기 당했어요"는 흔한 첫마디다. 유형이 여럿이라 하나로 못 좁히니 후보를 보여준다.
+  it("사기: 유형을 모를 때 후보를 늘어놓는다", async () => {
+    const t = await callText("search_topics", { query: "사기를 당했어요" });
+    expect(t).not.toContain("찾지 못했습니다");
+    expect((t.match(/^-\s+`/gm) ?? []).length).toBeGreaterThan(1);
+  });
+
   it("search_topics category 필터만 → 해당 분야 목록", async () => {
     const t = await callText("search_topics", { category: "노동" });
     expect(t).toContain("### 노동");
