@@ -12,3 +12,4 @@ logs/
 # 스크래핑 스크립트 로컬 산출물 (커밋 금지)
 scripts/naver_login_state.json
 scripts/*_top_engagement.json
+scripts/*_top_engagement.html
