@@ -1180,15 +1180,29 @@ function getBaseUrl(req: express.Request): string {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, "");
   const xfproto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
   const xfhost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
-  const host = xfhost || req.headers.host || "";
-  // ★배포 도메인은 무조건 https — kakaocloud 프록시가 내부 홉에서 x-forwarded-proto: http를 보내와도
-  //   신뢰하면 안 됨(도메인의 80포트는 응답조차 없어 링크가 죽고, https 채팅창에선 혼합콘텐츠 차단).
-  //   로컬(localhost 등)에서만 실제 프로토콜을 따른다.
-  const hostname = host.split(":")[0].toLowerCase();
+  const rawHost = xfhost || req.headers.host || "";
+  if (!rawHost) return "";
+  // host.split(":")[0]로 호스트명만 봤더니 "허용도메인:443@evil.example" 같은 값이 앞부분만
+  // 검사에 걸려 통과했다(2026-08-22 코덱스 지적) — URL에서 @ 앞은 userinfo이지 호스트가 아니라,
+  // 실제로 링크가 가리키는 곳은 evil.example이었다. new URL()로 제대로 파싱해서 진짜 hostname을 본다.
+  let hostname: string;
+  let port: string;
+  try {
+    const u = new URL(`http://${rawHost}`);
+    hostname = u.hostname.toLowerCase();
+    port = u.port;
+  } catch {
+    return ""; // 파싱조차 안 되는 값은 신뢰하지 않는다.
+  }
   const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname);
   if (!isLocal && !ALLOWED_HOSTS.includes(hostname)) return ""; // 모르는 호스트 — 링크를 비워 조작된 도메인을 심지 않는다.
   const proto = isLocal ? xfproto || req.protocol || "http" : "https";
-  return host ? `${proto}://${host}` : "";
+  // ★배포 도메인은 무조건 https — kakaocloud 프록시가 내부 홉에서 x-forwarded-proto: http를 보내와도
+  //   신뢰하면 안 됨(도메인의 80포트는 응답조차 없어 링크가 죽고, https 채팅창에선 혼합콘텐츠 차단).
+  //   로컬(localhost 등)에서만 실제 프로토콜을 따른다.
+  // 반환 URL은 검증된 hostname·port로 다시 조립한다 — 원본 헤더 문자열을 그대로 잇지 않는다.
+  const hostForUrl = port ? `${hostname}:${port}` : hostname;
+  return `${proto}://${hostForUrl}`;
 }
 
 const htmlEscape = (s: string): string =>
@@ -1770,7 +1784,7 @@ app.get("/widgets/:kind", (req, res) => {
     built = buildFormWidget(key, f, baseUrl, sub ?? undefined);
     heading = "차용증 양식 좀 만들어줘";
   } else if (kind === "triage") {
-    const q = (req.query.q as string) || "월급을 3개월째 못 받았어요";
+    const q = safeInput((req.query.q as string) || "월급을 3개월째 못 받았어요");
     const top = rankTopics(q)[0];
     if (!top) {
       res.status(404).type("text/plain; charset=utf-8").send("진단할 수 없는 상황입니다 (?q=상황설명)");
