@@ -1,4 +1,5 @@
 import express from "express";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -39,6 +40,7 @@ import {
   calcDeadline,
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
+import { logCall, recentLogs } from "./debugLog.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
@@ -138,6 +140,26 @@ export function createServer(baseUrl?: string): McpServer {
     { instructions: SERVER_INSTRUCTIONS },
   );
 
+  // 도구 호출 로깅 — registerTool을 감싸서 16개 도구 전부에 자동 적용(개별 도구 수정 불필요).
+  // 관리자 화면(/admin/logs, /forms와 같은 비밀번호)에서 최근 호출·에러·"주제 매칭 실패" 확인.
+  // SDK의 registerTool 제네릭 오버로드가 복잡해 any로 우회 — 런타임 동작만 필요.
+  const rawRegisterTool = server.registerTool.bind(server);
+  (server as any).registerTool = (name: string, config: any, handler: (...args: any[]) => Promise<any>) =>
+    rawRegisterTool(name as any, config, (async (...args: any[]) => {
+      const t0 = Date.now();
+      try {
+        const result = await handler(...args);
+        const text = (result?.content ?? [])
+          .filter((c: any) => c.type === "text")
+          .map((c: any) => c.text ?? "")
+          .join("\n");
+        logCall({ tool: name, args: args[0], ms: Date.now() - t0, ok: true, flag: text.includes("찾지 못했습니다") ? "no_match" : undefined });
+        return result;
+      } catch (err) {
+        logCall({ tool: name, args: args[0], ms: Date.now() - t0, ok: false, error: err instanceof Error ? err.message : String(err) });
+        throw err;
+      }
+    }) as any);
 
   // 자연어 통합검색 — 일상어 상황 설명을 주제 키로 매핑(접근성).
   server.registerTool(
@@ -825,6 +847,7 @@ export function createServer(baseUrl?: string): McpServer {
 
 export const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: false })); // 관리자 로그인 폼(/forms) 파싱용
 
 app.get("/", (_req, res) => {
   res.type("text/plain").send("법률 절차 길잡이 MCP 서버 — POST /mcp (Streamable HTTP)");
@@ -995,7 +1018,7 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
   const sub = formSubmitInfo(key);
   const submitBlock = sub
     ? `<div class="submit">
-    <h3>다 채우셨으면, 여기에 내세요</h3>
+    <h3>다 채우셨으면 여기에 제출하세요</h3>
     <div><b>접수처</b> · ${htmlEscape(sub.관할)}</div>
     <div><b>접수 방법</b> · ${htmlEscape(sub.온라인접수)}</div>
     ${sub.url ? `<div style="margin-top:9px"><a class="btn" href="${sub.url}" target="_blank" rel="noopener">접수처 바로가기</a></div>` : ""}
@@ -1011,8 +1034,8 @@ function renderFormHtml(key: string, f: (typeof FORMS)[string], baseUrl: string)
 <style>
 /* 랜딩(legal-navigator-web index.html :root)과 같은 값. 두 화면이 한 서비스로 보이려면 갈리면 안 된다.
    --fld 계열(빈칸의 노란 표시)만 기능색이라 별도 유지. */
-:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#8b95a1;--tip-bg:#f4f6f9;--foot:#8b95a1;}
-@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;--fld:#2a2410;--fld-line:#6f5a1f;--fld-ink:#e7c877;--ph:#6b7488;--tip-bg:#141b2b;--foot:#7a8398;}}
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;--accent-ink:#fff;--fld:#fff7e6;--fld-line:#d9a534;--fld-ink:#8a5a00;--ph:#8b95a1;--tip-bg:#f4f6f9;--foot:#4e5968;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;--fld:#2a2410;--fld-line:#6f5a1f;--fld-ink:#e7c877;--ph:#6b7488;--tip-bg:#141b2b;--foot:#a2aabb;}}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.62;-webkit-text-size-adjust:100%;}
@@ -1058,7 +1081,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .tips{margin:22px 0 0;background:var(--tip-bg);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
 .tips h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:7px}
 .tips ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;color:var(--ink2)}
-.foot{margin:26px 4px 0;font-size:11.5px;color:var(--foot);line-height:1.6}
+.foot{margin:26px 4px 0;font-size:12.5px;color:var(--foot);line-height:1.7}
+.foot p{margin:0 0 6px}
+.foot p:last-child{margin-bottom:0}
+.foot b{color:var(--ink)}
 .foot a{color:var(--foot)}
 /* 좁은 화면 — 버튼 4개를 2×2로. 위 줄은 내보내기(PDF·한글), 아래 줄은 보조(텍스트·비우기) */
 @media (max-width:520px){
@@ -1121,7 +1147,12 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <button class="btn" id="copyBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>링크 복사</button>
   </div>
-  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
+  <div class="foot">
+    <p>※ <b>일반 법률·절차 정보이며 개별 법률 자문이 아닙니다.</b></p>
+    <p>입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제).</p>
+    <p><b>관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요.</b></p>
+    <p>· 법률 절차 길잡이(Legal Navigator)</p>
+  </div>
 </div>
 <script>
 (function(){
@@ -1278,6 +1309,183 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 </script>
 </body></html>`;
 }
+
+// 관리자 인증 — 아이디 없이 비밀번호만. ADMIN_PASS 환경변수로 덮어쓸 수 있고,
+// 없으면 기본값 "세일러문"을 쓴다(운영 배포 시 ADMIN_PASS로 반드시 교체할 것).
+// 로그인 성공 시 비밀번호 해시를 쿠키에 저장 — Basic Auth 팝업(아이디 칸 포함) 대신 우리 폼 하나로 처리.
+function timingSafeStrEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
+}
+function adminPass(): string {
+  return process.env.ADMIN_PASS || "세일러문";
+}
+function adminCookieValue(): string {
+  return createHash("sha256").update(adminPass()).digest("hex");
+}
+function getCookie(req: express.Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return undefined;
+}
+function isAdminAuthed(req: express.Request): boolean {
+  const token = getCookie(req, "admin");
+  return !!token && timingSafeStrEqual(token, adminCookieValue());
+}
+function isLocalHost(req: express.Request): boolean {
+  const host = (req.headers.host || "").split(":")[0].toLowerCase();
+  return ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(host);
+}
+function renderAdminLoginHtml(error?: string): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 로그인 · 법률 절차 길잡이</title>
+<style>
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;}
+form{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:28px 26px;width:min(320px,90vw);text-align:center;}
+h1{font-size:16px;margin:0 0 16px}
+input{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);margin:0 0 10px}
+button{width:100%;font:inherit;font-size:14px;font-weight:700;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+.err{color:#e0392b;font-size:12.5px;margin:0 0 10px}
+</style>
+</head><body>
+<form method="post" action="/forms">
+<h1>비밀번호를 입력하세요</h1>
+${error ? `<p class="err">${htmlEscape(error)}</p>` : ""}
+<input type="password" name="pw" autofocus required>
+<button type="submit">입장</button>
+</form>
+</body></html>`;
+}
+
+// 서식 전체 목록 — 관리자가 링크만 클릭해 들어갈 수 있는 인덱스 페이지. 읽기전용·무상태.
+function renderFormsIndexHtml(baseUrl: string): string {
+  const byCategory = new Map<string, { key: string; title: string }[]>();
+  for (const key of FORM_KEYS) {
+    const topic = FORM_TOPIC[key];
+    const category = topic ? PROCEDURES[topic]?.category : undefined;
+    const cat = category || "기타";
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push({ key, title: FORMS[key].제목 });
+  }
+  const sections = [...CATEGORIES, "기타"]
+    .filter((cat) => byCategory.has(cat))
+    .map((cat) => {
+      const items = byCategory.get(cat)!;
+      const lis = items
+        .map(({ key, title }) => `<li><a href="${baseUrl}/forms/${encodeURIComponent(key)}">${htmlEscape(title)}</a></li>`)
+        .join("");
+      return `<section><h2>${htmlEscape(cat)} <span class="cnt">${items.length}</span></h2><ul>${lis}</ul></section>`;
+    })
+    .join("");
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>서식 전체 목록 · 법률 절차 길잡이</title>
+<style>
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.6;}
+.wrap{max-width:820px;margin:0 auto;padding:24px 16px 60px;}
+h1{font-size:22px;margin:0 0 6px}
+.sub{color:var(--ink2);font-size:13.5px;margin:0 0 24px}
+section{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:0 0 14px}
+h2{font-size:15px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.cnt{font-size:12px;font-weight:400;color:var(--ink2);background:var(--bg);border-radius:999px;padding:1px 8px}
+ul{margin:0;padding:0;list-style:none;display:grid;gap:2px}
+li a{display:block;padding:7px 4px;color:var(--ink);text-decoration:none;font-size:14px;border-radius:6px}
+li a:hover{background:var(--bg);color:var(--accent)}
+</style>
+</head><body><div class="wrap">
+<h1>서식 전체 목록</h1>
+<p class="sub">총 ${FORM_KEYS.length}개 · 클릭하면 빈칸 채우기 미리보기로 이동 · <a href="/admin/logs">디버그 로그 보기</a></p>
+${sections}
+</div></body></html>`;
+}
+app.get("/forms", (req, res) => {
+  if (!isAdminAuthed(req)) {
+    res.type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return;
+  }
+  res.type("text/html; charset=utf-8").send(renderFormsIndexHtml(getBaseUrl(req)));
+});
+app.post("/forms", (req, res) => {
+  const given = typeof req.body?.pw === "string" ? req.body.pw : "";
+  if (!timingSafeStrEqual(given, adminPass())) {
+    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml("비밀번호가 올바르지 않습니다."));
+    return;
+  }
+  res.cookie("admin", adminCookieValue(), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: !isLocalHost(req),
+    maxAge: 1000 * 60 * 60 * 12,
+  });
+  res.redirect(303, "/forms");
+});
+
+// 도구 호출 디버그 로그 — /forms와 같은 관리자 비밀번호로 보호. 최근 호출·에러·주제 매칭 실패 확인용.
+function renderAdminLogsHtml(): string {
+  const logs = recentLogs(200);
+  const errors = logs.filter((l) => !l.ok);
+  const noMatches = logs.filter((l) => l.flag === "no_match");
+  const row = (l: (typeof logs)[number]) => {
+    const badge = !l.ok ? `<span class="bad">에러</span>` : l.flag === "no_match" ? `<span class="warn">매칭실패</span>` : `<span class="ok">성공</span>`;
+    const detail = htmlEscape(l.error ?? JSON.stringify(l.args ?? {}));
+    return `<tr><td>${htmlEscape(l.ts)}</td><td>${htmlEscape(l.tool)}</td><td>${badge}</td><td>${l.ms}ms</td><td class="detail">${detail}</td></tr>`;
+  };
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>디버그 로그 · 법률 절차 길잡이</title>
+<style>
+:root{--bg:#f4f6f9;--paper:#fff;--ink:#191f28;--ink2:#4e5968;--line:#e5e8eb;--accent:#3182f6;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--paper:#171b22;--ink:#e6e9f0;--ink2:#a2aabb;--line:#2a2f3a;--accent:#4c8dff;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pretendard,"Malgun Gothic",system-ui,-apple-system,sans-serif;line-height:1.6;}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 16px 60px;}
+h1{font-size:22px;margin:0 0 6px}
+.sub{color:var(--ink2);font-size:13.5px;margin:0 0 20px}
+.stats{display:flex;gap:10px;margin:0 0 20px}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:13px}
+.stat b{display:block;font-size:20px}
+table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+td.detail{max-width:420px;word-break:break-all;color:var(--ink2)}
+.ok{color:#0a9;font-weight:600}.warn{color:#e0952b;font-weight:600}.bad{color:#e0392b;font-weight:600}
+a.export{font-size:12.5px;color:var(--accent);text-decoration:none}
+</style>
+</head><body><div class="wrap">
+<h1>디버그 로그</h1>
+<p class="sub">최근 ${logs.length}건 (메모리 보관, 컨테이너 재시작 시 초기화) · <a class="export" href="/admin/logs?format=json">JSON으로 내려받기</a> · <a class="export" href="/forms">서식 목록으로</a></p>
+<div class="stats">
+<div class="stat"><b>${logs.length}</b>전체 호출</div>
+<div class="stat"><b>${errors.length}</b>에러</div>
+<div class="stat"><b>${noMatches.length}</b>주제 매칭 실패</div>
+</div>
+<table><thead><tr><th>시각</th><th>도구</th><th>결과</th><th>소요</th><th>인자/에러</th></tr></thead>
+<tbody>${logs.map(row).join("") || `<tr><td colspan="5">아직 기록된 호출이 없습니다.</td></tr>`}</tbody></table>
+</div></body></html>`;
+}
+app.get("/admin/logs", (req, res) => {
+  if (!isAdminAuthed(req)) {
+    res.type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return;
+  }
+  if (req.query.format === "json") {
+    res.json(recentLogs(500));
+    return;
+  }
+  res.type("text/html; charset=utf-8").send(renderAdminLogsHtml());
+});
 
 // 서식 라우트 — 확장자 없음/.html은 시각화 미리보기(빈칸 채움), .txt는 파일 다운로드. 읽기전용·무상태·인메모리.
 app.get("/forms/:key", (req, res) => {
