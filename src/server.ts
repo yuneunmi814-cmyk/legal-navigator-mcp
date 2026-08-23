@@ -403,6 +403,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `주제를 찾아보거나 전체 목록을 볼 때. 일상어·속어(떼인 돈·깡통전세·갑질)로 주제 키를 찾습니다. 사용자가 자기 상황을 이야기하면 이 도구가 아니라 triage를 호출하세요. 한국 생활법률 ${TOPIC_KEYS.length}개 주제. query 없이 호출하면 전체 목록. 반환된 키를 get_procedure·get_checklist·get_form_template에 사용.\n` +
         `[트리거 예시] "층간소음 문제 어떻게 해요?" / "떼인 돈 받는 법" / "직장 내 괴롭힘 관련해서 알아봐줘" / "청년월세 지원 같은 거 있어?" / "무슨 법률 문제 도와줄 수 있어?"\n` +
+        `[EN] Finds the matching topic key from everyday Korean wording; call with no query to browse all topics by category.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         query: z
@@ -490,6 +491,7 @@ export function createServer(baseUrl?: string): McpServer {
         `"집주인이 보증금을 안 줘" / "친구한테 빌려준 돈 못 받았어" / "전 남친이 계속 연락해" / ` +
         `"법원에서 뭐가 날아왔는데" / "사기당한 것 같아" / "보일러 고장났는데 집주인이 나보고 고치래" / ` +
         `"월급을 두 달째 못 받고 있어요" / "살고 있는 집이 경매에 넘어갔어요"\n` +
+        `[EN] Triages a described situation into the closest Korean legal procedure - deadline, first steps, evidence to secure, and where to file.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         situation: z
@@ -556,6 +558,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `"이것도 ○○에 해당하나요?" 신고 전 자가진단 — ${ELEMENT_KEYS.length}개 유형의 법률상 성립요건 + 해당/비해당 정황 + 신고하려는 쪽·신고당한 쪽 양면 다음 단계. 해당 여부를 묻는 질문에는 모델 지식으로 답하지 말고 이 도구를 호출하세요. 단정 아님 — 최종 판단은 수사기관·법원.\n` +
         `[트리거 예시] "인스타 스토리 염탐도 스토킹으로 처벌 가능한가요?" / "빌려준 돈 신고 가능할까요?" / "수습기간 중 해고당했는데 부당해고에 해당되는지 궁금합니다" / "전세사기 집을 중개한 부동산 처벌 가능한가요?" / "잘못 신고하면 저도 처벌받나요?"\n` +
+        `[EN] Explains the statutory elements of an offence or claim so the user can self-check whether their situation may qualify. Not a determination.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         issue: z.enum(ELEMENT_KEYS).describe("확인할 유형: " + ELEMENT_KEYS.join(" | ")),
@@ -603,6 +606,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `무료 법률지원·구제 연결 — 대한법률구조공단(132) 무료상담·소송구조·범죄피해구조금·대지급금·상황별 핫라인(여성긴급 1366 등). 자격 판정이 아닌 안내.\n` +
         `[트리거 예시] "변호사 살 돈이 없어요" / "무료로 법률 상담 받을 수 있는 곳 있어요?" / "국가에서 대신 받아주는 제도 있다던데" / "이주여성인데 도움받을 곳 있나요?"\n` +
+        `[EN] Routes to free legal aid, victim compensation and welfare benefits, with how to apply and what to bring.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         keyword: z.string().max(200).optional().describe("상황·필요(예: 무료변호사, 체불, 범죄피해, 소송비용, 상담). 비우면 전체"),
@@ -644,6 +648,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `주제별 공식 대응 절차 — 관할기관·법정기한·온라인 접수처·순서대로의 단계·근거 법령(law.go.kr 대조). "어떻게 하나요/어디에 신고하나요" 질문에 사용.\n` +
         `[트리거 예시] "임금체불 신고 절차 알려줘" / "상속포기 어떻게 하나요?" / "전세보증금 반환 소송 절차가 궁금해요" / "장애인 등록은 어디서 하나요?"\n` +
+        `[EN] Step-by-step procedure for a topic - deadlines, competent authority, governing statutes, and online filing.\n` +
         `Service: ${SVC}.`,
       inputSchema: { topic: z.enum(TOPIC_KEYS).describe(TOPIC_DESC) },
       annotations: { title: "절차 안내", ...READONLY },
@@ -662,6 +667,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `주제별로 모아둘 증거 + 접수용 준비서류 체크리스트.\n` +
         `[트리거 예시] "임금체불 신고하려면 뭘 준비해야 해요?" / "전세금 소송에 필요한 증거가 뭐예요?" / "고소하려면 어떤 서류가 필요해요?"\n` +
+        `[EN] Documents and evidence to prepare for a topic, and where each one is issued.\n` +
         `Service: ${SVC}.`,
       inputSchema: { topic: z.enum(TOPIC_KEYS).describe(TOPIC_DESC) },
       annotations: { title: "필요 서류·증거 체크리스트", ...READONLY },
@@ -707,6 +713,7 @@ export function createServer(baseUrl?: string): McpServer {
         `확인 질문이 끝나 안내를 마무리할 때, 대화가 '어떻게 접수하느냐/뭘 써서 내느냐'로 넘어갈 때도 호출하세요. ` +
         `서식 키는 triage·get_procedure·get_checklist가 돌려준 진행 지침에 실려 옵니다. ` +
         `서식 본문을 직접 지어내지 말고 반드시 이 도구로 받으세요.\n` +
+        `[EN] Returns a fill-in-the-blank Korean official form template with drafting notes and download links. Not auto-filled.\n` +
         `Service: ${SVC}.`,
       inputSchema: { form: z.enum(FORM_KEYS).describe("서식 키. get_procedure/search_topics에서 안내된 서식명을 사용") },
       annotations: { title: "표준 서식 제공", ...READONLY },
@@ -750,6 +757,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `검증된 판례 조회(사건번호·요지·casenote 링크) — 실재 확인된 것만 수록하며 없으면 없다고 답합니다.\n` +
         `[트리거 예시] "비슷한 판례 있어요?" / "보일러 수리비 관련 판례 알려줘" / "법원이 이런 경우 어떻게 판단했어요?" / "전세보증금 판례 찾아줘"\n` +
+        `[EN] Looks up verified Korean court decisions by keyword or topic; returns nothing rather than inventing a case.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         keyword: z.string().max(200).optional().describe("주제 키 또는 검색어(예: 전세보증금반환, 사기, 해고, 지급명령). 비우면 판례가 있는 주제 목록"),
@@ -787,6 +795,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `금액 계산(같은 입력 → 같은 결과, 추정 금지) — 체불임금·퇴직금·주휴수당·지연이자(연 20%)·셀프등기 절감액·상속등기 비용. 개략 계산입니다.\n` +
         `[트리거 예시] "퇴직금 얼마 받을 수 있어요? 월급 300에 3년 일했어요" / "밀린 월급 지연이자까지 계산해줘" / "주휴수당 계산해줘" / "근저당 말소 셀프로 하면 얼마 들어요?"\n` +
+        `[EN] Deterministic money calculations - unpaid wages, severance, weekly holiday allowance, late interest, self-registration savings.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         item: z.enum(항목값).describe("체불임금 | 퇴직금 | 주휴수당 | 지연이자 | 셀프등기절감액"),
@@ -865,6 +874,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `주요 조문의 쉬운 요지 + 국가법령정보센터 원문 링크.\n` +
         `[트리거 예시] "임대인 수선의무 법 조항이 뭐예요?" / "사기죄 처벌 조항 알려줘" / "무슨 법에 근거가 있어요?"\n` +
+        `[EN] Plain-language summaries of key Korean statutory provisions with links to the official law database.\n` +
         `Service: ${SVC}.`,
       inputSchema: { keyword: z.string().max(200).optional().describe("예: 해고, 보증금, 소멸시효, 청약철회, 사기, 지급명령 (비우면 전체)") },
       annotations: { title: "법령 요지 조회", ...READONLY },
@@ -898,6 +908,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `사건번호·법령 조문이 실재하는지 대조하고 폐기·하급심·법개정 등 주의를 표시. 모르는 인용은 지어내지 않고 공식 조회 링크로 안내(환각 차단).\n` +
         `[트리거 예시] "대법원 94다34692 진짜 있는 판례야?" / "이 판례 믿어도 돼요?" / "민법 623조가 맞는 조문인지 확인해줘"\n` +
+        `[EN] Checks whether a cited case number or statutory article actually exists, and flags overruled, lower-court or amended ones.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         citation: z.string().max(200).describe("검증할 사건번호 또는 법령 조문 (예: 2020다247190 / 대법원 2024도10141 / 민법 제759조 / 상가건물 임대차보호법 제10조의4)"),
@@ -979,6 +990,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `최근 법 개정·시행일 확인(시점법) — 사건 당시 어느 법이 적용되는지 판단할 때.\n` +
         `[트리거 예시] "임대차법 최근 개정된 거 있어요?" / "스토킹처벌법 언제부터 시행됐어요?" / "작년 사건인데 지금 법이 적용되나요?"\n` +
+        `[EN] Recent Korean statutory and case-law changes with effective dates, so the law applicable at the time can be identified.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         keyword: z.string().max(200).optional().describe("예: 스토킹 / 통상임금 / 유류분 / 임대차 / 개인정보 / 출퇴근 (비우면 최근 변경 전체)"),
@@ -1007,6 +1019,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `민사 소송비용(인지대·송달료) 법정 산식 계산 — 소가·당사자 수·절차 종류·전자소송 감액 반영. 개략 계산입니다.\n` +
         `[트리거 예시] "500만원 소송하면 비용이 얼마나 들어요?" / "소액재판 인지대 계산해줘" / "소송 비용 부담돼서 고민이에요"\n` +
+        `[EN] Calculates court filing fees and service costs for a given claim amount.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         claim_amount: z.number().finite().nonnegative().describe("소가(청구금액, 원). 금전청구는 청구액"),
@@ -1036,6 +1049,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `기한·소멸시효 D-day 계산(상속포기 3개월·항소 2주·부당해고 구제 3개월·임금채권 3년 등). 사용자가 "언제까지"를 묻거나 경과 시간("두 달 지났는데")을 말하면 호출하세요 — 기한을 놓치면 권리가 사라집니다. 기산점은 사실관계에 따라 확인 필요.\n` +
         `[트리거 예시] "아버지가 돌아가신 지 두 달인데 상속포기 아직 돼요?" / "해고당한 게 언제까지 신고 가능해요?" / "빌려준 지 9년 됐는데 너무 늦었나요?"\n` +
+        `[EN] Calculates statutory deadlines and limitation periods from a given start date.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         start_date: z.string().describe("기산 기준일 (YYYY-MM-DD). 예: 해고일, 사고일, 송달받은 날"),
@@ -1100,6 +1114,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `증빙서류 발급처·온라인 경로·수수료 안내(등기부등본·가족관계증명서·소득금액증명·진단서 등).\n` +
         `[트리거 예시] "등기부등본 어디서 떼요?" / "가족관계증명서 인터넷으로 발급돼요?" / "소송에 낼 서류들 발급처 알려줘"\n` +
+        `[EN] Where and how to obtain supporting documents - issuing office, online link, fee, and practical tips.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         document: z.string().max(200).optional().describe("서류명/키워드(예: 등기부등본, 가족관계증명서, 소득금액증명, 진단서, 부채증명, 전입세대확인서). 비우면 전체 목록 + 준비 꿀팁"),
@@ -1136,6 +1151,7 @@ export function createServer(baseUrl?: string): McpServer {
       description:
         `법률용어·일상어 뜻풀이(각하/기각·가압류·공시송달·떼인 돈·빨간딱지 등). 정의만 제공.\n` +
         `[트리거 예시] "가압류가 뭐예요?" / "각하랑 기각이 뭐가 달라요?" / "공시송달이 무슨 뜻이에요?" / "내용증명이 뭔가요?"\n` +
+        `[EN] Explains Korean legal terms in plain language, including commonly confused pairs. Definition only.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
         term: z.string().max(200).describe("뜻이 궁금한 단어(법률용어 또는 일상어). 예: 각하, 가압류, 공시송달, 통상임금, 떼인 돈, 빨간딱지"),

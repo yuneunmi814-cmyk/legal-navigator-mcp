@@ -21,7 +21,7 @@ npm run build && npm start
 
 ## 도구 (16종)
 
-PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 description(서비스명 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
+PlayMCP 규격 준수: 영문 tool name · annotations 5종 · description 국문+영문 병기(`[EN]` 줄, 서비스명 영문/국문 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
 
 | name | title | 설명 |
 |---|---|---|
@@ -68,7 +68,7 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 - ✅ 프로토콜 2025-06-18 (허용 범위 2025-03-26 ~ 2025-11-25)
 - ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 16개(권장 3~10 대비 초과분은 계산기 3종·검증 2종 등 스키마가 달라 분리가 호출 정확도에 유리한 도구들 — list_topics는 search_topics에 통합, check_elements는 해당성 질문 전용)
 - ✅ annotations(title·readOnlyHint·destructiveHint·openWorldHint·idempotentHint) 전부 지정
-- ✅ description 영문 + 서비스명 병기, 1024자 이내
+- ✅ description 국문+영문 병기(각 도구에 `[EN]` 영문 요약 1줄) + 서비스명 영문/국문 병기, 1024자 이내(최장 738자)
 - ✅ 이름에 'kakao' 미포함
 - ✅ 응답 인메모리 → 평균 <100ms (외부 API는 핫패스에서 미사용)
 
