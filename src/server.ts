@@ -1,5 +1,5 @@
 import express from "express";
-import { timingSafeEqual, createHash, randomBytes } from "node:crypto";
+import { timingSafeEqual, createHash, scryptSync } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -1896,38 +1896,50 @@ function timingSafeStrEqual(a: string, b: string): boolean {
   const bBuf = Buffer.from(b);
   return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
 }
-// 환경변수를 못 쓰는 배포 환경(PlayMCP in KC는 서버를 만들 때만 환경변수를 받고, 만든 뒤에는
-// 수정 화면이 없다 — 2026-08-24 콘솔 확인)에서도 관리자 화면을 열 수 있어야 한다.
-// 그렇다고 비밀번호를 소스에 둘 수는 없다(공개 저장소). 그래서 시작할 때 무작위로 하나 만들고
-// 서버 로그에 한 번만 찍는다. 콘솔 '모니터링'에 들어갈 수 있는 사람 = 환경변수를 넣을 수 있는
-// 사람이므로 보호 수준은 같고, 저장소에는 아무 값도 남지 않는다. 재배포하면 새 값이 나온다.
-const 자동생성비밀번호 = randomBytes(18).toString("base64url");
-let 비밀번호출처: "env" | "auto" = "env";
+// 배포 환경(PlayMCP in KC)이 ①만든 뒤에는 환경변수를 못 받고 ②컨테이너 로그를 볼 수 없다
+// (모니터링 탭은 요청 수 그래프뿐 — 2026-08-24 확인). 그래서 비밀번호를 밖에서 넣을 수도,
+// 안에서 알려줄 수도 없다.
+//
+// 해결: 비밀번호가 아니라 **비밀번호의 지문(scrypt 해시)** 을 저장소에 둔다. 지문으로는
+// 원래 값을 되돌릴 수 없고, scrypt 는 일부러 느려서 무차별 대입도 현실적이지 않다.
+// 실제 서비스가 비밀번호를 보관하는 방식과 같다 — 공개 저장소에 있어도 안전하다.
+// 비밀번호 자체는 은미님 비밀번호 관리자에만 있다.
+//
+// ADMIN_PASS 환경변수를 줄 수 있는 환경에서는 그 값이 우선한다(지문 대조를 건너뛴다).
+const ADMIN_HASH_SALT = "3e0d6e14320b56787fbb9d91a19cf723";
+const ADMIN_HASH = "82724dd11af7faaf315c0e1dfab3fe5019a81123c6044b1412d36812556c4634";
 
-/** 설정된 관리자 비밀번호. 환경변수가 있으면 그것을, 없으면 시작 시 만든 무작위 값을 쓴다. */
-function adminPass(): string {
-  const pass = process.env.ADMIN_PASS?.trim();
-  if (pass) {
-    비밀번호출처 = "env";
-    return pass;
+// 로그인 성공 표식. 비밀번호에서 파생하지 않는다 — 지문 방식에선 서버도 원래 비밀번호를 모르기 때문.
+// 실행마다 달라져 재배포하면 기존 로그인이 풀린다.
+const ADMIN_COOKIE_TOKEN = createHash("sha256").update(ADMIN_HASH + ":" + Date.now() + ":" + Math.random()).digest("hex");
+
+/** 입력한 비밀번호가 저장된 지문과 맞는지. scrypt 파라미터는 지문을 만들 때와 같아야 한다. */
+function 지문이맞나(given: string): boolean {
+  try {
+    const dk = scryptSync(given, Buffer.from(ADMIN_HASH_SALT, "hex"), 32, { N: 16384, r: 8, p: 1 });
+    return timingSafeEqual(dk, Buffer.from(ADMIN_HASH, "hex"));
+  } catch {
+    return false;
   }
-  비밀번호출처 = "auto";
-  return 자동생성비밀번호;
 }
 
-/** 서버가 뜰 때 한 번. 자동 생성했을 때만 값을 알려준다(환경변수를 준 경우엔 찍지 않는다). */
-export function 관리자비밀번호안내(): string {
+/** 관리자 화면이 열려 있는가. 지문이 박혀 있으므로 항상 열려 있다(비밀번호를 아는 사람만 통과). */
+function adminEnabled(): boolean {
+  return Boolean(process.env.ADMIN_PASS?.trim()) || ADMIN_HASH.length > 0;
+}
+
+/** 비밀번호 검사. 환경변수가 있으면 그 값과, 없으면 저장된 지문과 대조한다. */
+function 비밀번호맞나(given: string): boolean {
   const envPass = process.env.ADMIN_PASS?.trim();
-  if (envPass) return "[관리자] ADMIN_PASS 환경변수를 사용합니다.";
-  return (
-    "[관리자] ADMIN_PASS 환경변수가 없어 이번 실행용 비밀번호를 만들었습니다.\n" +
-    `[관리자] 비밀번호: ${자동생성비밀번호}\n` +
-    "[관리자] /admin/logs 로그인에 쓰세요. 서버를 다시 시작하면 새 값이 만들어집니다."
-  );
+  if (envPass) return timingSafeStrEqual(given, envPass);
+  return 지문이맞나(given);
 }
-function adminCookieValue(pass: string): string {
-  return createHash("sha256").update(pass).digest("hex");
+
+/** 쿠키에 넣을 값 — 비밀번호를 그대로 두지 않는다. */
+function adminCookieFor(given: string): string {
+  return createHash("sha256").update(ADMIN_HASH_SALT + given).digest("hex");
 }
+
 function getCookie(req: express.Request, name: string): string | undefined {
   const header = req.headers.cookie;
   if (!header) return undefined;
@@ -1939,10 +1951,12 @@ function getCookie(req: express.Request, name: string): string | undefined {
   return undefined;
 }
 function isAdminAuthed(req: express.Request): boolean {
-  const pass = adminPass();
-  if (!pass) return false; // 비밀번호가 설정되지 않았으면 어떤 쿠키로도 통과할 수 없다
+  if (!adminEnabled()) return false;
   const token = getCookie(req, ADMIN_COOKIE);
-  return !!token && timingSafeStrEqual(token, adminCookieValue(pass));
+  if (!token) return false;
+  // 환경변수를 쓰면 그 값에서 파생한 쿠키와, 아니면 이번 실행의 로그인 표식과 대조한다.
+  const envPass = process.env.ADMIN_PASS?.trim();
+  return timingSafeStrEqual(token, envPass ? adminCookieFor(envPass) : ADMIN_COOKIE_TOKEN);
 }
 function isLocalHost(req: express.Request): boolean {
   const host = (req.headers.host || "").split(":")[0].toLowerCase();
@@ -2005,7 +2019,7 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding
 
 /** 관리자 화면 공통 관문. 열 수 없으면 응답을 보내고 true를 돌려준다(라우트는 거기서 끝낸다). */
 function blockAdmin(req: express.Request, res: express.Response): boolean {
-  if (!adminPass()) {
+  if (!adminEnabled()) {
     res.status(503).type("text/html; charset=utf-8").send(renderAdminDisabledHtml());
     return true;
   }
@@ -2018,17 +2032,17 @@ function blockAdmin(req: express.Request, res: express.Response): boolean {
 
 // 로그인 처리 — /forms와 /admin/logs가 같은 비밀번호를 쓴다(관리자 화면은 하나의 문으로 들어간다).
 app.post("/admin/login", (req, res) => {
-  const pass = adminPass();
-  if (!pass) {
+  if (!adminEnabled()) {
     res.status(503).type("text/html; charset=utf-8").send(renderAdminDisabledHtml());
     return;
   }
   const given = typeof req.body?.pw === "string" ? req.body.pw : "";
-  if (!timingSafeStrEqual(given, pass)) {
+  if (!비밀번호맞나(given)) {
     res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml("비밀번호가 올바르지 않습니다."));
     return;
   }
-  res.cookie(ADMIN_COOKIE, adminCookieValue(pass), {
+  const envPass = process.env.ADMIN_PASS?.trim();
+  res.cookie(ADMIN_COOKIE, envPass ? adminCookieFor(envPass) : ADMIN_COOKIE_TOKEN, {
     httpOnly: true,
     sameSite: "lax",
     secure: !isLocalHost(req), // 로컬 개발(http)에서는 secure를 끄지 않으면 쿠키가 저장되지 않는다
@@ -2326,7 +2340,5 @@ const PORT = Number(process.env.PORT ?? 4100);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.error(`법률 절차 길잡이 MCP listening on http://localhost:${PORT}/mcp`);
-    // 관리자 비밀번호 안내 — 자동 생성했을 때만 값이 찍힌다. 콘솔 '모니터링'에서 읽는다.
-    console.error(관리자비밀번호안내());
   });
 }
