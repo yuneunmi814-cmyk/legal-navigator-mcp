@@ -13,3 +13,4 @@ logs/
 scripts/naver_login_state.json
 scripts/*_top_engagement.json
 scripts/*_top_engagement.html
+scripts/*_bodies.json
