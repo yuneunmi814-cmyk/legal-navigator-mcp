@@ -891,6 +891,35 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(bad.headers.get("set-cookie")).toBeNull();
   });
 
+  it("ADMIN_PASS가 없으면 관리자 화면 자체가 열리지 않는다 (503)", async () => {
+    // 저장소가 공개라 소스에 기본 비밀번호를 두지 않는다 — 적혀 있으면 아무나 아는 값이라
+    // 비밀번호가 아니다. 환경변수가 없으면 로그인 화면도 띄우지 않고 문을 아예 닫는다.
+    delete process.env.ADMIN_PASS;
+    try {
+      for (const path of ["/admin/logs", "/forms"]) {
+        // 이미 받아 둔 쿠키가 있어도 통과하지 못해야 한다
+        const res = await fetch(`${base}${path}`, { headers: { Cookie: cookie } });
+        expect(res.status).toBe(503);
+        const html = await res.text();
+        expect(html).toContain("관리자 화면이 꺼져 있습니다");
+        expect(html).not.toContain("비밀번호를 입력하세요"); // 로그인도 받지 않는다
+      }
+      // 어떤 비밀번호로도 로그인할 수 없다(빈 값 포함)
+      for (const pw of ["", "세일러문", "아무거나"]) {
+        const res = await fetch(`${base}/admin/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ pw }).toString(),
+          redirect: "manual",
+        });
+        expect(res.status).toBe(503);
+        expect(res.headers.get("set-cookie")).toBeNull();
+      }
+    } finally {
+      process.env.ADMIN_PASS = ADMIN_PW;
+    }
+  });
+
   it("정상 호출은 인자의 값을 남기지 않는다 — 키 이름만", async () => {
     process.env.DEBUG_LOG = "on";
     clearLogs();

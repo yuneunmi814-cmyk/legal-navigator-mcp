@@ -1885,7 +1885,10 @@ ${hwpxClientScript()}
 // ── 관리자 인증 ────────────────────────────────────────────────────────────────
 // 아이디 없이 비밀번호 하나. 계정 저장소도 세션 저장소도 만들지 않는다 —
 // 맞으면 "비밀번호의 해시"를 쿠키에 넣고, 요청마다 그 값과 대조할 뿐이다(무상태 유지).
-// 운영 배포에서는 ADMIN_PASS 환경변수로 반드시 바꿀 것(기본값은 소스에 그대로 보인다).
+//
+// 비밀번호는 ADMIN_PASS 환경변수에서만 온다. 기본값을 두지 않는다 — 이 저장소는 공개라
+// 소스에 적힌 기본 비밀번호는 곧 비밀번호가 없는 것과 같다. 환경변수가 없으면 관리자 화면을
+// 아예 열지 않는다(503). 비밀번호를 모르는 사람이 못 들어오는 게 아니라, 문 자체가 없는 상태.
 const ADMIN_COOKIE = "admin";
 function timingSafeStrEqual(a: string, b: string): boolean {
   // 길이·내용이 다를 때 응답 시간 차이로 비밀번호를 한 글자씩 알아내지 못하도록 상수시간 비교.
@@ -1893,11 +1896,13 @@ function timingSafeStrEqual(a: string, b: string): boolean {
   const bBuf = Buffer.from(b);
   return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
 }
-function adminPass(): string {
-  return process.env.ADMIN_PASS || "세일러문";
+/** 설정된 관리자 비밀번호. 환경변수가 없거나 비어 있으면 undefined = 관리자 화면 비활성. */
+function adminPass(): string | undefined {
+  const pass = process.env.ADMIN_PASS?.trim();
+  return pass ? pass : undefined;
 }
-function adminCookieValue(): string {
-  return createHash("sha256").update(adminPass()).digest("hex");
+function adminCookieValue(pass: string): string {
+  return createHash("sha256").update(pass).digest("hex");
 }
 function getCookie(req: express.Request, name: string): string | undefined {
   const header = req.headers.cookie;
@@ -1910,8 +1915,10 @@ function getCookie(req: express.Request, name: string): string | undefined {
   return undefined;
 }
 function isAdminAuthed(req: express.Request): boolean {
+  const pass = adminPass();
+  if (!pass) return false; // 비밀번호가 설정되지 않았으면 어떤 쿠키로도 통과할 수 없다
   const token = getCookie(req, ADMIN_COOKIE);
-  return !!token && timingSafeStrEqual(token, adminCookieValue());
+  return !!token && timingSafeStrEqual(token, adminCookieValue(pass));
 }
 function isLocalHost(req: express.Request): boolean {
   const host = (req.headers.host || "").split(":")[0].toLowerCase();
@@ -1951,14 +1958,53 @@ ${error ? `<p class="err">${htmlEscape(error)}</p>` : ""}
 </body></html>`;
 }
 
+// ADMIN_PASS가 없을 때 관리자 화면 대신 내보내는 안내. 503(서비스 이용 불가) —
+// 잘못 들어온 요청이 아니라 서버 쪽 설정이 빠져서 못 여는 것이므로 401/404가 아니라 503이 맞다.
+function renderAdminDisabledHtml(): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 화면이 꺼져 있습니다 · 법률 절차 길잡이</title>
+<style>${ADMIN_CSS}
+.note{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 20px;font-size:14px;color:var(--ink2)}
+.note p{margin:0 0 10px}.note p:last-child{margin-bottom:0}
+code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+</style>
+</head><body><div class="wrap">
+<h1>관리자 화면이 꺼져 있습니다</h1>
+<div class="note">
+<p>관리자 비밀번호가 설정되지 않아 이 화면을 열지 않습니다.</p>
+<p>열려면 서버 환경변수에 <code>ADMIN_PASS</code>를 주고 서버를 다시 시작하세요.</p>
+<p>비밀번호 기본값은 일부러 두지 않았습니다 — 소스 코드에 적힌 비밀번호는 저장소를 볼 수 있는 사람 모두가 아는 값이라 비밀번호가 아닙니다.</p>
+</div>
+</div></body></html>`;
+}
+
+/** 관리자 화면 공통 관문. 열 수 없으면 응답을 보내고 true를 돌려준다(라우트는 거기서 끝낸다). */
+function blockAdmin(req: express.Request, res: express.Response): boolean {
+  if (!adminPass()) {
+    res.status(503).type("text/html; charset=utf-8").send(renderAdminDisabledHtml());
+    return true;
+  }
+  if (!isAdminAuthed(req)) {
+    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return true;
+  }
+  return false;
+}
+
 // 로그인 처리 — /forms와 /admin/logs가 같은 비밀번호를 쓴다(관리자 화면은 하나의 문으로 들어간다).
 app.post("/admin/login", (req, res) => {
+  const pass = adminPass();
+  if (!pass) {
+    res.status(503).type("text/html; charset=utf-8").send(renderAdminDisabledHtml());
+    return;
+  }
   const given = typeof req.body?.pw === "string" ? req.body.pw : "";
-  if (!timingSafeStrEqual(given, adminPass())) {
+  if (!timingSafeStrEqual(given, pass)) {
     res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml("비밀번호가 올바르지 않습니다."));
     return;
   }
-  res.cookie(ADMIN_COOKIE, adminCookieValue(), {
+  res.cookie(ADMIN_COOKIE, adminCookieValue(pass), {
     httpOnly: true,
     sameSite: "lax",
     secure: !isLocalHost(req), // 로컬 개발(http)에서는 secure를 끄지 않으면 쿠키가 저장되지 않는다
@@ -2008,10 +2054,7 @@ ${sections}
 }
 
 app.get("/forms", (req, res) => {
-  if (!isAdminAuthed(req)) {
-    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml());
-    return;
-  }
+  if (blockAdmin(req, res)) return;
   res.type("text/html; charset=utf-8").send(renderFormsIndexHtml(getBaseUrl(req)));
 });
 
@@ -2081,10 +2124,7 @@ code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding
 }
 
 app.get("/admin/logs", (req, res) => {
-  if (!isAdminAuthed(req)) {
-    res.status(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml());
-    return;
-  }
+  if (blockAdmin(req, res)) return;
   // 꺼져 있으면 조회도 하지 않는다 — 화면에는 "꺼져 있음"만 안내한다.
   if (!debugLogEnabled()) {
     if (req.query.format === "json") {
