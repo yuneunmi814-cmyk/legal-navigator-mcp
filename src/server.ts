@@ -41,7 +41,7 @@ import {
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
-import { formLayoutClientScript } from "./formlayout.js";
+import { formLayoutClientScript, layoutParas } from "./formlayout.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
@@ -1373,7 +1373,57 @@ function 본문HTML(bodyRaw: string): string {
     const minw = Math.min(Math.max(width, 4), 28);
     return `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
   });
-  return s;
+  // 4) 줄 단위로 감싸며 관공서 배치를 화면에도 입힌다.
+  //    내려받는 파일에만 배치가 걸리고 화면은 왼쪽 정렬 평문이라, 받아보기 전엔 결과를 알 수 없었다
+  //    (2026-08-23 예은님 요청 — "여기 보이는 걸 그대로 받게 해달라").
+  //    배치는 내보내기와 같은 layoutParas 를 쓴다 — 화면과 파일이 어긋날 여지를 만들지 않는다.
+  const laid = layoutParas(bodyRaw.split("\n").map((t) => [{ t }]));
+  const cls = (st: { align?: string; size?: string; bold?: boolean; hang?: boolean }) =>
+    ["ln",
+     st.align === "CENTER" ? "ln-c" : st.align === "RIGHT" ? "ln-r" : "",
+     st.size === "TITLE" ? "ln-t" : st.size === "SUB" ? "ln-s" : "",
+     st.hang ? "ln-h" : ""].filter(Boolean).join(" ");
+  // 한 줄이 여러 조각으로 갈릴 수 있다(마무리 줄 — 작성일자 / 신청인(인) / ○○법원 귀중).
+  // 내보내기가 넓은 공백에서 끊는 것과 같은 자리에서 화면도 끊어야 배치가 일치한다.
+  const 조각 = new Map<number, ParaStyleLike[]>();
+  for (const p of laid) {
+    const arr = 조각.get(p.i) ?? [];
+    arr.push(p.s as ParaStyleLike);
+    조각.set(p.i, arr);
+  }
+  return s.split("\n").map((line, i) => {
+    const sts = 조각.get(i) ?? [{}];
+    if (sts.length <= 1) return `<div class="${cls(sts[0])}">${line || "<br>"}</div>`;
+    // 태그 밖의 넓은 공백(2칸 이상)에서만 끊는다 — 입력칸·체크박스 마크업을 가르면 화면이 깨진다.
+    const parts = 태그밖넓은공백으로쪼개기(line);
+    if (parts.length !== sts.length) return `<div class="${cls(sts[0])}">${line || "<br>"}</div>`;
+    return parts.map((part, k) => `<div class="${cls(sts[k])}">${part || "<br>"}</div>`).join("");
+  }).join("");
+}
+
+type ParaStyleLike = { align?: string; size?: string; bold?: boolean; hang?: boolean };
+
+/** HTML 한 줄을 태그 밖의 2칸 이상 공백에서 쪼갠다(태그 안 공백·속성값은 건드리지 않는다). */
+function 태그밖넓은공백으로쪼개기(line: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let depth = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "<") depth++;
+    if (ch === ">" && depth > 0) depth--;
+    if (depth === 0 && ch === " " && line[i + 1] === " ") {
+      let j = i;
+      while (line[j] === " ") j++;
+      if (buf.trim()) out.push(buf);
+      buf = "";
+      i = j - 1;
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim()) out.push(buf);
+  return out.length ? out : [line];
 }
 
 // 검색엔진에 알릴 '원본' 주소. 도메인을 붙이면 여기만 바꾸면 된다.
@@ -1460,7 +1510,14 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 /* 안내문은 한 덩어리 문장으로 흐르게 — flex로 두면 조각조각 칼럼처럼 쪼개져 읽기 어려움 */
 .hint{display:block;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2);line-height:1.9;word-break:keep-all}
 .hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap}
-.doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;font-size:15px;line-height:1.95;}
+.doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);word-break:keep-all;overflow-wrap:anywhere;font-size:15px;line-height:1.95;}
+/* 관공서 배치 — 내보내기(layoutParas)와 같은 판정을 화면에도 그대로 입힌다. */
+.doc .ln{white-space:pre-wrap}
+.doc .ln-c{text-align:center}
+.doc .ln-r{text-align:right}
+.doc .ln-t{text-align:center;font-size:1.5em;font-weight:800;letter-spacing:.28em;margin:.2em 0 1.1em;line-height:1.5}
+.doc .ln-s{font-size:1.12em;font-weight:700;margin-top:.5em}
+.doc .ln-h{padding-left:1.5em;text-indent:-1.5em}
 .fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:top;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
@@ -1626,7 +1683,16 @@ ${formLayoutClientScript()}
           if(seg)paras[paras.length-1].push({t:seg,s:style||{}});
         });
       }
+      // 본문이 줄 단위 .ln 으로 감싸여 있으면 그 안을 훑는다(화면 배치를 입히며 구조가 바뀌었다).
+      // 감싸기 전 구조(평평한 텍스트+span)도 그대로 처리되도록 both 를 지원한다.
+      var nodes=[];
       doc.childNodes.forEach(function(n){
+        if(n.nodeType===1&&n.classList&&n.classList.contains("ln")){
+          if(nodes.length)nodes.push({nodeType:3,textContent:"\\n"});
+          n.childNodes.forEach(function(c){nodes.push(c);});
+        } else nodes.push(n);
+      });
+      nodes.forEach(function(n){
         if(n.nodeType===3){push(n.textContent);return;}
         if(n.nodeType!==1)return;
         if(n.classList.contains("fld")){
