@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app } from "../src/server.js";
-import { TOPIC_KEYS, FORM_KEYS } from "../src/data/index.js";
+import { TOPIC_KEYS, FORM_KEYS, PROCEDURES } from "../src/data/index.js";
 
 let base = "";
 let server: Server;
@@ -36,12 +36,21 @@ async function rawCallText(body: string): Promise<string> {
 }
 
 describe("도구 목록·PlayMCP 규격", () => {
-  it("16개 도구 · description ≤1024 · annotations 5종 · 이름규칙 · kakao 없음", async () => {
+  it("16개 도구 · description ≤1024 · annotations 5종(값까지) · 이름규칙 · kakao 없음", async () => {
     const tools = (await rpc("tools/list", {})).result.tools;
     expect(tools.length).toBe(16);
     for (const t of tools) {
       expect(t.description.length).toBeLessThanOrEqual(1024);
-      for (const a of ["readOnlyHint", "destructiveHint", "openWorldHint", "idempotentHint"]) expect(t.annotations).toHaveProperty(a);
+      // annotations 5종: title + hint 4개. property 존재만이 아니라 실제 기대값까지 검증한다 —
+      // 전부 읽기 전용·비파괴 정보 제공 도구이므로 read/idempotent=true, destructive/openWorld=false가 맞다.
+      expect(typeof t.annotations?.title).toBe("string");
+      expect(t.annotations.title.trim().length).toBeGreaterThan(0);
+      expect(t.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
       expect(t.name).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(t.name).not.toMatch(/kakao/i);
     }
@@ -144,10 +153,26 @@ describe("회귀: 인용 검증 오탐·미가동", () => {
 });
 
 describe("핵심 동작", () => {
+  // 8/9 결정 "문제 상황 → 관련 법 + 제출 방법"은 그대로다. 다만 섹션 제목 문자열을 확인하던 것을
+  // 실제 데이터가 실렸는지로 바꿨다 — 제목 문구가 바뀌어도 내용이 빠지면 잡아야 하기 때문.
   it("triage 텍스트 응답에 접수처·근거 법령이 함께 나온다 (문제 상황 → 관련 법 + 제출 방법)", async () => {
     const t = await callText("triage", { situation: "임금체불 3개월" });
-    expect(t).toContain("접수·도움받을 곳");
-    expect(t).toContain("근거 법령");
+    const p = PROCEDURES["임금체불"];
+    expect(t).toContain(p.온라인접수);
+    expect(t).toContain(p.근거법[0]);
+  });
+  it("triage는 확인 질문 하나로 끝난다 (선택지 + 직접 입력)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    expect(t).toContain("①");
+    expect(t).toContain("직접 입력");
+    // 한 번에 다 쏟지 않는다 — 사용자에게 보이는 본문은 짧게 유지한다.
+    expect(t.split("<!--")[0].length).toBeLessThan(900);
+  });
+  it("triage 진행 지침에 그 주제의 서식 키가 실린다 (모델이 서식 위젯을 띄울 수 있게)", async () => {
+    const t = await callText("triage", { situation: "임금체불 3개월" });
+    const hint = t.split("<!--")[1] ?? "";
+    expect(hint).toContain("임금체불진정서");
+    expect(hint).toContain("get_form_template");
   });
   it("모든 응답에 면책 고지가 붙는다", async () => {
     const t = await callText("get_procedure", { topic: TOPIC_KEYS[0] });
@@ -156,7 +181,7 @@ describe("핵심 동작", () => {
   it("get_form_template에 미리보기·다운로드 링크 + /forms 다운로드 200", async () => {
     const t = await callText("get_form_template", { form: FORM_KEYS[0] });
     expect(t).toContain("빈칸 바로 채우기");
-    expect(t).toContain("텍스트 파일로 저장");
+    expect(t).toContain("서식 다운로드");
     const res = await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}.txt`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
@@ -216,6 +241,37 @@ describe("핵심 동작", () => {
     const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     expect(a).toBe(b); // 동일 요청 → 동일 응답(상태 없음)
   });
+  // 위젯의 "한글 서식 바로 받기"가 이 경로를 부른다. 여기가 죽으면 카톡에서
+  // 버튼을 눌러도 아무 일이 안 일어난다 — 사용자는 이유를 알 수 없다.
+  it("서식 파일이 서버에서 바로 떨어진다 (.hwpx/.docx)", async () => {
+    for (const [ext, magicMime] of [
+      ["hwpx", "hancom"],
+      ["docx", "wordprocessingml"],
+    ] as const) {
+      const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}.${ext}`);
+      expect(res.status, ext).toBe(200);
+      expect(res.headers.get("content-type") ?? "", ext).toContain(magicMime);
+      // 브라우저가 페이지로 열지 않고 파일로 받게 하는 헤더
+      const cd = res.headers.get("content-disposition") ?? "";
+      expect(cd, ext).toContain("attachment");
+      // 한글 파일명이 깨지지 않게 UTF-8로도 같이 적는다
+      expect(cd, ext).toContain("filename*=UTF-8''");
+      const buf = new Uint8Array(await res.arrayBuffer());
+      // 서버는 압축해서 보내므로(브라우저 쪽은 무압축) 크기가 작다. 빈 껍데기만 아니면 된다.
+      expect(buf.length, ext).toBeGreaterThan(800);
+      expect([buf[0], buf[1]], `${ext}: ZIP이 아니다`).toEqual([0x50, 0x4b]);
+    }
+  });
+
+  it("hwpx의 첫 항목은 무압축 mimetype이어야 한다 (한글이 안 열리는 첫째 이유)", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}.hwpx`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(buf[8] | (buf[9] << 8), "첫 항목이 압축돼 있다").toBe(0);
+    const nameLen = buf[26] | (buf[27] << 8);
+    expect(new TextDecoder().decode(buf.slice(30, 30 + nameLen))).toBe("mimetype");
+    expect(new TextDecoder().decode(buf.slice(30 + nameLen, 30 + nameLen + 19))).toBe("application/hwp+zip");
+  });
+
   it("없는 서식: .txt→404, 미리보기→404 html", async () => {
     const txt = await fetch(`${base}/forms/없는서식키.txt`);
     expect(txt.status).toBe(404);
@@ -233,13 +289,29 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   it("서식 페이지: 한글·워드 내보내기 버튼 + A4 인쇄 규격", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
     const html = await res.text();
-    expect(html).toContain('id="docBtn"');
-    expect(html).toContain("한글 · 워드로 내보내기");
+    // 내보내기는 드롭다운 한 개로 모았다 — 형식마다 버튼을 늘어놓으면 바가 길어진다(8/21)
+    expect(html).toContain('id="saveMenu"');
+    for (const fmt of ["hwpx", "docx", "md", "txt"]) {
+      expect(html, `${fmt} 항목이 메뉴에 없다`).toContain(`data-fmt="${fmt}"`);
+    }
+    // 한글·워드를 따로 받을 수 있어야 한다 (2026-08-20 회의 지적 → 8/21 .hwpx 추가)
+    expect(html).toContain("서식 다운로드");
+    // 어떤 확장자로 떨어지는지 화면에서 밝히고 있는지
+    expect(html).toContain(".hwpx");
+    expect(html).toContain(".docx");
     expect(html).toContain("@page{size:A4");
-    // 내보내기는 브라우저 안에서만 — 서버 전송 코드(fetch/XMLHttpRequest)가 핸들러에 없어야 한다
-    const handler = html.slice(html.indexOf('getElementById("docBtn")'), html.indexOf('getElementById("resetBtn")'));
-    expect(handler).toContain("wordprocessingml");
-    expect(handler).not.toMatch(/fetch\(|XMLHttpRequest/);
+    // 내보내기는 브라우저 안에서만 — 채운 값을 서버로 보내는 코드가 있으면 안 된다.
+    // 개인정보를 0건 수집한다는 말이 사실이려면 이 구간에 fetch/XHR이 없어야 한다.
+    const exportCode = html.slice(html.indexOf("function hwpxFiles(title,paras)"), html.indexOf('getElementById("resetBtn")'));
+    expect(exportCode.length).toBeGreaterThan(500);
+    expect(exportCode).toContain("wordprocessingml");
+    expect(exportCode).toContain("hancom.hwpx");
+    expect(exportCode).not.toMatch(/fetch\(|XMLHttpRequest|navigator\.sendBeacon/);
+    // hidden 속성이 display 지정에 밀리면 메뉴가 열린 채로 뜬다 — 8/21에 실제로 그랬다
+    expect(html).toMatch(/\[hidden\]\{display:none!important\}/);
+    // 위젯의 '서식 다운로드'는 #save로 들어온다. 받는 쪽이 없으면 '빈칸 채우기'와
+    // 똑같은 화면이 떠서 버튼이 두 개인 의미가 없어진다(8/22 지적).
+    expect(html).toContain('location.hash==="#save"');
   });
 
   it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
@@ -304,6 +376,59 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(t).toContain("주제 목록");
     expect(t).toContain("### 노동");
   });
+  // 동의어가 낱말 사이에 말이 끼면 안 걸리던 문제. "계속 찾아"는 "계속 집 앞에 찾아와요"도
+  // 잡으라고 적어둔 말인데 붙어 있을 때만 재고 있었다 — 스토킹 신고의 가장 전형적인 문장이
+  // 라이브에서 0건이었다(2026-08-23). 폭력 사안에서 놓치면 그 사람은 그냥 돌아간다.
+  it("스토킹: 사이에 말이 끼어도 잡는다", async () => {
+    for (const q of [
+      "헤어진 사람이 계속 집 앞에 찾아와요",
+      "전 남자친구가 계속 찾아와요",
+      "계속 친한 척 연락함",
+      "자꾸 연락이 와요 무서워요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, `'${q}' 가 0건이다`).toContain("스토킹");
+    }
+  });
+
+  // 느슨하게 잡으면 엉뚱한 데로 간다 — 8/19에 "업무누락 반복하는 실장급 직원"이
+  // 검찰 사칭 보이스피싱으로 갔다. 넓히는 변경마다 이쪽도 같이 본다.
+  it("스토킹이 아닌 것은 스토킹으로 가지 않는다", async () => {
+    for (const q of [
+      "업무누락 반복하는 실장급 직원",
+      "집주인이 찾아와서 나가라고 해요",
+      "동사무소에 계속 찾아갔는데 서류를 안 줘요",
+      "보일러가 고장났는데 집주인이 수리비를 부담하래",
+      "월급을 두 달째 못 받고 있어요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      const 첫줄 = (t.split("\n").find((l) => l.trim().startsWith("- `")) ?? "").trim();
+      expect(첫줄, `'${q}' 의 1순위가 스토킹이다`).not.toContain("스토킹");
+    }
+  });
+
+  // 상담창 시작 화면의 예시 문장은 하나라도 0건이면 첫인상이 무너진다.
+  // "중고거래로 사기를 당했어요"가 실제로 0건이었다(2026-08-24, 은미님 폰에서 발견).
+  it("상담창 예시 문장이 전부 주제를 찾는다", async () => {
+    for (const q of [
+      "월급을 두 달째 못 받고 있어요",
+      "전세 보증금을 안 돌려줘요",
+      "헤어진 사람이 계속 집 앞에 찾아와요",
+      "법원에서 지급명령이 왔어요",
+      "중고거래로 사기를 당했어요",
+    ]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, `'${q}' 가 0건이다`).not.toContain("찾지 못했습니다");
+    }
+  });
+
+  // "사기 당했어요"는 흔한 첫마디다. 유형이 여럿이라 하나로 못 좁히니 후보를 보여준다.
+  it("사기: 유형을 모를 때 후보를 늘어놓는다", async () => {
+    const t = await callText("search_topics", { query: "사기를 당했어요" });
+    expect(t).not.toContain("찾지 못했습니다");
+    expect((t.match(/^-\s+`/gm) ?? []).length).toBeGreaterThan(1);
+  });
+
   it("search_topics category 필터만 → 해당 분야 목록", async () => {
     const t = await callText("search_topics", { category: "노동" });
     expect(t).toContain("### 노동");
@@ -609,7 +734,7 @@ describe("복지·취약가구·농어업인 주제·신청서", () => {
   it("신청서: 사회보장급여_신청서 — 현행 명칭 정정 + 다운로드 링크", async () => {
     const t = await callText("get_form_template", { form: "사회보장급여_신청서" });
     expect(t).toContain("사회보장급여 신청(변경)서");
-    expect(t).toContain("파일로 저장·공유");
+    expect(t).toContain("서식 다운로드");
   });
   it("신청서: 외국인_사업장변경신청서 — 1개월 기한·2단계(출입국) 경고", async () => {
     const t = await callText("get_form_template", { form: "외국인_사업장변경신청서" });

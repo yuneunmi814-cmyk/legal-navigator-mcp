@@ -1,5 +1,9 @@
 // 데이터 정합성 불변식. index.ts import 자체가 mergeStrict(키 충돌 시 throw)를 실행 → 충돌 시 이 파일이 실패.
 import { describe, it, expect } from "vitest";
+import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
+import { formLayoutClientScript, layoutParas } from "../src/formlayout.js";
+import { matchFormsByName } from "../src/server.js";
+import { buildFormWidget } from "../src/widgets.js";
 import {
   SEARCH_SYNONYMS,
   CHECKLISTS,
@@ -302,5 +306,270 @@ describe("접수처 버튼 URL", () => {
     expect(find("스토킹범죄의 처벌 등에 관한 법률")).toContain("스토킹신고응급조치");
     expect(find("스토킹방지 및 피해자보호 등에 관한 법률")).toContain("스토킹신고응급조치");
     expect(find("통매음")).toContain("촬영물협박강요");
+  });
+});
+
+// ── HWPX(한글) 내보내기 ─────────────────────────────────────────────
+// 실물 .hwpx(정부 공고문)를 뜯어 맞춘 구조다. 한 글자만 어긋나도 한글이 "열 수 없는 파일"이라 한다.
+// 여기서 막지 못하면 사용자 폰에서야 알게 된다.
+describe("HWPX 내보내기", () => {
+  const paras: HwpxRun[][] = [
+    [{ t: "임 금 체 불 진 정 서", b: true }],
+    [],
+    [{ t: "진정인 성명: " }, { t: "윤은미", u: true }],
+    [{ t: "☑ 임금 미지급  ☐ 퇴직금 미지급" }],
+  ];
+
+  it("ZIP 첫 항목은 mimetype이어야 한다 (HWPX 규칙)", () => {
+    const files = hwpxFiles("임금체불 진정서", paras);
+    expect(files[0].name).toBe("mimetype");
+    expect(files[0].data).toBe("application/hwp+zip");
+  });
+
+  it("한글이 요구하는 파트가 모두 들어 있다", () => {
+    const names = hwpxFiles("t", paras).map((f) => f.name);
+    for (const need of [
+      "version.xml",
+      "settings.xml",
+      "Contents/header.xml",
+      "Contents/section0.xml",
+      "Contents/content.hpf",
+      "META-INF/container.xml",
+      "META-INF/manifest.xml",
+      "META-INF/container.rdf",
+      "Preview/PrvText.txt",
+    ]) {
+      expect(names).toContain(need);
+    }
+  });
+
+  it("모든 XML 파트의 태그가 짝이 맞는다", () => {
+    for (const f of hwpxFiles("따옴표 & <꺾쇠> 제목", paras)) {
+      if (f.name === "mimetype" || f.name.endsWith(".txt")) continue;
+      const stack: string[] = [];
+      for (const m of f.data.matchAll(/<(\/?)([A-Za-z0-9:_.-]+)([^>]*?)(\/?)>/g)) {
+        const [, close, name, , self] = m;
+        if (f.data.slice(m.index!, m.index! + 2) === "<?") continue;
+        if (close) expect(stack.pop(), `${f.name}: </${name}> 짝 안 맞음`).toBe(name);
+        else if (!self) stack.push(name);
+      }
+      expect(stack, `${f.name}: 안 닫힌 태그 ${stack.join(",")}`).toHaveLength(0);
+    }
+  });
+
+  it("본문의 모든 ID 참조가 header에 정의돼 있다", () => {
+    const files = hwpxFiles("t", paras);
+    const pick = (n: string) => files.find((f) => f.name === n)!.data;
+    const header = pick("Contents/header.xml");
+    const section = pick("Contents/section0.xml");
+    const defined = (tag: string, src: string) =>
+      new Set([...src.matchAll(new RegExp(`<${tag} id="(\\d+)"`, "g"))].map((m) => m[1]));
+    const used = (attr: string, src: string) =>
+      new Set([...src.matchAll(new RegExp(`${attr}="(\\d+)"`, "g"))].map((m) => m[1]).filter((v) => v !== "4294967295"));
+
+    for (const [attr, tag, src] of [
+      ["charPrIDRef", "hh:charPr", section],
+      ["paraPrIDRef", "hh:paraPr", section],
+      ["styleIDRef", "hh:style", section],
+      ["outlineShapeIDRef", "hh:numbering", section],
+      ["borderFillIDRef", "hh:borderFill", header + section],
+      ["tabPrIDRef", "hh:tabPr", header],
+    ] as const) {
+      const have = defined(tag, header);
+      for (const id of used(attr, src)) {
+        expect(have.has(id), `${attr}="${id}" 인데 ${tag} id=${id} 이 header에 없다`).toBe(true);
+      }
+    }
+  });
+
+  it("refList 자식 순서가 스키마 순서와 같다", () => {
+    const header = hwpxFiles("t", paras).find((f) => f.name === "Contents/header.xml")!.data;
+    const order = ["hh:fontfaces", "hh:borderFills", "hh:charProperties", "hh:tabProperties", "hh:numberings", "hh:paraProperties", "hh:styles"];
+    const at = order.map((t) => header.indexOf("<" + t));
+    expect(at.every((v) => v > 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("본문 글자가 XML 이스케이프된다", () => {
+    const sec = hwpxFiles("t", [[{ t: "채권자 & 채무자 <갑>" }]]).find((f) => f.name === "Contents/section0.xml")!.data;
+    expect(sec).toContain("채권자 &amp; 채무자 &lt;갑&gt;");
+    expect(sec).not.toContain("<갑>");
+  });
+
+  it("빈 문단도 문단으로 남는다 (서식의 줄 간격이 무너지지 않게)", () => {
+    const sec = hwpxFiles("t", paras).find((f) => f.name === "Contents/section0.xml")!.data;
+    expect([...sec.matchAll(/<hp:p /g)]).toHaveLength(paras.length);
+  });
+
+  // 8/16·8/19에 템플릿 리터럴 안에 직접 적은 "\\n"이 실제 줄바꿈으로 치환되면서 서식 페이지
+  // 스크립트가 통째로 죽은 적이 두 번 있다. 이 스크립트는 런타임에 끼워 넣는 값이라 그 함정은
+  // 없지만, 결과물이 실제로 돌아가는지는 여기서 확인한다(페이지 전체는 server.test.ts가 본다).
+  it("클라이언트 스크립트가 문법적으로 살아있다", () => {
+    expect(() => new Function("xe", formLayoutClientScript() + hwpxClientScript() + "; return hwpxFiles;")).not.toThrow();
+  });
+
+  it("브라우저에서 만든 결과가 서버 쪽 결과와 같다", () => {
+    const make = new Function("xe", formLayoutClientScript() + hwpxClientScript() + "; return hwpxFiles;")(
+      (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+    );
+    const browser = make("임금체불 진정서", paras.map((r) => r.map((x) => ({ t: x.t, s: { b: x.b, u: x.u } }))));
+    const server = hwpxFiles("임금체불 진정서", paras);
+    expect(browser.map((f: { name: string }) => f.name)).toEqual(server.map((f) => f.name));
+    for (let i = 0; i < server.length; i++) {
+      expect(browser[i].data, `${server[i].name} 불일치`).toBe(server[i].data);
+    }
+  });
+});
+
+// ── 관공서 서식 배치 ────────────────────────────────────────────────
+// 내보낸 파일이 밑줄 친 평문 나열이라 실제 서식과 안 닮았던 문제(2026-08-22).
+// 기준은 법원 공식 서식 원본(지급명령에 대한 이의신청서).
+describe("서식 배치(formlayout)", () => {
+  const P = (lines: string[]): HwpxRun[][] => lines.map((t) => [{ t }]);
+  const 글 = (p: { r: { t: string }[] }) => p.r.map((r) => r.t).join("");
+  const laid = layoutParas(
+    P([
+      "내 용 증 명",
+      "",
+      "발신인: 홍길동 (주소: 서울)",
+      "1. 발신인은 수신인과 위 부동산에 관하여 임대차계약을 체결하였습니다.",
+      "2. 위 임대차는 종료되었으나 보증금을 반환하지 않고 있습니다.",
+      "",
+      "작성일자 2026-08-22   발신인 홍길동 (인)   ○○지방법원 귀중",
+    ]),
+  );
+  const 찾기 = (re: RegExp) => laid.find((p) => re.test(글(p)))!;
+
+  it("제목은 가운데·굵게·큰 글씨", () => {
+    expect(laid[0].s).toEqual({ align: "CENTER", size: "TITLE", bold: true });
+  });
+
+  it("한 줄에 뭉친 마무리 줄을 날짜·서명·귀중 셋으로 끊는다", () => {
+    expect(찾기(/^작성일자 2026-08-22$/)).toBeTruthy();
+    expect(찾기(/^발신인 홍길동 \(인\)$/)).toBeTruthy();
+    expect(찾기(/^○○지방법원 귀중$/)).toBeTruthy();
+  });
+
+  it("귀중은 우측, 날짜·서명은 가운데", () => {
+    expect(찾기(/귀중$/).s.align).toBe("RIGHT");
+    expect(찾기(/^작성일자/).s.align).toBe("CENTER");
+    expect(찾기(/^발신인 홍길동/).s.align).toBe("CENTER");
+  });
+
+  it("번호 항목은 내어쓰기, 본문 줄은 건드리지 않는다", () => {
+    expect(찾기(/^1\. 발신인은/).s.hang).toBe(true);
+    expect(찾기(/^발신인: 홍길동/).s).toEqual({});
+  });
+
+  it("본문 한가운데의 '(인)'은 끊지도 정렬하지도 않는다", () => {
+    // 상속재산분할협의서의 당사자란처럼 마무리 블록이 아닌 곳
+    const 긴서식 = layoutParas(
+      P([
+        "상속재산분할협의서",
+        "공동상속인  성명 홍길동 (인)  주소 서울",
+        "1. 아래와 같이 협의한다.",
+        "2. 부동산은 갑이 취득한다.",
+        "3. 예금은 을이 취득한다.",
+        "4. 이상을 증명한다.",
+        "5. 각자 1통씩 보관한다.",
+        "작성일자 2026-08-22   상속인 홍길동 (인)",
+      ]),
+    );
+    const 당사자 = 긴서식.find((p) => 글(p).indexOf("공동상속인") === 0)!;
+    expect(글(당사자)).toBe("공동상속인  성명 홍길동 (인)  주소 서울"); // 그대로
+    expect(당사자.s).toEqual({});
+  });
+
+  // 화면에서는 "○○지방법원"의 ○○ 가 입력 칸(밑줄 런)으로 바뀐다. 그래서 넓은 공백이
+  // " (인)   " 런의 *맨 끝*에 걸리고, 그 자리에서 잘린 조각은 빈 문자열이다.
+  // 바로 끊으면 분리 지점이 사라져 "신청인 … (인)  ○○지방법원 귀중"이 한 줄로 붙었다.
+  it("넓은 공백이 런 끝에 걸려도 다음 내용에서 끊는다 (실제 페이지의 ○○ 입력칸)", () => {
+    const 실제 = layoutParas([
+      [{ t: "제목" }], [{ t: "가" }], [{ t: "나" }], [{ t: "다" }], [{ t: "라" }],
+      [
+        { t: "작성일자 " }, { t: "2026. 8. 22.", u: true },
+        { t: "   신청인 " }, { t: "윤은미", u: true },
+        { t: " (인)   " }, { t: "        ", u: true }, { t: "지방법원 귀중" },
+      ],
+    ]);
+    const 글 = (p: { r: { t: string }[] }) => p.r.map((r) => r.t).join("");
+    const 끝세줄 = 실제.slice(-3).map(글);
+    expect(끝세줄[0]).toBe("작성일자 2026. 8. 22.");
+    expect(끝세줄[1]).toBe("신청인 윤은미 (인)");
+    expect(끝세줄[2].trim()).toBe("지방법원 귀중");
+    expect(실제[실제.length - 1].s.align).toBe("RIGHT");
+    expect(실제[실제.length - 2].s.align).toBe("CENTER");
+    expect(실제[실제.length - 3].s.align).toBe("CENTER");
+  });
+
+  it("사용자가 채운 값(밑줄 런)은 쪼개지지 않는다", () => {
+    const 채운것 = layoutParas([
+      [{ t: "제목" }],
+      [{ t: "가" }],
+      [{ t: "나" }],
+      [{ t: "다" }],
+      [{ t: "라" }],
+      [{ t: "작성일자 " }, { t: "2026  08  22", u: true }, { t: "   발신인 홍길동 (인)" }],
+    ]);
+    const 값 = 채운것.flatMap((p) => p.r).find((r) => r.u)!;
+    expect(값.t).toBe("2026  08  22"); // 넓은 공백이 있어도 그대로
+  });
+});
+
+// ── 서식 이름으로 찾기 ──────────────────────────────────────────────
+// "내용증명"·"합의서"처럼 문서 이름만 아는 사람이 많다. 주제 검색이 비었다고 빈손으로
+// 돌려보내면, 정작 그 이름의 서식을 12종이나 갖고 있으면서 없다고 답하게 된다(8/21 확인).
+describe("서식 이름 검색 (주제 검색이 빌 때의 대비책)", () => {
+  it("'내용증명' 한 단어로 내용증명 서식을 찾는다", () => {
+    const hits = matchFormsByName("내용증명");
+    expect(hits.length).toBeGreaterThanOrEqual(10);
+    expect(hits).toContain("보증금반환_내용증명");
+    expect(hits).toContain("임금지급_내용증명");
+  });
+
+  it("띄어쓰기·가운뎃점·밑줄을 무시하고 맞춘다", () => {
+    for (const q of ["보증금반환 내용증명", "보증금반환_내용증명", "보증금반환·내용증명"]) {
+      expect(matchFormsByName(q), q).toContain("보증금반환_내용증명");
+    }
+  });
+
+  it("여러 낱말은 모두 들어간 서식만 맞춘다", () => {
+    const hits = matchFormsByName("보증금 내용증명");
+    expect(hits).toContain("보증금반환_내용증명");
+    expect(hits).not.toContain("임금지급_내용증명");
+  });
+
+  it("한 글자나 관계없는 말에는 아무것도 주지 않는다", () => {
+    expect(matchFormsByName("가")).toHaveLength(0);
+    expect(matchFormsByName("떡볶이 레시피")).toHaveLength(0);
+  });
+
+  it("모든 서식이 제 이름으로 검색된다", () => {
+    for (const key of FORM_KEYS) {
+      expect(matchFormsByName(key), `${key} — 제 이름으로도 안 찾힌다`).toContain(key);
+    }
+  });
+});
+
+// 위젯 버튼 두 개가 같은 곳으로 가면 안 된다 — 8/22에 실제로 그랬다.
+describe("서식 위젯 버튼", () => {
+  const base = "https://x.test";
+  const card = buildFormWidget(
+    "임금체불진정서",
+    { 제목: "임금체불 진정서", 용도: "고용노동부에 진정" },
+    base,
+    { url: "https://labor.moel.go.kr", 관할: "관할 지방고용노동청" },
+  );
+  const urls = (card.widget as { children: { type: string; onClickAction?: { payload: { target: { url: string } } } }[] }).children
+    .filter((c) => c.type === "Button")
+    .map((c) => c.onClickAction!.payload.target.url);
+
+  it("버튼마다 가는 곳이 다르다", () => {
+    expect(new Set(urls).size).toBe(urls.length);
+  });
+
+  // 8/23: 페이지를 거쳐 메뉴를 여는 대신 파일이 바로 떨어지게 바꿨다.
+  it("서식 다운로드는 파일로 바로 떨어진다 (.hwpx)", () => {
+    expect(urls.some((u) => u.endsWith(".hwpx"))).toBe(true);
   });
 });

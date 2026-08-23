@@ -15,18 +15,18 @@ PlayMCP 개발가이드 규격을 준수하며 Claude·ChatGPT·카카오톡(Pla
 npm install
 npm run dev          # http://localhost:4100/mcp  (Streamable HTTP, stateless)
 npm run typecheck
-npm test             # vitest 160개 (계산 결정성·데이터 불변식·인용검증 회귀·통합)
+npm test             # vitest 193개 (계산 결정성·데이터 불변식·인용검증 회귀·통합)
 npm run build && npm start
 ```
 
 ## 도구 (16종)
 
-PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 description(서비스명 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
+PlayMCP 규격 준수: 영문 tool name · annotations 5종 · description 국문+영문 병기(`[EN]` 줄, 서비스명 영문/국문 병기) · ≤1024자. 전부 인메모리(외부 API 핫패스 미사용).
 
 | name | title | 설명 |
 |---|---|---|
 | `triage` | 빠른 진단·다음 단계 | 상황(자연어)→가장 가까운 절차의 **기한·첫 단계·확보할 증거·도움처**를 한 장으로(경로 안내, 권고 아님) |
-| `check_elements` | 해당 여부 기준 안내 | "이것도 스토킹인가요?" — 13개 유형의 **법률상 성립요건** + 해당 가능성을 높이는/낮추는 정황 대조 + **피해측·피신고측 양면** 다음 단계(단정 없음, 판단은 수사기관·법원) |
+| `check_elements` | 해당 여부 기준 안내 | "이것도 스토킹인가요?" — 22개 유형의 **법률상 성립요건** + 해당 가능성을 높이는/낮추는 정황 대조 + **피해측·피신고측 양면** 다음 단계(단정 없음, 판단은 수사기관·법원) |
 | `search_topics` | 자연어 주제 검색·주제 목록 | 일상어 상황 설명 → 관련 주제 키 랭킹(동의어 매핑 + 메타데이터 가중). query 없이 호출하면 분야별 전체 목록(카테고리 필터) |
 | `get_procedure` | 절차 안내 | 유형별 공식 대응 절차·관할기관·기한·접수처·근거 법령 |
 | `get_checklist` | 필요 서류·증거 | 모아둘 증거 + 접수용 준비서류 체크리스트 |
@@ -68,7 +68,7 @@ PlayMCP 규격 준수: 영문 tool name · annotations 5종 · 영문 descriptio
 - ✅ 프로토콜 2025-06-18 (허용 범위 2025-03-26 ~ 2025-11-25)
 - ✅ tool name 영문/숫자/`-`/`_`, 중복 없음, 16개(권장 3~10 대비 초과분은 계산기 3종·검증 2종 등 스키마가 달라 분리가 호출 정확도에 유리한 도구들 — list_topics는 search_topics에 통합, check_elements는 해당성 질문 전용)
 - ✅ annotations(title·readOnlyHint·destructiveHint·openWorldHint·idempotentHint) 전부 지정
-- ✅ description 영문 + 서비스명 병기, 1024자 이내
+- ✅ description 국문+영문 병기(각 도구에 `[EN]` 영문 요약 1줄) + 서비스명 영문/국문 병기, 1024자 이내(최장 738자)
 - ✅ 이름에 'kakao' 미포함
 - ✅ 응답 인메모리 → 평균 <100ms (외부 API는 핫패스에서 미사용)
 
@@ -105,9 +105,13 @@ npm run build && PORT=8080 node dist/server.js  # 컨테이너 CMD와 동일
 - [x] 인용 검증·시점법(`verify_citation`·`law_updates`) — 환각 차단
 - [x] 무료지원·구제 신청서 빈칸 채움 골격 23종(`src/data/apply_forms.ts`) — 소송구조·구조금·대지급금·분쟁조정·전세사기·채무조정 + 사회보장급여·자립수당·국가유공자 등록·산재 요양급여·외국인 사업장변경 + 노란우산 공제금·갱생보호·행정심판 청구·정보공개 청구·의료분쟁 조정 + 장애인 등록·국민연금 유족/장애연금·근로/자녀장려금·재난적의료비 지원. declaw 경계 유지, 공식양식 출처·작성요령 동봉
 - [x] 서식 파일 내보내기 — `GET /forms/:key.txt`(읽기전용·무상태) + `get_form_template` 응답의 `📎 파일로 저장·공유` 링크. 받은 `.txt`를 구글 드라이브·카카오톡 '나에게 보내기'·메일로 공유. 링크 호스트는 요청에서 도출(`X-Forwarded-*`/`PUBLIC_BASE_URL`)
+- [x] 서식을 **한글(.hwpx)·워드(.docx)로 내보내기** — 채운 값 그대로 담은 진짜 문서 파일을
+  브라우저에서 만든다(서버로 아무것도 보내지 않음). `.hwp`는 한컴의 비공개 바이너리라 만들 수 없고,
+  `.hwpx`는 같은 문서를 담는 국가표준(KS X 6101, OWPML)이라 한글 2014 이상에서 그대로 열린다.
+  구조는 실물 `.hwpx`를 뜯어 맞췄고(`src/hwpx.ts` 주석 참고), 회귀 테스트 9종이 지킨다.
 - [x] 법률용어 풀이 사전(`src/data/glossary.ts`, 125개·9분류) — 일상어↔법률어 + 헷갈리는 쌍 구별, easylaw·law.go.kr·대법원·헌재 검증. `explain_term` 도구
 - [x] 원문 연결 강화 — `get_precedent` 사건번호별 casenote 딥링크, `get_statute`에 더 깊은 원문(조문 전문·신구조문) 안내
-- [x] 자동 테스트(`test/`, vitest 160개) — 계산 결정성·데이터 정합성 불변식·할루시네이션 재발 가드(미실존 사건번호·비표준 조문)·코드리뷰가 잡은 버그 회귀·통합(도구 규격·면책·다운로드)
+- [x] 자동 테스트(`test/`, vitest 193개) — 계산 결정성·데이터 정합성 불변식·할루시네이션 재발 가드(미실존 사건번호·비표준 조문)·코드리뷰가 잡은 버그 회귀·통합(도구 규격·면책·다운로드)
 - [x] 판례 전수 재검증 — 전 사건번호를 casenote·law.go.kr로 대조(미실존 3건 제거·오기 2건 정정), 회귀 테스트로 재발 차단
 - [~] 법제처 국가법령정보 Open API 라이브(`src/lawapi.ts`, `LAW_OC` 키 필요·선택, 응답속도 위해 핫패스 미사용)
 - [ ] 가이드형 서식 작성 인터뷰(대화로 빈칸 한 칸씩 채우기, declaw 경계 유지)
