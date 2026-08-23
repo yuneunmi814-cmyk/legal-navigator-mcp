@@ -568,7 +568,8 @@ describe("서식 위젯 버튼", () => {
     expect(new Set(urls).size).toBe(urls.length);
   });
 
-  it("서식 다운로드는 #save로 간다 (도착하면 다운로드 메뉴가 열린다)", () => {
-    expect(urls.some((u) => u.endsWith("#save"))).toBe(true);
+  // 8/23: 페이지를 거쳐 메뉴를 여는 대신 파일이 바로 떨어지게 바꿨다.
+  it("서식 다운로드는 파일로 바로 떨어진다 (.hwpx)", () => {
+    expect(urls.some((u) => u.endsWith(".hwpx"))).toBe(true);
   });
 });

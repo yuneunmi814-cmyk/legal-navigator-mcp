@@ -70,8 +70,11 @@ export function buildFormWidget(
 ): KakaoWidget {
   const previewUrl = `${baseUrl}/forms/${encodeURIComponent(formKey)}`;
   // 8/21: "텍스트 파일로 받기"를 없애고 서식 파일 받기로 바꿨다.
-  // #save는 서식 페이지 위쪽 버튼 바(인쇄·한글·워드)로 바로 내려보낸다.
-  const saveUrl = `${previewUrl}#save`;
+  // 8/23: 페이지를 거치지 않고 **파일이 바로 떨어지게** 바꿨다 — 카톡에서 서식을 찾은
+  // 사람에게 "페이지 열고 → 메뉴 열고 → 형식 고르고"는 세 단계나 된다.
+  // 한글(.hwpx)로 준다. 관공서 제출 서식이라 워드보다 이쪽이 기본값이고,
+  // 워드·채워서 받기는 '빈칸 바로 채우기' 화면에 그대로 있다.
+  const hwpUrl = `${previewUrl}.hwpx`;
   const children: WidgetComponent[] = [
     { type: "Title", value: trunc(f.제목.replace(/\s*\(.*?\)\s*$/, ""), 40) },
     { type: "Caption", value: trunc(f.용도, 90) },
@@ -88,7 +91,7 @@ export function buildFormWidget(
     ...(submit?.url
       ? [{ type: "Button", label: "🏛️ 접수처 바로가기", onClickAction: openUrl(submit.url), style: "secondary", block: true } as Button]
       : []),
-    { type: "Button", label: "📄 서식 다운로드 (한글·워드)", onClickAction: openUrl(saveUrl), style: "secondary", block: true },
+    { type: "Button", label: "📄 한글 서식 바로 받기 (.hwpx)", onClickAction: openUrl(hwpUrl), style: "secondary", block: true },
     ...(submit ? [{ type: "Caption", value: trunc(`🏛️ 제출: ${submit.관할}`, 70) } as Caption] : []),
     { type: "Caption", value: "일반 정보이며 개별 법률 자문이 아닙니다 · 법률 절차 길잡이" },
   ];

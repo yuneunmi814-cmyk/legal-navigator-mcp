@@ -40,6 +40,7 @@ import {
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
 import { hwpxClientScript } from "./hwpx.js";
+import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
 import { formLayoutClientScript } from "./formlayout.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
@@ -1761,10 +1762,11 @@ ${hwpxClientScript()}
 </body></html>`;
 }
 
-// 서식 라우트 — 확장자 없음/.html은 시각화 미리보기(빈칸 채움), .txt는 파일 다운로드. 읽기전용·무상태·인메모리.
+// 서식 라우트 — 확장자 없음/.html은 시각화 미리보기(빈칸 채움),
+// .txt/.hwpx/.docx는 파일이 바로 떨어진다(빈 서식). 읽기전용·무상태·인메모리.
 app.get("/forms/:key", (req, res) => {
   const raw = req.params.key; // Express 5가 params를 이미 디코드(이중 디코딩 금지)
-  const m = /\.(txt|html?)$/i.exec(raw);
+  const m = /\.(txt|hwpx|docx|html?)$/i.exec(raw);
   const ext = m ? m[1].toLowerCase() : "";
   const key = m ? raw.slice(0, m.index) : raw;
   const f = FORMS[key];
@@ -1777,6 +1779,20 @@ app.get("/forms/:key", (req, res) => {
         .type("text/html; charset=utf-8")
         .send('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>서식을 찾을 수 없습니다</h2><p>get_form_template의 서식 키를 확인하세요.</p></body>');
     }
+    return;
+  }
+  // .hwpx / .docx → 빈 서식 파일을 그 자리에서 만들어 내려준다.
+  // 위젯에서 누르면 페이지를 거치지 않고 파일이 바로 받아진다(8/23).
+  if (ext === "hwpx" || ext === "docx") {
+    const paras = bodyToParas(f.제목, f.본문);
+    const buf = ext === "hwpx" ? hwpxBuffer(f.제목, paras) : docxBuffer(paras);
+    const name = `${safeName(f.제목)}.${ext}`;
+    res
+      .type(MIME[ext])
+      // filename*=UTF-8'' 이 없으면 한글 파일명이 깨져서 저장된다.
+      .set("Content-Disposition", `attachment; filename="form.${ext}"; filename*=UTF-8''${encodeURIComponent(name)}`)
+      .set("Cache-Control", "public, max-age=3600")
+      .send(buf);
     return;
   }
   if (ext !== "txt") {

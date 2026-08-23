@@ -241,6 +241,37 @@ describe("핵심 동작", () => {
     const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     expect(a).toBe(b); // 동일 요청 → 동일 응답(상태 없음)
   });
+  // 위젯의 "한글 서식 바로 받기"가 이 경로를 부른다. 여기가 죽으면 카톡에서
+  // 버튼을 눌러도 아무 일이 안 일어난다 — 사용자는 이유를 알 수 없다.
+  it("서식 파일이 서버에서 바로 떨어진다 (.hwpx/.docx)", async () => {
+    for (const [ext, magicMime] of [
+      ["hwpx", "hancom"],
+      ["docx", "wordprocessingml"],
+    ] as const) {
+      const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}.${ext}`);
+      expect(res.status, ext).toBe(200);
+      expect(res.headers.get("content-type") ?? "", ext).toContain(magicMime);
+      // 브라우저가 페이지로 열지 않고 파일로 받게 하는 헤더
+      const cd = res.headers.get("content-disposition") ?? "";
+      expect(cd, ext).toContain("attachment");
+      // 한글 파일명이 깨지지 않게 UTF-8로도 같이 적는다
+      expect(cd, ext).toContain("filename*=UTF-8''");
+      const buf = new Uint8Array(await res.arrayBuffer());
+      // 서버는 압축해서 보내므로(브라우저 쪽은 무압축) 크기가 작다. 빈 껍데기만 아니면 된다.
+      expect(buf.length, ext).toBeGreaterThan(800);
+      expect([buf[0], buf[1]], `${ext}: ZIP이 아니다`).toEqual([0x50, 0x4b]);
+    }
+  });
+
+  it("hwpx의 첫 항목은 무압축 mimetype이어야 한다 (한글이 안 열리는 첫째 이유)", async () => {
+    const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}.hwpx`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(buf[8] | (buf[9] << 8), "첫 항목이 압축돼 있다").toBe(0);
+    const nameLen = buf[26] | (buf[27] << 8);
+    expect(new TextDecoder().decode(buf.slice(30, 30 + nameLen))).toBe("mimetype");
+    expect(new TextDecoder().decode(buf.slice(30 + nameLen, 30 + nameLen + 19))).toBe("application/hwp+zip");
+  });
+
   it("없는 서식: .txt→404, 미리보기→404 html", async () => {
     const txt = await fetch(`${base}/forms/없는서식키.txt`);
     expect(txt.status).toBe(404);
