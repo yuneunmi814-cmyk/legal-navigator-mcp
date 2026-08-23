@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app } from "../src/server.js";
+import { logCall, recentLogs, clearLogs } from "../src/debugLog.js";
 import { TOPIC_KEYS, FORM_KEYS, PROCEDURES } from "../src/data/index.js";
 
 let base = "";
@@ -817,5 +818,158 @@ describe("피해·위기(범죄피해자·자살·재난) 주제·연결", () =>
         }
       }
     }
+  });
+});
+
+// 이 서비스는 가정폭력·성폭력·스토킹 상담을 다룬다. triage의 situation에는 "남편이 때려요" 같은
+// 사용자 원문이 들어온다. 그래서 로그가 "무엇을 남기는지"보다 "무엇을 안 남기는지"를 못 박아 둔다.
+// 이 세 가지가 깨지면 피해 사실이 적힌 문장이 관리자 화면에 그대로 뜬다.
+describe("도구 호출 디버그 로그 (/admin/logs)", () => {
+  const ADMIN_PW = "테스트용비밀번호";
+  const 이전DEBUG = process.env.DEBUG_LOG;
+  const 이전PASS = process.env.ADMIN_PASS;
+  let cookie = "";
+
+  beforeAll(async () => {
+    process.env.ADMIN_PASS = ADMIN_PW;
+    const res = await fetch(`${base}/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ pw: ADMIN_PW }).toString(),
+      redirect: "manual",
+    });
+    expect(res.status).toBe(303);
+    cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
+    expect(cookie).toMatch(/^admin=/);
+  });
+
+  afterAll(() => {
+    if (이전DEBUG === undefined) delete process.env.DEBUG_LOG;
+    else process.env.DEBUG_LOG = 이전DEBUG;
+    if (이전PASS === undefined) delete process.env.ADMIN_PASS;
+    else process.env.ADMIN_PASS = 이전PASS;
+    clearLogs();
+  });
+
+  async function logsJson(): Promise<any> {
+    const res = await fetch(`${base}/admin/logs?format=json`, { headers: { Cookie: cookie } });
+    return res.json();
+  }
+  async function logsHtml(): Promise<string> {
+    const res = await fetch(`${base}/admin/logs`, { headers: { Cookie: cookie } });
+    return res.text();
+  }
+
+  it("DEBUG_LOG가 꺼져 있으면(기본값) 수집도 조회도 하지 않는다", async () => {
+    delete process.env.DEBUG_LOG;
+    clearLogs();
+    await callText("triage", { situation: "월급을 3개월째 못 받았어요" });
+
+    expect(await logsJson()).toEqual({ enabled: false, entries: [] });
+    expect(await logsHtml()).toContain("꺼져 있습니다");
+
+    // 조회만 막는 게 아니라 애초에 쌓이지 않았는지 — 켠 뒤에 봐도 비어 있어야 한다.
+    process.env.DEBUG_LOG = "on";
+    expect((await logsJson()).entries).toEqual([]);
+    delete process.env.DEBUG_LOG;
+  });
+
+  it("로그인하지 않으면 /admin/logs·/forms 둘 다 비밀번호를 묻는다", async () => {
+    for (const path of ["/admin/logs", "/forms"]) {
+      const res = await fetch(`${base}${path}`);
+      expect(res.status).toBe(401);
+      expect(await res.text()).toContain("비밀번호를 입력하세요");
+    }
+    // 틀린 비밀번호로는 쿠키를 받지 못한다
+    const bad = await fetch(`${base}/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ pw: "틀린비밀번호" }).toString(),
+      redirect: "manual",
+    });
+    expect(bad.status).toBe(401);
+    expect(bad.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("ADMIN_PASS가 없으면 관리자 화면 자체가 열리지 않는다 (503)", async () => {
+    // 저장소가 공개라 소스에 기본 비밀번호를 두지 않는다 — 적혀 있으면 아무나 아는 값이라
+    // 비밀번호가 아니다. 환경변수가 없으면 로그인 화면도 띄우지 않고 문을 아예 닫는다.
+    delete process.env.ADMIN_PASS;
+    try {
+      for (const path of ["/admin/logs", "/forms"]) {
+        // 이미 받아 둔 쿠키가 있어도 통과하지 못해야 한다
+        const res = await fetch(`${base}${path}`, { headers: { Cookie: cookie } });
+        expect(res.status).toBe(503);
+        const html = await res.text();
+        expect(html).toContain("관리자 화면이 꺼져 있습니다");
+        expect(html).not.toContain("비밀번호를 입력하세요"); // 로그인도 받지 않는다
+      }
+      // 어떤 비밀번호로도 로그인할 수 없다(빈 값 포함)
+      for (const pw of ["", "세일러문", "아무거나"]) {
+        const res = await fetch(`${base}/admin/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ pw }).toString(),
+          redirect: "manual",
+        });
+        expect(res.status).toBe(503);
+        expect(res.headers.get("set-cookie")).toBeNull();
+      }
+    } finally {
+      process.env.ADMIN_PASS = ADMIN_PW;
+    }
+  });
+
+  it("정상 호출은 인자의 값을 남기지 않는다 — 키 이름만", async () => {
+    process.env.DEBUG_LOG = "on";
+    clearLogs();
+    const 원문 = "월급을 3개월째 못 받았어요";
+    const 응답 = await callText("triage", { situation: 원문 });
+    expect(응답).not.toContain("찾지 못했습니다"); // 매칭에 성공한 = 정상 호출
+
+    const { enabled, entries } = await logsJson();
+    expect(enabled).toBe(true);
+    const [최근] = entries;
+    expect(최근.tool).toBe("triage");
+    expect(최근.ok).toBe(true);
+    expect(최근.flag).toBeUndefined();
+    expect(최근.argKeys).toEqual(["situation"]); // 키 이름은 남고
+    expect(최근.args).toBeUndefined(); // 값은 남지 않는다
+    // 로그 어디에도(관리자 화면 HTML 포함) 사용자 문장이 보이면 안 된다.
+    expect(JSON.stringify(entries)).not.toContain("월급");
+    expect(await logsHtml()).not.toContain(원문);
+
+    delete process.env.DEBUG_LOG;
+  });
+
+  it("매칭 실패(no_match)만 자유 텍스트를 남기고, 그것도 마스킹해서 남긴다", async () => {
+    process.env.DEBUG_LOG = "on";
+    clearLogs();
+    const 원문 = "즐거운 캠핑 장비 추천 부탁 010-1234-5678 me@example.com";
+    const 응답 = await callText("triage", { situation: 원문 });
+    expect(응답).toContain("찾지 못했습니다");
+
+    const [최근] = (await logsJson()).entries;
+    expect(최근.flag).toBe("no_match");
+    const 저장된 = 최근.args.situation as string;
+    expect(저장된).toContain("캠핑 장비"); // 실패 원인을 볼 수 있게 문장 자체는 남되
+    expect(저장된).toContain("[전화번호]"); // 연락처·이메일은 가려서 남는다
+    expect(저장된).toContain("[이메일]");
+    expect(저장된).not.toContain("1234-5678");
+    expect(저장된).not.toContain("me@example.com");
+
+    delete process.env.DEBUG_LOG;
+  });
+
+  it("자유 텍스트는 200자에서 잘린다", () => {
+    // MCP 인자는 zod가 이미 200자로 막고 있어 도구 호출로는 긴 값이 들어올 수 없다.
+    // 그래도 저장 단계에서 한 번 더 자른다 — 인자 제한이 느슨해져도 로그는 길어지지 않도록.
+    process.env.DEBUG_LOG = "on";
+    clearLogs();
+    logCall({ tool: "triage", args: { situation: "가".repeat(500) }, ms: 1, ok: true, flag: "no_match" });
+    const 저장된 = recentLogs(1)[0].args!.situation as string;
+    expect(저장된.length).toBeLessThanOrEqual(201); // 200자 + 잘렸음을 알리는 '…'
+    expect(저장된.endsWith("…")).toBe(true);
+    delete process.env.DEBUG_LOG;
   });
 });
