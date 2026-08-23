@@ -40,6 +40,7 @@ import {
 } from "./calc.js";
 import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
 import { hwpxClientScript } from "./hwpx.js";
+import { formLayoutClientScript } from "./formlayout.js";
 
 // 위젯 응답 스위치 — 카카오 툴즈(본선 서버)에서만 켠다. 위젯 반환 시 LLM이 가공하지 않고 카드가 곧 답변이 됨(가이드 §3).
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
@@ -1598,6 +1599,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       return new Blob(parts.concat(central,[new Uint8Array(eocd)]),{type:mime});
     }
     function xe(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+${formLayoutClientScript()}
     // 화면의 서식(빈칸·체크박스·굵은 라벨)을 문단·런 구조로 옮긴다.
     function collect(){
       var paras=[[]];
@@ -1623,13 +1625,22 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
       });
       return paras;
     }
+    // w:sz 는 1/2pt 단위 — 23=11.5pt(본문), 30=15pt(제목), 26=13pt(귀중).
+    // w:before / w:after 는 1/20pt — 1200=60pt(귀중 위 여백), 600=30pt.
     function docXml(paras){
-      var body=paras.map(function(runs){
-        var rs=runs.map(function(r){
-          var pr='<w:rPr><w:rFonts w:ascii="Batang" w:eastAsia="Batang" w:hAnsi="Batang"/><w:sz w:val="23"/>'+(r.s.b?"<w:b/>":"")+(r.s.u?'<w:u w:val="single"/>':"")+"</w:rPr>";
+      var body=layoutParas(paras).map(function(p){
+        var st=p.s;
+        var sz=st.size==="TITLE"?30:st.size==="SUB"?26:23;
+        var rs=p.r.map(function(r){
+          var pr='<w:rPr><w:rFonts w:ascii="Batang" w:eastAsia="Batang" w:hAnsi="Batang"/><w:sz w:val="'+sz+'"/>'+((r.s&&r.s.b)||st.bold?"<w:b/>":"")+(r.s&&r.s.u?'<w:u w:val="single"/>':"")+"</w:rPr>";
           return "<w:r>"+pr+'<w:t xml:space="preserve">'+xe(r.t)+"</w:t></w:r>";
         }).join("");
-        return '<w:p><w:pPr><w:spacing w:after="0" w:line="300" w:lineRule="auto"/></w:pPr>'+rs+"</w:p>";
+        var before=st.align==="RIGHT"?1200:st.align==="CENTER"&&!st.size?600:0;
+        var after=st.size==="TITLE"?600:0;
+        var ppr='<w:spacing w:before="'+before+'" w:after="'+after+'" w:line="300" w:lineRule="auto"/>'+
+          (st.align?'<w:jc w:val="'+(st.align==="RIGHT"?"right":"center")+'"/>':"")+
+          (st.hang?'<w:ind w:left="400" w:hanging="400"/>':"");
+        return '<w:p><w:pPr>'+ppr+'</w:pPr>'+rs+"</w:p>";
       }).join("");
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';

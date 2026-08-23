@@ -16,6 +16,8 @@
 //   refList 안의 순서도 스키마가 정한 순서다: fontfaces → borderFills → charProperties
 //   → tabProperties → numberings → paraProperties → styles.
 
+import { layoutParas, type ParaStyle } from "./formlayout.js";
+
 const XD = '<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>';
 
 const NS =
@@ -56,8 +58,9 @@ const borderFill = (id: number) =>
   '<hh:diagonal type="SOLID" width="0.1 mm" color="#000000"/></hh:borderFill>';
 
 // id 0=보통, 1=굵게(라벨), 2=밑줄(채워 넣은 빈칸) — 화면의 .lbl / .fld 와 짝이 맞는다.
-const charPr = (id: number, bold: boolean, underline: boolean) =>
-  `<hh:charPr id="${id}" height="1000" textColor="#000000" shadeColor="none" useFontSpace="0"` +
+// id 3=제목(15pt 굵게), 4='○○법원 귀중'(13pt 굵게) — formlayout.ts 의 size 와 짝이 맞는다.
+const charPr = (id: number, bold: boolean, underline: boolean, height = 1000) =>
+  `<hh:charPr id="${id}" height="${height}" textColor="#000000" shadeColor="none" useFontSpace="0"` +
   ' useKerning="0" symMark="NONE" borderFillIDRef="2">' +
   '<hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>' +
   '<hh:ratio hangul="100" latin="100" hanja="100" japanese="100" other="100" symbol="100" user="100"/>' +
@@ -69,26 +72,37 @@ const charPr = (id: number, bold: boolean, underline: boolean) =>
   '<hh:strikeout shape="NONE" color="#000000"/><hh:outline type="NONE"/>' +
   '<hh:shadow type="NONE" color="#B2B2B2" offsetX="10" offsetY="10"/></hh:charPr>';
 
-const MARGIN =
-  '<hh:margin><hc:intent value="0" unit="HWPUNIT"/><hc:left value="0" unit="HWPUNIT"/>' +
-  '<hc:right value="0" unit="HWPUNIT"/><hc:prev value="0" unit="HWPUNIT"/>' +
-  '<hc:next value="0" unit="HWPUNIT"/></hh:margin>' +
+// HWPUNIT = 1/7200인치, 1pt = 100.
+const MARGIN = (intent: number, left: number, prev: number, next: number) =>
+  `<hh:margin><hc:intent value="${intent}" unit="HWPUNIT"/><hc:left value="${left}" unit="HWPUNIT"/>` +
+  `<hc:right value="0" unit="HWPUNIT"/><hc:prev value="${prev}" unit="HWPUNIT"/>` +
+  `<hc:next value="${next}" unit="HWPUNIT"/></hh:margin>` +
   '<hh:lineSpacing type="PERCENT" value="160" unit="HWPUNIT"/>';
 
-const PARAPR =
-  '<hh:paraPr id="0" tabPrIDRef="0" condense="0" fontLineHeight="0" snapToGrid="1"' +
-  ' suppressLineNumbers="0" checked="0"><hh:align horizontal="LEFT" vertical="BASELINE"/>' +
+// formlayout.ts 의 배치와 1:1 —
+//  0 본문(왼쪽) · 1 가운데(날짜·서명, 위 12pt) · 2 우측(귀중, 위 60pt)
+//  3 내어쓰기(번호 항목) · 4 제목(가운데, 아래 30pt)
+const paraPr = (id: number, align: string, intent: number, left: number, prev: number, next: number) =>
+  `<hh:paraPr id="${id}" tabPrIDRef="0" condense="0" fontLineHeight="0" snapToGrid="1"` +
+  ` suppressLineNumbers="0" checked="0"><hh:align horizontal="${align}" vertical="BASELINE"/>` +
   '<hh:heading type="NONE" idRef="0" level="0"/>' +
   '<hh:breakSetting breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD" widowOrphan="0"' +
   ' keepWithNext="0" keepLines="0" pageBreakBefore="0" lineWrap="BREAK"/>' +
   '<hh:autoSpacing eAsianEng="0" eAsianNum="0"/>' +
   '<hp:switch><hp:case hp:required-namespace="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar">' +
-  MARGIN +
+  MARGIN(intent, left, prev, next) +
   "</hp:case><hp:default>" +
-  MARGIN +
+  MARGIN(intent, left, prev, next) +
   "</hp:default></hp:switch>" +
   '<hh:border borderFillIDRef="2" offsetLeft="0" offsetRight="0" offsetTop="0" offsetBottom="0"' +
   ' connect="0" ignoreMargin="0"/></hh:paraPr>';
+
+const PARAPRS =
+  paraPr(0, "LEFT", 0, 0, 0, 0) +
+  paraPr(1, "CENTER", 0, 0, 1200, 0) +
+  paraPr(2, "RIGHT", 0, 0, 6000, 0) +
+  paraPr(3, "LEFT", -1400, 1400, 0, 0) +
+  paraPr(4, "CENTER", 0, 0, 0, 3000);
 
 // secPr이 outlineShapeIDRef="1"로 이걸 가리킨다. 없으면 열리지 않는다.
 const NUMBERING =
@@ -109,12 +123,13 @@ export const HWPX_HEADER_XML =
   '<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/><hh:refList>' +
   FONTFACES +
   '<hh:borderFills itemCnt="2">' + borderFill(1) + borderFill(2) + "</hh:borderFills>" +
-  '<hh:charProperties itemCnt="3">' +
+  '<hh:charProperties itemCnt="5">' +
   charPr(0, false, false) + charPr(1, true, false) + charPr(2, false, true) +
+  charPr(3, true, false, 1500) + charPr(4, true, false, 1300) +
   "</hh:charProperties>" +
   '<hh:tabProperties itemCnt="1"><hh:tabPr id="0" autoTabLeft="0" autoTabRight="0"/></hh:tabProperties>' +
   '<hh:numberings itemCnt="1">' + NUMBERING + "</hh:numberings>" +
-  '<hh:paraProperties itemCnt="1">' + PARAPR + "</hh:paraProperties>" +
+  '<hh:paraProperties itemCnt="5">' + PARAPRS + "</hh:paraProperties>" +
   '<hh:styles itemCnt="1"><hh:style id="0" type="PARA" name="바탕글" engName="Normal" paraPrIDRef="0"' +
   ' charPrIDRef="0" nextStyleIDRef="0" langID="1042" lockForm="0"/></hh:styles></hh:refList>' +
   '<hh:compatibleDocument targetProgram="HWP201X"><hh:layoutCompatibility/></hh:compatibleDocument>' +
@@ -198,10 +213,17 @@ const LINESEG =
   '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000"' +
   ' baseline="850" spacing="600" horzpos="0" horzsize="51024" flags="393216"/></hp:linesegarray>';
 
+/** 배치(formlayout) → header.xml 의 paraPr / charPr id. 브라우저 사본과 같은 값을 쓴다. */
+export const ppRef = (st: ParaStyle) =>
+  st.size === "TITLE" ? 4 : st.align === "RIGHT" ? 2 : st.align === "CENTER" ? 1 : st.hang ? 3 : 0;
+export const cpRef = (st: ParaStyle, r: { b?: boolean; u?: boolean }) =>
+  st.size === "TITLE" ? 3 : st.size === "SUB" ? 4 : r.b ? 1 : r.u ? 2 : 0;
+
 /** 문단 배열 → Contents/section0.xml. 첫 문단의 첫 run에 secPr이 들어간다(HWPX 규칙). */
 export function hwpxSectionXml(paras: HwpxRun[][]): string {
-  const body = paras
-    .map((runs, n) => {
+  const body = layoutParas(paras)
+    .map((p, n) => {
+      const st = p.s;
       let rs =
         n === 0
           ? '<hp:run charPrIDRef="0">' +
@@ -209,12 +231,11 @@ export function hwpxSectionXml(paras: HwpxRun[][]): string {
             '<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>' +
             "</hp:run>"
           : "";
-      if (!runs.length) rs += '<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>';
-      for (const r of runs) {
-        const cid = r.b ? 1 : r.u ? 2 : 0;
-        rs += `<hp:run charPrIDRef="${cid}"><hp:t>${xe(r.t)}</hp:t></hp:run>`;
+      if (!p.r.length) rs += '<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>';
+      for (const r of p.r) {
+        rs += `<hp:run charPrIDRef="${cpRef(st, r)}"><hp:t>${xe(r.t)}</hp:t></hp:run>`;
       }
-      return `<hp:p id="${n}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">${rs}${LINESEG}</hp:p>`;
+      return `<hp:p id="${n}" paraPrIDRef="${ppRef(st)}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">${rs}${LINESEG}</hp:p>`;
     })
     .join("");
   return XD + `<hs:sec ${NS}>` + body + "</hs:sec>";
@@ -236,7 +257,7 @@ export function hwpxContentHpf(title: string): string {
 
 /** ZIP에 담을 엔트리 목록. mimetype이 반드시 첫 번째. */
 export function hwpxFiles(title: string, paras: HwpxRun[][]): { name: string; data: string }[] {
-  const prv = paras.map((r) => r.map((x) => x.t).join("")).join("\n").slice(0, 1000);
+  const prv = layoutParas(paras).map((p) => p.r.map((x) => x.t).join("")).join("\n").slice(0, 1000);
   return [
     { name: "mimetype", data: HWPX_MIMETYPE },
     { name: "version.xml", data: HWPX_VERSION_XML },
@@ -263,19 +284,26 @@ export function hwpxClientScript(): string {
   // .hwp는 비공개 바이너리라 못 만든다. .hwpx는 국가표준(KS X 6101)이고 ZIP+XML이라
   // .docx와 같은 방식으로 만든다. 한글 2014 이상에서 그대로 열린다.
   var HWPX_XD=${S(XD)},HWPX_NS=${S(NS)},HWPX_SECPR=${S(HWPX_SECPR)},HWPX_LS=${S(LINESEG)};
+  // 배치 id 는 header.xml 의 paraPr / charPr 표와 짝 — src/hwpx.ts 의 ppRef/cpRef 와 같은 값.
+  function ppRef(st){return st.size==="TITLE"?4:st.align==="RIGHT"?2:st.align==="CENTER"?1:st.hang?3:0;}
+  function cpRef(st,r){
+    if(st.size==="TITLE")return 3;
+    if(st.size==="SUB")return 4;
+    return (r.s&&r.s.b)||r.b?1:((r.s&&r.s.u)||r.u?2:0);
+  }
   function hwpxFiles(title,paras){
     var body="",prv=[];
-    paras.forEach(function(runs,n){
+    layoutParas(paras).forEach(function(p,n){
+      var st=p.s;
       var rs=n===0?'<hp:run charPrIDRef="0">'+HWPX_SECPR+'<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run>':"";
-      if(!runs.length) rs+='<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>';
+      if(!p.r.length) rs+='<hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>';
       var line="";
-      runs.forEach(function(r){
-        var cid=r.s&&r.s.b?1:(r.s&&r.s.u?2:0);
-        rs+='<hp:run charPrIDRef="'+cid+'"><hp:t>'+xe(r.t)+"</hp:t></hp:run>";
+      p.r.forEach(function(r){
+        rs+='<hp:run charPrIDRef="'+cpRef(st,r)+'"><hp:t>'+xe(r.t)+"</hp:t></hp:run>";
         line+=r.t;
       });
       prv.push(line);
-      body+='<hp:p id="'+n+'" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">'+rs+HWPX_LS+"</hp:p>";
+      body+='<hp:p id="'+n+'" paraPrIDRef="'+ppRef(st)+'" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">'+rs+HWPX_LS+"</hp:p>";
     });
     return [
       {name:"mimetype",data:${S(HWPX_MIMETYPE)}},
