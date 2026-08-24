@@ -85,9 +85,18 @@ export function zip(files: { name: string; data: string }[], store: string[] = [
 
 const xe = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** 서식 본문 텍스트 → 문단 배열. 빈 줄은 빈 문단으로 남긴다(줄 간격이 무너지지 않게). */
-export function bodyToParas(제목: string, 본문: string): HwpxRun[][] {
-  const paras: HwpxRun[][] = [[{ t: 제목, b: true }], []];
+/**
+ * 서식 본문 텍스트 → 문단 배열. 빈 줄은 빈 문단으로 남긴다(줄 간격이 무너지지 않게).
+ *
+ * ⚠️ 본문만 넣는다. 서식 이름을 앞에 끼워 넣으면 안 된다 —
+ * layoutParas는 **첫 문단을 제목으로 보고 가운데 큰 글씨로** 만든다.
+ * 안내문("… (표준 서식 예시 — 공란을 직접 채워 사용)")을 앞에 붙였더니
+ * 그게 제목 자리를 차지하고 정작 "진 정 서"가 왼쪽으로 밀렸다 —
+ * 브라우저에서 받은 파일과 서버에서 받은 파일이 달라졌다(2026-08-24 확인).
+ * 브라우저 쪽은 화면의 본문만 읽으므로, 여기도 본문만 넣어야 둘이 같아진다.
+ */
+export function bodyToParas(_제목: string, 본문: string): HwpxRun[][] {
+  const paras: HwpxRun[][] = [];
   for (const line of String(본문).split("\n")) paras.push(line.trim() ? [{ t: line }] : []);
   return paras;
 }

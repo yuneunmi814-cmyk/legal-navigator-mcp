@@ -4,6 +4,8 @@ import { hwpxFiles, hwpxClientScript, type HwpxRun } from "../src/hwpx.js";
 import { formLayoutClientScript, layoutParas } from "../src/formlayout.js";
 import { matchFormsByName } from "../src/server.js";
 import { buildFormWidget } from "../src/widgets.js";
+import { bodyToParas } from "../src/formfile.js";
+import { layoutParas } from "../src/formlayout.js";
 import {
   SEARCH_SYNONYMS,
   CHECKLISTS,
@@ -571,5 +573,29 @@ describe("서식 위젯 버튼", () => {
   // 8/23: 페이지를 거쳐 메뉴를 여는 대신 파일이 바로 떨어지게 바꿨다.
   it("서식 다운로드는 파일로 바로 떨어진다 (.hwpx)", () => {
     expect(urls.some((u) => u.endsWith(".hwpx"))).toBe(true);
+  });
+});
+
+// 같은 버튼인데 어디서 받았느냐에 따라 문서가 다르게 생기면 안 된다.
+// 서버 쪽 조립에 서식 이름을 앞에 끼워 넣었더니 layoutParas가 그걸 제목으로 보고
+// 가운데 큰 글씨로 만들어버려, 정작 "진 정 서"가 왼쪽으로 밀렸다(2026-08-24).
+describe("서버가 내려주는 서식의 배치", () => {
+  const f = FORMS["임금체불진정서"];
+
+  it("문서 제목이 가운데 큰 글씨다 (안내문이 그 자리를 뺏지 않는다)", () => {
+    const laid = layoutParas(bodyToParas(f.제목, f.본문)).filter((p) => p.r.map((r) => r.t).join("").trim());
+    const first = laid[0];
+    const text = first.r.map((r) => r.t).join("").trim();
+    expect(text, "안내문이 제목 자리를 차지했다").not.toContain("표준 서식 예시");
+    expect(first.s.align).toBe("CENTER");
+    expect(first.s.size).toBe("TITLE");
+  });
+
+  it("모든 서식에서 첫 문단이 제목이 된다", () => {
+    for (const key of FORM_KEYS) {
+      const form = FORMS[key];
+      const laid = layoutParas(bodyToParas(form.제목, form.본문)).filter((p) => p.r.map((r) => r.t).join("").trim());
+      expect(laid[0]?.s.size, `${key}: 첫 문단이 제목이 아니다`).toBe("TITLE");
+    }
   });
 });
