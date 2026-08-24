@@ -1366,6 +1366,8 @@ function 대괄호밖(s: string, fn: (seg: string) => string): string {
 //  · 그 외 대괄호([성명]·[______]·[   ]) → 채울 빈칸 입력 필드
 //  · 대괄호 밖의 ○○(○○지방법원 등) → 채울 빈칸 입력 필드
 //  · ☐ → 탭 토글 체크박스.  (사용자가 본인 사실만 입력 — AI 대필 아님)
+const wideCls = (minw: number) => (minw >= 20 ? " wide" : "");
+
 function 본문HTML(bodyRaw: string): string {
   let s = htmlEscape(bodyRaw);
   // 0) ○○ → 입력 필드. 반드시 대괄호 처리보다 먼저 — 나중에 하면 생성된 필드의
@@ -1373,16 +1375,19 @@ function 본문HTML(bodyRaw: string): string {
   s = 대괄호밖(s, (seg) =>
     seg.replace(동그라미자리, (m) => {
       const minw = Math.min(Math.max(m.length, 4), 28);
-      return `<span class="fld" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw}ch"></span>`;
+      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw}ch"></span>`;
     }),
   );
+  // 넓은 칸(20ch 이상)은 좁은 화면에서 제 줄을 차지하게 표시해 둔다.
+  // 28ch면 16px 기준 약 286px인데, 폰 문서 폭이 296px이라 앞 글자 뒤에 붙는 순간
+  // 화면 밖으로 나가 가로 스크롤이 생긴다(320px 전수 검사에서 3종 적발, 8/24).
   // 0-2) 대괄호 밖에 남은 밑줄(____)도 입력 가능하게 — 종이 서식의 빈칸 관행(8/11 회의 결정 ②).
   //    ○○와 같은 이유로 대괄호 처리보다 먼저·대괄호 밖에서만. 뒤로 미루면 3)이 만든
   //    data-ph 안의 밑줄까지 치환한다(예: 항소장 "[○○지방법원 20 가단 ____ … 선고]").
   s = 대괄호밖(s, (seg) =>
     seg.replace(/_{3,}/g, (m) => {
       const minw = Math.min(Math.max(m.length, 4), 28);
-      return `<span class="fld" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
+      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
     }),
   );
   // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
@@ -1409,7 +1414,7 @@ function 본문HTML(bodyRaw: string): string {
     }
     const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
     const minw = Math.min(Math.max(width, 4), 28);
-    return `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
+    return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
   });
   // 4) 줄 단위로 감싸며 관공서 배치를 화면에도 입힌다.
   //    내려받는 파일에만 배치가 걸리고 화면은 왼쪽 정렬 평문이라, 받아보기 전엔 결과를 알 수 없었다
@@ -1559,8 +1564,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 /* vertical-align은 baseline이어야 한다. top으로 두면 칸이 줄 맨 위에 붙고 글자는 기준선에
    앉아서, 같은 줄인데도 칸마다 세로 위치가 -5px·-2px로 들쭉날쭉해진다. 좁은 화면에서는
    그게 "글자에 칸이 올라탄" 것처럼 보인다(8/24 예은님 폰 제보 → 320px에서 22곳 재현).
-   좌우 여백도 1px은 너무 붙는다 — 앞 글자와 칸이 한 덩어리로 읽힌다. */
-.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 3px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
+   좌우 여백도 1px은 너무 붙는다 — 앞 글자와 칸이 한 덩어리로 읽힌다.
+   max-width는 여백을 빼고 잡아야 한다. 100%로 두면 넓은 칸이 좌우 여백만큼
+   문서 밖으로 밀려 가로 스크롤이 생긴다(320px 전수 검사에서 3종 적발). */
+.fld{display:inline-block;max-width:calc(100% - 6px);border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 3px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
 /* 긴 서술형 칸 — 항목명(예: "- 경위:")은 윗줄에 그대로 두고, 입력은 아래 전용 칸에서.
@@ -1586,6 +1593,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   .bar .dd>.btn{width:100%}
   .menu{min-width:0;width:max(100%,220px)}
   .bar .sp{display:none}
+  /* 넓은 빈칸은 폰에서 제 줄을 차지한다. 앞 글자 뒤에 붙여두면 화면 밖으로 나간다. */
+  /* min-width는 렌더러가 인라인으로 박아서(밑줄 길이 → ch) 스타일시트로는 못 이긴다.
+     좁은 화면에서만 !important로 덮는다 — 안 그러면 칸이 문서 밖으로 26px 밀린다. */
+  .doc .fld.wide{display:block;width:100%;min-width:0!important;margin:6px 0 4px}
   .btn{padding:11px 8px;font-size:13.5px;justify-content:center}
   .wrap{padding:16px 12px 56px}
   /* 16px 미만이면 iOS가 빈칸을 탭할 때마다 화면을 확대해 버린다. 서식은 빈칸을

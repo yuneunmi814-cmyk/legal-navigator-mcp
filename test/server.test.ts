@@ -349,6 +349,18 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   // 빈칸이 글자보다 위로 떠서 좁은 화면에서 "글자에 올라탄" 것처럼 보였다
   // (8/24 예은님 폰 제보 — 320px에서 22곳 재현). vertical-align이 top이면
   // 칸은 줄 맨 위에, 글자는 기준선에 앉아 세로가 어긋난다.
+  // 밑줄 길이에 맞춰 min-width를 인라인으로 박는데(최대 28ch≈286px), 폰 문서 폭이 260px이라
+  // 앞 글자 뒤에 붙는 순간 화면 밖으로 나가 가로 스크롤이 생겼다(320px 전수 검사에서 3종 적발).
+  // 넓은 칸은 좁은 화면에서 제 줄을 차지하게 한다.
+  it("넓은 빈칸은 좁은 화면에서 제 줄을 차지한다", async () => {
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("금융분쟁조정_신청서")}`)).text();
+    expect(html, "넓은 칸에 wide 표시가 없다").toContain('class="fld wide"');
+    const rule = /\.doc \.fld\.wide\{[^}]*\}/.exec(html)?.[0] ?? "";
+    expect(rule, "wide 규칙을 못 찾았다").toContain("display:block");
+    // 인라인 min-width는 스타일시트로 못 이긴다 — !important가 빠지면 다시 밖으로 밀린다
+    expect(rule, "인라인 min-width를 못 덮는다").toContain("min-width:0!important");
+  });
+
   it("입력칸은 글자 기준선에 맞춰 앉는다 (좁은 화면에서 겹쳐 보이지 않게)", async () => {
     const html = await (await fetch(`${base}/forms/${encodeURIComponent("금전소비대차계약서")}`)).text();
     const fld = /\.fld\{[^}]*\}/.exec(html)?.[0] ?? "";
