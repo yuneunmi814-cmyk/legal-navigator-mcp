@@ -1,3 +1,6 @@
 # pnpm 설정 — esbuild(tsx·vitest의 네이티브 바이너리)만 설치 스크립트 허용
+packages:
+  - '.'
+
 allowBuilds:
   esbuild: true
