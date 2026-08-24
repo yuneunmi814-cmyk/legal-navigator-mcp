@@ -315,6 +315,17 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(html).toContain('location.hash==="#save"');
   });
 
+  // 빈칸이 글자보다 위로 떠서 좁은 화면에서 "글자에 올라탄" 것처럼 보였다
+  // (8/24 예은님 폰 제보 — 320px에서 22곳 재현). vertical-align이 top이면
+  // 칸은 줄 맨 위에, 글자는 기준선에 앉아 세로가 어긋난다.
+  it("입력칸은 글자 기준선에 맞춰 앉는다 (좁은 화면에서 겹쳐 보이지 않게)", async () => {
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("금전소비대차계약서")}`)).text();
+    const fld = /\.fld\{[^}]*\}/.exec(html)?.[0] ?? "";
+    expect(fld, ".fld 규칙을 못 찾았다").toContain("display:inline-block");
+    expect(fld, "칸이 줄 맨 위에 붙으면 글자와 어긋난다").toContain("vertical-align:baseline");
+    expect(fld, "좌우 여백이 1px이면 앞 글자와 한 덩어리로 읽힌다").not.toMatch(/margin:0 1px/);
+  });
+
   it("서식 페이지: 긴 서술형은 블록 입력칸(.fld.big), 밑줄도 입력 가능 (8/11 회의 결정 ②)", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("임금체불진정서")}`);
     const html = await res.text();

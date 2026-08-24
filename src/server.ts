@@ -1556,7 +1556,11 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .doc .ln-t{text-align:center;font-size:1.5em;font-weight:800;letter-spacing:.28em;margin:.2em 0 1.1em;line-height:1.5}
 .doc .ln-s{font-size:1.12em;font-weight:700;margin-top:.5em}
 .doc .ln-h{padding-left:1.5em;text-indent:-1.5em}
-.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 1px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:top;font-family:inherit;}
+/* vertical-align은 baseline이어야 한다. top으로 두면 칸이 줄 맨 위에 붙고 글자는 기준선에
+   앉아서, 같은 줄인데도 칸마다 세로 위치가 -5px·-2px로 들쭉날쭉해진다. 좁은 화면에서는
+   그게 "글자에 칸이 올라탄" 것처럼 보인다(8/24 예은님 폰 제보 → 320px에서 22곳 재현).
+   좌우 여백도 1px은 너무 붙는다 — 앞 글자와 칸이 한 덩어리로 읽힌다. */
+.fld{display:inline-block;max-width:100%;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 3px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
 /* 긴 서술형 칸 — 항목명(예: "- 경위:")은 윗줄에 그대로 두고, 입력은 아래 전용 칸에서.
@@ -1565,7 +1569,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
   border:1.5px dashed var(--fld-line);border-radius:10px;line-height:1.7;font-weight:500;white-space:pre-wrap;}
 .fld.big:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400;font-size:.94em}
 .lbl{font-weight:800;background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--ink);padding:1px 8px;border-radius:6px;letter-spacing:-.01em;}
-.cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.3em;line-height:1;padding:2px 5px;margin:0 1px;color:var(--accent);vertical-align:-.12em;border-radius:5px}
+.cbx{display:inline-block;cursor:pointer;user-select:none;font-size:1.3em;line-height:1;padding:2px 5px;margin:0 3px;color:var(--accent);vertical-align:-.12em;border-radius:5px}
 .cbx:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .cbx:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .cbx:focus{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
