@@ -83,9 +83,10 @@ describe("데이터 정합성", () => {
       expect(FORM_KEYS).toContain(form);
       expect(TOPIC_KEYS).toContain(topic);
     }
-    // 개인 간 계약서 등 제출처 없는 서식 3종만 의도적 제외
+    // 개인 간 계약서·다기관 공통 서식 등 단일 제출처를 정할 수 없는 서식은 의도적 제외
     const unmapped = FORM_KEYS.filter((k) => !FORM_TOPIC[k]);
-    expect(unmapped.sort()).toEqual(["금전소비대차계약서", "분쟁조정_신청서", "채무변제확인서"]);
+    expect(unmapped.sort()).toEqual(["금전소비대차계약서", "분쟁조정_신청서", "지식재산_경고장", "채무변제확인서"]);
+    expect(FORM_TOPIC.피해구제신청_개요).toBe("피해금환급절차");
   });
 
   it("생활밀착 커버리지 확대 8/9 — 택배·항공·환불·누수·중고차·사망후·화재", () => {
@@ -219,6 +220,30 @@ describe("데이터 정합성", () => {
     for (const f of ["금전소비대차계약서", "채무변제확인서"]) {
       expect(FORM_KEYS).toContain(f);
     }
+  });
+
+  it("법률 서식 작성요령은 이자상한과 미성년자 이해상반 조건을 명시한다", () => {
+    expect(FORMS.채무변제확인서.작성요령.join(" ")).toContain("최고 연 20%");
+    const inheritanceTips = FORMS.상속재산분할협의서.작성요령.join(" ");
+    expect(inheritanceTips).toContain("이해상반행위");
+    expect(inheritanceTips).toContain("민법 제921조");
+    expect(inheritanceTips).not.toContain("미성년 상속인은 특별대리인이 필요합니다");
+
+    for (const topic of ["대여금미반환", "물품용역대금미수금", "손해배상청구", "교통사고손해배상청구"]) {
+      const guidance = JSON.stringify(PROCEDURES[topic]);
+      expect(guidance, topic).toContain("6개월 내");
+      expect(guidance, topic).not.toContain("소제기·내용증명으로 중단");
+    }
+  });
+
+  it("장기요양 불복절차는 법정 심사·재심사 단계와 기한을 안내한다", () => {
+    const tips = FORMS.장기요양인정_신청서.작성요령.join(" ");
+    expect(tips).toContain("공단에 심사청구");
+    expect(tips).toContain("안 날부터 90일");
+    expect(tips).toContain("처분이 있은 날부터 180일");
+    expect(tips).toContain("장기요양재심사위원회");
+    expect(tips).toContain("결정통지를 받은 날부터 90일");
+    expect(tips).not.toContain("장기요양심판위원회");
   });
 });
 

@@ -1650,24 +1650,24 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     <button class="btn" id="copyBtn" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>링크 복사</button>
   </div>
-  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 기기 브라우저에만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 삭제). 관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요. · 법률 절차 길잡이(Legal Navigator)</p>
+  <p class="foot">※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 입력 내용은 이 탭을 닫기 전까지만 자동 저장되며 서버로 전송되지 않습니다(빈칸 비우기를 누르면 즉시 삭제). ${official ? "관공서 제출본은 위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요." : "제출 전 해당 기관의 최신 서식과 접수요건을 확인하세요."} · 법률 절차 길잡이(Legal Navigator)</p>
 </div>
 <script>
 (function(){
   var doc=document.getElementById("doc");
-  // 입력값 자동 저장·복원 — 이 기기 브라우저(localStorage)에만 저장, 서버 전송 없음.
+  // 입력값 자동 저장·복원 — 현재 탭의 sessionStorage에만 저장, 탭을 닫으면 삭제되고 서버 전송 없음.
   var KEY="lnform:"+location.pathname;
   function save(){
     try{
       var d={f:[],c:[]};
       doc.querySelectorAll(".fld").forEach(function(x){d.f.push(x.textContent||"");});
       doc.querySelectorAll(".cbx").forEach(function(c){d.c.push(c.getAttribute("aria-checked")==="true");});
-      localStorage.setItem(KEY,JSON.stringify(d));
+      sessionStorage.setItem(KEY,JSON.stringify(d));
     }catch(e){}
   }
   function restore(){
     try{
-      var raw=localStorage.getItem(KEY); if(!raw) return;
+      var raw=sessionStorage.getItem(KEY); if(!raw) return;
       var d=JSON.parse(raw);
       doc.querySelectorAll(".fld").forEach(function(x,i){if(d.f&&d.f[i])x.textContent=d.f[i];});
       doc.querySelectorAll(".cbx").forEach(function(c,i){if(d.c&&d.c[i]){c.setAttribute("aria-checked","true");c.textContent="☑";}});
@@ -1844,7 +1844,7 @@ ${hwpxClientScript()}
   document.getElementById("resetBtn").addEventListener("click",function(){
     doc.querySelectorAll(".fld").forEach(function(x){x.textContent="";});
     doc.querySelectorAll(".cbx").forEach(function(c){c.setAttribute("aria-checked","false");c.textContent="☐";});
-    try{localStorage.removeItem(KEY);}catch(e){}
+    try{sessionStorage.removeItem(KEY);}catch(e){}
   });
 
   // ── 공유 (8/18 회의 결정 ③) ─────────────────────────
@@ -2257,7 +2257,9 @@ app.get("/forms/:key", (req, res) => {
     ...f.작성요령.map((s) => `- ${s}`),
     "",
     "────────────────────",
-    "※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요.",
+    f.공식양식
+      ? "※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 관공서 제출본은 위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요."
+      : "※ 일반 법률·절차 정보이며 개별 법률 자문이 아닙니다. 제출 전 해당 기관의 최신 서식과 접수요건을 확인하세요.",
   );
   const filename = `${f.제목.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "_")}.txt`;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");

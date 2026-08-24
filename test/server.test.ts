@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app } from "../src/server.js";
 import { logCall, recentLogs, clearLogs } from "../src/debugLog.js";
-import { TOPIC_KEYS, FORM_KEYS, PROCEDURES } from "../src/data/index.js";
+import { TOPIC_KEYS, FORM_KEYS, FORMS, PROCEDURES } from "../src/data/index.js";
 
 let base = "";
 let server: Server;
@@ -236,6 +236,37 @@ describe("핵심 동작", () => {
       const close = (html.match(/<\/span>/g) || []).length;
       expect(open, k).toBe(close);
     }
+  });
+  it("중첩 대괄호·선택 표시가 깨진 마크업으로 남지 않는다", async () => {
+    for (const k of ["계약해제_내용증명", "부동산매매_해제_내용증명", "소년보호_보조인선임서"]) {
+      const html = await (await fetch(`${base}/forms/${encodeURIComponent(k)}`)).text();
+      const docHtml = html.match(/<div class="doc" id="doc">([\s\S]*?)<\/div>\s*<div class="tips">/)?.[1] ?? "";
+      expect(docHtml, k).not.toMatch(/[\[\]]/);
+    }
+    for (const k of ["행정심판_청구서", "국가장학금_신청서"]) {
+      expect(FORMS[k].본문, k).not.toMatch(/\[\s\]/);
+      const html = await (await fetch(`${base}/forms/${encodeURIComponent(k)}`)).text();
+      const docHtml = html.match(/<div class="doc" id="doc">([\s\S]*?)<\/div>\s*<div class="tips">/)?.[1] ?? "";
+      expect(docHtml.match(/role="checkbox"/g) ?? [], k).toHaveLength(7);
+    }
+  });
+  it("공식양식 유무에 따라 HTML·TXT 제출 안내를 구분한다", async () => {
+    const officialHtml = await (await fetch(`${base}/forms/${encodeURIComponent("소송구조신청서")}`)).text();
+    const officialTxt = await (await fetch(`${base}/forms/${encodeURIComponent("소송구조신청서")}.txt`)).text();
+    expect(officialHtml).toContain("위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요");
+    expect(officialTxt).toContain("위 '공식 양식 받는 곳'에서 정식 서식을 받아 작성하세요");
+
+    const exampleHtml = await (await fetch(`${base}/forms/${encodeURIComponent("금전소비대차계약서")}`)).text();
+    const exampleTxt = await (await fetch(`${base}/forms/${encodeURIComponent("금전소비대차계약서")}.txt`)).text();
+    expect(exampleHtml).toContain("제출 전 해당 기관의 최신 서식과 접수요건을 확인하세요");
+    expect(exampleHtml).not.toContain("위 ‘공식 양식 받는 곳’에서 정식 서식을 받아 작성하세요");
+    expect(exampleTxt).toContain("제출 전 해당 기관의 최신 서식과 접수요건을 확인하세요");
+  });
+  it("입력값은 탭 세션에만 복원되고 장기 localStorage에는 남기지 않는다", async () => {
+    const html = await (await fetch(`${base}/forms/${encodeURIComponent("채무변제확인서")}`)).text();
+    expect(html).toContain("sessionStorage.setItem");
+    expect(html).toContain("sessionStorage.getItem");
+    expect(html).not.toContain("localStorage");
   });
   it("서식 미리보기는 사용자 입력값을 서버에 저장하지 않는다(무상태·정적)", async () => {
     const a = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
@@ -491,6 +522,15 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
   it("get_form_template 채무변제확인서(사후 차용증) → 민법 제168조 채무승인", async () => {
     const t = await callText("get_form_template", { form: "채무변제확인서" });
     expect(t).toContain("제168조");
+    expect(t).toContain("2023다240299");
+    expect(t).toContain("최고 연 20%");
+    expect(t).toContain("이 확인서만으로 바로 강제집행할 수 있는 것은 아니며");
+  });
+  it("대여금 반환 내용증명은 최고 후 6개월 내 후속조치 필요를 정확히 안내", async () => {
+    const t = await callText("get_form_template", { form: "대여금반환_내용증명" });
+    expect(t).toContain("민법 제174조");
+    expect(t).toContain("최고 시점으로 소급한 시효중단 효과");
+    expect(t).toContain("이미 완성된 시효가 내용증명만으로 되살아나는 것은 아닙니다");
   });
   it("신규 서식 시각화 미리보기 200 · 체크박스/빈칸 렌더", async () => {
     const res = await fetch(`${base}/forms/${encodeURIComponent("채무변제확인서")}`);
