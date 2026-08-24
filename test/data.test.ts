@@ -5,6 +5,7 @@ import { formLayoutClientScript, layoutParas } from "../src/formlayout.js";
 import { matchFormsByName } from "../src/server.js";
 import { buildFormWidget } from "../src/widgets.js";
 import { bodyToParas } from "../src/formfile.js";
+import { FORM_TOPIC } from "../src/data/form_topic.js";
 import { layoutParas } from "../src/formlayout.js";
 import {
   SEARCH_SYNONYMS,
@@ -621,6 +622,19 @@ describe("서버가 내려주는 서식의 배치", () => {
       const form = FORMS[key];
       const laid = layoutParas(bodyToParas(form.제목, form.본문)).filter((p) => p.r.map((r) => r.t).join("").trim());
       expect(laid[0]?.s.size, `${key}: 첫 문단이 제목이 아니다`).toBe("TITLE");
+    }
+  });
+});
+
+// 접수처가 없는 서식(개인 간 계약서·경고장 등)은 FORM_TOPIC에서 빼는 게 맞지만,
+// 그러면 "이 주제의 표준 서식" 목록에서도 빠져 **어디서도 안 나오는 서식**이 된다.
+// 이름을 정확히 아는 사람만 찾을 수 있게 되므로, 절차 본문에 호출 힌트를 남긴다(8/24).
+describe("매핑 없는 서식도 상담 중에 나온다", () => {
+  it("FORM_TOPIC에 없는 서식은 절차 단계에서 호출 힌트로 언급된다", () => {
+    const 절차전체 = JSON.stringify(TOPIC_KEYS.map((k) => PROCEDURES[k]));
+    for (const key of FORM_KEYS) {
+      if (FORM_TOPIC[key]) continue;
+      expect(절차전체, `${key}: 매핑도 없고 절차에서도 안 나온다 — 찾을 방법이 없다`).toContain(key);
     }
   });
 });
