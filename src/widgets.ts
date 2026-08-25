@@ -178,6 +178,188 @@ export function buildCalcWidget(item: string, r: { 결과: string; 계산식: st
   };
 }
 
+// ── 4) 무료 법률지원 카드 — find_legal_aid용: 지금 걸 수 있는 번호를 버튼으로 ──
+// 이 서비스 사용자가 가장 자주 막히는 지점은 "그래서 어디에 물어보나"다.
+// 카카오 가이드 §3.3은 버튼 URL이 AppScheme도 받는다고 명시한다 → tel:로 바로 걸리게 한다.
+// ⚠️ 순서가 전부다. 짧은 것부터 맞추면 1588-0075가 '1588'로 잘려 전화가 안 걸린다
+// (2026-08-26 미리보기에서 실제로 그렇게 나왔다). 긴 형태부터 차례로 시도한다.
+const 전화형태 = [
+  /\b(1[5-9]\d{2}[-\s]?\d{4})\b/,          // 1588-0075 · 1899-xxxx
+  /\b(0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4})\b/, // 02-3476-6515 · 031-xxx-xxxx
+  /\b(1[0-9]{2,3})\b/,                       // 132 · 112 · 129 · 1350 · 1366
+];
+// tel: 에는 숫자만, 화면에는 사람이 읽는 모양(1588-0075) 그대로 보여준다.
+const 전화추출 = (연락: string): { tel: string; 표시: string } | null => {
+  const 정리 = 연락.replace(/국번없이\s*/g, "").replace(/[☎️☏]/g, " ");
+  for (const re of 전화형태) {
+    const m = re.exec(정리);
+    if (m) return { tel: m[1].replace(/[-\s]/g, ""), 표시: m[1].replace(/\s/g, "-") };
+  }
+  return null;
+};
+
+export function buildLegalAidWidget(
+  keyword: string | undefined,
+  programs: { 명칭: string; 대상: string; 내용: string; 연락: string }[],
+  hotlines: { 번호: string; 기관: string; 용도: string }[],
+): KakaoWidget {
+  const shown = programs.slice(0, 3);
+  const 프로그램줄: WidgetComponent[] = shown.flatMap((p): WidgetComponent[] => [
+    { type: "Text", value: trunc(p.명칭, 44) },
+    { type: "Caption", value: trunc(`대상: ${p.대상}`, 62) },
+  ]);
+
+  // 전화 버튼 — 프로그램에서 뽑은 번호를 앞에, 132는 언제나 마지막 보루로 남긴다.
+  // ⚠️ 핫라인을 앞에서부터 그냥 집으면 임금체불 질문에 '112 경찰'이 뜬다(2026-08-26 미리보기에서 확인).
+  //    상관없는 번호를 내미는 건 도움이 아니라 소음이므로, 키워드와 맞물리는 것만 남긴다.
+  const 번호들: { label: string; tel: string }[] = [];
+  const 담기 = (이름: string, 전화: { tel: string; 표시: string } | null) => {
+    if (전화 && !번호들.some((x) => x.tel === 전화.tel)) {
+      번호들.push({ label: `📞 ${전화.표시} ${trunc(이름, 16)}`, tel: 전화.tel });
+    }
+  };
+  for (const p of shown) 담기(p.명칭, 전화추출(p.연락));
+  if (keyword) {
+    const kw = keyword.trim();
+    for (const h of hotlines) {
+      const 맞물림 = h.용도.includes(kw) || h.기관.includes(kw) || kw.includes(h.기관);
+      if (맞물림) 담기(h.기관, 전화추출(h.번호));
+    }
+  }
+  담기("무료 법률상담", { tel: "132", 표시: "132" });
+
+  const 버튼: Button[] = 번호들.slice(0, 3).map((b, i) => ({
+    type: "Button",
+    label: b.label,
+    onClickAction: openUrl(`tel:${b.tel}`),
+    style: i === 0 ? "primary" : "secondary",
+    block: true,
+  }));
+
+  const children: WidgetComponent[] = [
+    { type: "Caption", value: keyword ? `무료 법률지원 · ${trunc(keyword, 24)}` : "무료 법률지원" },
+    { type: "Title", value: shown.length ? trunc(shown[0].명칭, 40) : "무료 법률상담" },
+    ...(shown.length ? [{ type: "Text", value: trunc(shown[0].내용, 90), size: "sm" } as TextC] : []),
+    ...(programs.length > 1
+      ? ([{ type: "Divider" }, { type: "Caption", value: `함께 볼 곳 ${programs.length - 1}개` }, ...프로그램줄.slice(2)] as WidgetComponent[])
+      : []),
+    { type: "Divider" },
+    { type: "Text", value: "📞 지금 걸 수 있는 곳" },
+    ...버튼,
+    { type: "Caption", value: "자격은 기관에서 최종 확인 · 법률 절차 길잡이" },
+  ];
+  return {
+    widget: { type: "Card", size: "md", children },
+    copy_text: [
+      keyword ? `**무료 법률지원 — ${keyword}**` : "**무료 법률지원**",
+      ...shown.map((p) => `- ${p.명칭} (${p.연락})`),
+      "- 무료상담: 대한법률구조공단 132",
+    ].join("\n"),
+  };
+}
+
+// ── 5) 절차 카드 — get_procedure용: 기한을 맨 위에, 단계는 번호를 붙여 ──
+export function buildProcedureWidget(
+  topic: { 제목: string; 기한: string; 관할기관: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
+): KakaoWidget {
+  const url = extractSubmitUrl(topic.온라인접수);
+  // 원본 단계는 "1) …"로 시작하는 것과 아닌 것이 섞여 있다. 한 곳에서 떼어내
+  // 카드와 copy_text가 같은 문자열을 쓰게 한다(따로 처리하면 "1. 1) …"가 된다).
+  const 벗긴단계 = topic.단계.map((s) => s.replace(/^\d+[)\-.]?\s*/, ""));
+  const 단계: TextC[] = 벗긴단계.slice(0, 5).map((s, i) => ({
+    type: "Text",
+    value: trunc(`${i + 1}. ${s}`, 74),
+    size: "sm",
+  }));
+  const children: WidgetComponent[] = [
+    { type: "Caption", value: "절차 안내" },
+    { type: "Title", value: trunc(topic.제목, 40) },
+    {
+      type: "Row",
+      gap: 8,
+      children: [
+        { type: "Badge", label: `⏰ ${trunc(topic.기한, 26)}`, color: "danger", variant: "soft" },
+        { type: "Badge", label: trunc(topic.관할기관, 20), color: "secondary", variant: "soft" },
+      ],
+    },
+    { type: "Divider" },
+    ...단계,
+    ...(topic.단계.length > 5 ? [{ type: "Caption", value: `외 ${topic.단계.length - 5}단계` } as Caption] : []),
+    ...(url
+      ? [{ type: "Button", label: "🏛️ 접수처 바로가기", onClickAction: openUrl(url), style: "primary", block: true } as Button]
+      : []),
+    { type: "Button", label: "📞 132 무료 법률상담", onClickAction: openUrl("tel:132"), style: "secondary", block: true },
+    { type: "Caption", value: "경로 안내 · 결론 아님 · 법률 절차 길잡이" },
+  ];
+  return {
+    widget: { type: "Card", size: "md", children },
+    copy_text: `**${topic.제목}**\n⏰ ${topic.기한}\n${벗긴단계.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join("\n")}\n무료상담 132 — 법률 절차 길잡이`,
+  };
+}
+
+// ── 6) 체크리스트 카드 — get_checklist용: 빠뜨린 것이 눈에 보이게 ──
+export function buildChecklistWidget(
+  제목: string,
+  c: { 증거: string[]; 준비서류: string[] },
+): KakaoWidget {
+  const 줄 = (items: string[], n: number): TextC[] =>
+    items.slice(0, n).map((s) => ({ type: "Text", value: trunc(`☐ ${s}`, 72), size: "sm" }));
+  const children: WidgetComponent[] = [
+    { type: "Caption", value: "준비 체크리스트" },
+    { type: "Title", value: trunc(제목, 40) },
+    { type: "Divider" },
+    { type: "Text", value: `🔍 모아둘 증거 ${c.증거.length}가지` },
+    ...줄(c.증거, 4),
+    ...(c.증거.length > 4 ? [{ type: "Caption", value: `외 ${c.증거.length - 4}가지` } as Caption] : []),
+    { type: "Divider" },
+    { type: "Text", value: `📎 접수용 서류 ${c.준비서류.length}가지` },
+    ...줄(c.준비서류, 4),
+    ...(c.준비서류.length > 4 ? [{ type: "Caption", value: `외 ${c.준비서류.length - 4}가지` } as Caption] : []),
+    { type: "Caption", value: "빠진 게 있으면 접수가 되돌아옵니다 · 법률 절차 길잡이" },
+  ];
+  return {
+    widget: { type: "Card", size: "md", children },
+    copy_text: `**${제목} — 준비 체크리스트**\n증거: ${c.증거.slice(0, 3).join(" · ")}\n서류: ${c.준비서류.slice(0, 3).join(" · ")}\n— 법률 절차 길잡이`,
+  };
+}
+
+// ── 7) 기한 카드 — calculate_deadline용: 남은 날을 제일 크게 ──
+// 기한은 놓치면 권리가 사라진다. 계산식보다 'D-5'가 먼저 보여야 한다.
+export function buildDeadlineWidget(
+  종류: string,
+  r: { 마감일: string; 남은일수: number },
+  meta: { 기준일: string; 기간표시: string; 기산: string; 경고: string },
+): KakaoWidget {
+  const 지남 = r.남은일수 < 0;
+  const 오늘 = r.남은일수 === 0;
+  const 큰글씨 = 지남 ? `기한 지남 (${-r.남은일수}일)` : 오늘 ? "오늘이 마감일" : `D-${r.남은일수}`;
+  const 색: Badge["color"] = 지남 ? "danger" : r.남은일수 <= 7 ? "danger" : r.남은일수 <= 30 ? "warning" : "success";
+  const children: WidgetComponent[] = [
+    // 기한 종류는 내부 키(상속포기_한정승인)라 밑줄이 그대로 보인다. 읽는 모양으로 바꿔 준다.
+    { type: "Caption", value: `⏰ ${trunc(종류.replace(/_/g, " · "), 30)}` },
+    { type: "Title", value: 큰글씨, size: "lg" },
+    {
+      type: "Row",
+      gap: 8,
+      children: [
+        { type: "Badge", label: `마감 ${r.마감일}`, color: 색, variant: "solid" },
+        { type: "Badge", label: `${meta.기준일} + ${meta.기간표시}`, color: "secondary", variant: "soft" },
+      ],
+    },
+    { type: "Divider" },
+    { type: "Text", value: trunc(`기산점: ${meta.기산}`, 96), size: "sm" },
+    { type: "Text", value: trunc(`⚠️ ${meta.경고}`, 110), size: "sm", italic: true },
+    ...(지남 || r.남은일수 <= 30
+      ? [{ type: "Button", label: "📞 132 무료 법률상담", onClickAction: openUrl("tel:132"), style: "primary", block: true } as Button]
+      : []),
+    { type: "Caption", value: "중단·정지 사유로 달라질 수 있음 · 법률 절차 길잡이" },
+  ];
+  return {
+    widget: { type: "Card", size: "sm", children },
+    copy_text: `**${종류.replace(/_/g, " · ")}** — ${큰글씨}\n마감일 ${r.마감일} (${meta.기준일} + ${meta.기간표시})\n기산점: ${meta.기산}\n무료상담 132 — 법률 절차 길잡이`,
+  };
+}
+
 // ── 로컬 시각 미리보기 렌더러 — 카카오 프리뷰 권한이 없는 동안 팀·데모용 근사 렌더 ──
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

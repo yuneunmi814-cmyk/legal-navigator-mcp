@@ -595,10 +595,46 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     expect(j.name).toBe("calculate_deadline");
     expect(JSON.stringify(j.widget)).toMatch(/D-|기한 경과|마감일/);
   });
-  it("위젯 비대상 툴(get_procedure)은 그대로 마크다운", async () => {
+  it("get_procedure → 절차 카드(기한 배지 + 단계 번호)", async () => {
     const t = await callText("get_procedure", { topic: "임금체불" });
-    expect(() => JSON.parse(t)).toThrow(); // JSON 아님 = 텍스트 유지
-    expect(t).toContain("개별 법률 자문이 아닙니다");
+    const j = JSON.parse(t);
+    expect(j.name).toBe("get_procedure");
+    expect(j.widget.type).toBe("Card");
+    // 기한을 맨 위 배지로 — 놓치면 권리가 사라지는 정보라 본문에 묻으면 안 된다.
+    expect(JSON.stringify(j.widget)).toContain("⏰");
+    expect(JSON.stringify(j.widget)).toMatch(/"1\. /);
+    // 카드에는 요약만 담기므로 전문은 for_assistant로 넘어가야 모델이 답을 만든다.
+    expect(j.for_assistant).toContain("절차 전문");
+  });
+
+  it("get_checklist → 체크리스트 카드(증거·서류 두 묶음)", async () => {
+    const t = await callText("get_checklist", { topic: "임금체불" });
+    const j = JSON.parse(t);
+    expect(j.name).toBe("get_checklist");
+    expect(j.widget.type).toBe("Card");
+    const w = JSON.stringify(j.widget);
+    expect(w).toContain("모아둘 증거");
+    expect(w).toContain("접수용 서류");
+    expect(w).toContain("☐");
+  });
+
+  it("find_legal_aid → 전화 버튼이 tel: 스킴으로 나간다", async () => {
+    const t = await callText("find_legal_aid", { keyword: "체불" });
+    const j = JSON.parse(t);
+    expect(j.name).toBe("find_legal_aid");
+    const w = JSON.stringify(j.widget);
+    // 카카오 가이드 §3.3 — onClickAction.payload.target.url은 AppScheme도 받는다.
+    // 이 서비스 사용자가 제일 자주 막히는 "어디에 물어보나"를 한 번 눌러 해결한다.
+    expect(w).toContain("tel:");
+    expect(w).toContain("132");
+  });
+
+  it("[회귀] 기한 카드는 남은 일수를 제목 자리에 크게 둔다", async () => {
+    const t = await callText("calculate_deadline", { start_date: "2099-01-01", deadline_type: "상속포기_한정승인" });
+    const j = JSON.parse(t);
+    const title = j.widget.children.find((c: { type: string }) => c.type === "Title");
+    expect(title.size).toBe("lg");
+    expect(String(title.value)).toMatch(/^D-\d+$/);
   });
   it("[회귀] 프록시가 x-forwarded-proto:http를 보내도 배포 도메인 버튼 URL은 https", async () => {
     // kakaocloud 프록시 내부 홉 재현: 비로컬 호스트 + http 프로토 헤더 → 그래도 https여야 함(80포트 무응답·혼합콘텐츠)

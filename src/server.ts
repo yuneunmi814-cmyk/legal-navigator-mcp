@@ -39,7 +39,7 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
-import { buildFormWidget, buildTriageWidget, buildCalcWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, buildLegalAidWidget, buildProcedureWidget, buildChecklistWidget, buildDeadlineWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
 import { logCall, recentLogs, debugLogEnabled, setCollecting, collectingBy } from "./debugLog.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
@@ -181,6 +181,17 @@ const 계산보조지침 =
   "금액은 개략 추정이며 확정액이 아니라는 점을 밝힌다. " +
   "청구·신청 문서가 필요해지면 get_form_template을 호출한다 — 서식 본문을 직접 지어내지 말 것. " +
   "도구 이름을 사용자 화면에 노출하지 말 것.";
+
+const 지원보조지침 =
+  "무료 법률지원 카드가 화면에 이미 표시되고, 전화번호는 눌러서 바로 걸 수 있는 버튼으로 나가 있다. " +
+  "번호를 텍스트로 다시 읊지 말고, 이 사람 상황에 어디부터 걸어야 하는지 한 곳만 골라 이유와 함께 말한다. " +
+  "자격 요건은 기관이 최종 판단한다는 점을 밝히고, 자격이 안 될 것이라고 미리 단정하지 않는다. " +
+  "도구 이름을 사용자 화면에 노출하지 말 것.";
+
+const 체크리스트보조지침 =
+  "체크리스트 카드가 화면에 이미 표시된다. 항목을 다시 나열하지 말고, " +
+  "이 중 사용자가 지금 당장 확보하기 어려워 보이는 것 한두 가지를 짚어 대안(발급처·대체 증거)을 알려준다. " +
+  "서류가 준비되면 get_form_template을 호출한다. 도구 이름을 사용자 화면에 노출하지 말 것.";
 
 /**
  * 확인 질문 한 개. 주제가 259개라 질문을 손으로 쓸 수 없어 데이터에서 만든다.
@@ -674,6 +685,11 @@ export function createServer(baseUrl?: string): McpServer {
       }
       const shown = matched.slice(0, 8);
       const more = matched.length > 8 ? `\n\n_(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)_` : "";
+      if (widgetsOn()) {
+        return {
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildLegalAidWidget(kw, matched, HOTLINES), name: "find_legal_aid", for_assistant: `${지원보조지침}\n\n[전체 목록]\n${shown.map(detail).join("\n\n")}` }) }],
+        };
+      }
       const text = `## 🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
       return { content: [{ type: "text", text: withDisclaimer(text) }] };
     },
@@ -690,11 +706,17 @@ export function createServer(baseUrl?: string): McpServer {
       inputSchema: { topic: z.enum(TOPIC_KEYS).describe(TOPIC_DESC) },
       annotations: { title: "절차 안내", ...READONLY },
     },
-    async ({ topic }) => ({
+    async ({ topic }) => {
       // 절차를 본 다음 대개 서식이 필요해진다. 어떤 서식인지 키를 함께 주지 않으면
       // 모델이 서식을 직접 지어내는 쪽으로 샌다 — 진행 지침에 키와 호출 시점을 싣는다.
-      content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }],
-    }),
+      const p = PROCEDURES[topic];
+      if (widgetsOn() && p) {
+        return {
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p), name: "get_procedure", for_assistant: `${진단보조지침(topic)}\n\n[절차 전문]\n${절차텍스트(topic)}` }) }],
+        };
+      }
+      return { content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }] };
+    },
   );
 
   server.registerTool(
@@ -726,6 +748,11 @@ export function createServer(baseUrl?: string): McpServer {
         ...c.준비서류.map((s) => `- [ ] ${s}`),
       ].join("\n");
       // 준비서류를 확인한 사용자의 다음 행동은 거의 서식 작성이다. 여기서 키를 놓치면 흐름이 끊긴다.
+      if (widgetsOn()) {
+        return {
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildChecklistWidget(PROCEDURES[topic]?.제목 ?? topic, c), name: "get_checklist", for_assistant: `${체크리스트보조지침}\n${진단보조지침(topic)}\n\n[전체 목록]\n${text}` }) }],
+        };
+      }
       return { content: [{ type: "text", text: withDisclaimer(text) + 지침주석(진단보조지침(topic)) }] };
     },
   );
@@ -1103,10 +1130,11 @@ export function createServer(baseUrl?: string): McpServer {
       const 기간표시 = rule.기간.년 ? `${rule.기간.년}년` : rule.기간.월 ? `${rule.기간.월}개월` : `${rule.기간.일}일`;
       const status = r.남은일수 < 0 ? `⛔ 기한 경과 (${-r.남은일수}일 지남)` : r.남은일수 === 0 ? "⚠️ 오늘이 마감일" : `⏳ D-${r.남은일수} (${r.남은일수}일 남음)`;
       if (widgetsOn()) {
-        const kw = buildCalcWidget(`⏰ ${deadline_type}`, {
-          결과: `${r.마감일} · ${status}`,
-          계산식: `기준일 ${start_date} + ${기간표시}`,
-          비고: `기산점: ${rule.기산} / ${rule.경고}`,
+        const kw = buildDeadlineWidget(deadline_type, r, {
+          기준일: start_date,
+          기간표시,
+          기산: rule.기산,
+          경고: rule.경고,
         });
         // 기한은 놓치면 권리가 사라진다 — 남은 일수를 흐리게 말하지 않도록 따로 못 박는다.
         return {
@@ -2309,8 +2337,40 @@ app.get("/widgets/:kind", (req, res) => {
   } else if (kind === "calc") {
     built = buildCalcWidget("퇴직금", calcSeverance(100_000, 1095)); // 일평균 10만원(월 300), 3년 재직
     heading = "월급 300에 3년 일했는데 퇴직금 얼마예요?";
+  } else if (kind === "aid") {
+    const kw = safeInput((req.query.q as string) || "체불");
+    const matched = SUPPORT_PROGRAMS.filter((x) => x.명칭.includes(kw) || x.대상.includes(kw) || x.내용.includes(kw) || x.키워드.some((k) => k.includes(kw) || kw.includes(k)));
+    built = buildLegalAidWidget(kw, matched.length ? matched : SUPPORT_PROGRAMS.slice(0, 3), HOTLINES);
+    heading = "변호사 살 돈이 없어요";
+  } else if (kind === "procedure") {
+    const t = (req.query.topic as string) || "임금체불";
+    const p2 = PROCEDURES[t];
+    if (!p2) {
+      res.status(404).type("text/plain; charset=utf-8").send("주제 키를 확인하세요 (?topic=주제키)");
+      return;
+    }
+    built = buildProcedureWidget(p2);
+    heading = "임금체불 신고 절차 알려줘";
+  } else if (kind === "checklist") {
+    const t = (req.query.topic as string) || "임금체불";
+    const c = CHECKLISTS[t];
+    if (!c) {
+      res.status(404).type("text/plain; charset=utf-8").send("주제 키를 확인하세요 (?topic=주제키)");
+      return;
+    }
+    built = buildChecklistWidget(PROCEDURES[t]?.제목 ?? t, c);
+    heading = "뭘 챙겨가야 해요?";
+  } else if (kind === "deadline") {
+    const rule = DEADLINES["상속포기_한정승인"];
+    const r = rule ? calcDeadline("2026-08-20", rule.기간) : null;
+    if (!r || !rule) {
+      res.status(404).type("text/plain; charset=utf-8").send("기한 예시를 만들 수 없습니다");
+      return;
+    }
+    built = buildDeadlineWidget("상속포기_한정승인", r, { 기준일: "2026-08-20", 기간표시: "3개월", 기산: rule.기산, 경고: rule.경고 });
+    heading = "8월 20일에 알았는데 언제까지예요?";
   } else {
-    res.status(404).type("text/plain; charset=utf-8").send("지원: /widgets/form · /widgets/triage · /widgets/calc");
+    res.status(404).type("text/plain; charset=utf-8").send("지원: /widgets/form · triage · calc · aid · procedure · checklist · deadline");
     return;
   }
   if (req.query.json) {
