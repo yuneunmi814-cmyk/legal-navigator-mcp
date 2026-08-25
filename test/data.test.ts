@@ -184,7 +184,7 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(259);
+    expect(TOPIC_KEYS.length).toBe(263);
     expect(CATEGORIES.length).toBe(57);
     expect(FORM_KEYS.length).toBe(114);
     expect(GLOSSARY.length).toBe(125);
