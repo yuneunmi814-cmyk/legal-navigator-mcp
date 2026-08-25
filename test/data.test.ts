@@ -86,7 +86,11 @@ describe("데이터 정합성", () => {
     }
     // 개인 간 계약서·다기관 공통 서식 등 단일 제출처를 정할 수 없는 서식은 의도적 제외
     const unmapped = FORM_KEYS.filter((k) => !FORM_TOPIC[k]);
-    expect(unmapped.sort()).toEqual(["금전소비대차계약서", "분쟁조정_신청서", "지식재산_경고장", "채무변제확인서"]);
+    expect(unmapped.sort()).toEqual([
+      "국선대리인선임신청서", "금전소비대차계약서", "분쟁조정_신청서", "상고장",
+      "상소권회복청구서", "정식재판청구권회복청구서", "지식재산_경고장",
+      "채무변제확인서", "항소이유서", "헌법소원심판청구서",
+    ]);
     expect(FORM_TOPIC.피해구제신청_개요).toBe("피해금환급절차");
   });
 
@@ -184,9 +188,9 @@ describe("데이터 정합성", () => {
   });
 
   it("규모 스냅샷(회귀 감지)", () => {
-    expect(TOPIC_KEYS.length).toBe(263);
+    expect(TOPIC_KEYS.length).toBe(267);
     expect(CATEGORIES.length).toBe(57);
-    expect(FORM_KEYS.length).toBe(114);
+    expect(FORM_KEYS.length).toBe(121);
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });

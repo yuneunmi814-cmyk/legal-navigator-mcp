@@ -1036,4 +1036,14 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(저장된.endsWith("…")).toBe(true);
     delete process.env.DEBUG_LOG;
   });
+  // 카카오 개발가이드 §5.3 — 주민등록번호 등 6종을 '요구'하지 않는다.
+  // 서식 본문의 [______] 빈칸은 종이에 직접 적는 칸이지, 채팅에서 받아낼 값이 아니다.
+  it("서식 응답은 민감번호를 묻지 말라고 어시스턴트에게 지시한다", async () => {
+    for (const form of ["개명허가_신청서", "상속포기심판청구서"]) {
+      const text = await callText("get_form_template", { form });
+      expect(text, form).toContain("주민등록번호·운전면허번호·여권번호");
+      expect(text, form).toContain("묻지도, 받아 적지도");
+    }
+  });
+
 });
