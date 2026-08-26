@@ -39,7 +39,7 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
-import { buildFormWidget, buildTriageWidget, buildCalcWidget, buildLegalAidWidget, buildProcedureWidget, buildChecklistWidget, buildDeadlineWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl } from "./widgets.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, buildLegalAidWidget, buildProcedureWidget, buildChecklistWidget, buildDeadlineWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl, type 판례요약 } from "./widgets.js";
 import { logCall, recentLogs, debugLogEnabled, setCollecting, collectingBy } from "./debugLog.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
@@ -92,6 +92,18 @@ const READONLY = {
   idempotentHint: true,
   openWorldHint: false,
 };
+
+// 주제에 수록된 판례를 배지 한 줄로 요약. 요지는 넘기지 않는다(결론 단정 방지 — 위젯 쪽 주석 참고).
+function 판례요약of(topic: string): 판례요약 | undefined {
+  const arr = PRECEDENTS[topic];
+  if (!arr?.length) return undefined;
+  const 최고심 = arr.some((p) => p.법원.includes("대법원"))
+    ? "대법원"
+    : arr.some((p) => p.법원.includes("헌법재판소"))
+      ? "헌법재판소"
+      : "하급심";
+  return { n: arr.length, 최고심 };
+}
 
 const 항목값 = ["체불임금", "퇴직금", "주휴수당", "지연이자", "셀프등기절감액", "상속등기비용"] as const;
 const TOPIC_DESC = "주제 키. 카테고리: 노동·주택임대차·돈거래·소비자·교통사고·형사·민사절차. 모르면 search_topics로 먼저 확인(query 없이 호출하면 전체 목록).";
@@ -570,7 +582,7 @@ export function createServer(baseUrl?: string): McpServer {
       // 위젯을 반환하면 이 아래 마크다운은 모델에게 가지 않는다. 그래서 진행 지침을
       // for_assistant로 함께 실어 보낸다 — 이게 없으면 모델이 서식 존재를 모른 채 답한다.
       if (widgetsOn()) {
-        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
+        const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 }, 판례요약of(top));
         return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage", for_assistant: 진단보조지침(top) }) }] };
       }
       // 사용자에게는 주제 '키'가 아니라 제목을 보여준다. 키는 `외국인근로자_임금체불`처럼
@@ -712,7 +724,7 @@ export function createServer(baseUrl?: string): McpServer {
       const p = PROCEDURES[topic];
       if (widgetsOn() && p) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p), name: "get_procedure", for_assistant: `${진단보조지침(topic)}\n\n[절차 전문]\n${절차텍스트(topic)}` }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p, 판례요약of(topic)), name: "get_procedure", for_assistant: `${진단보조지침(topic)}\n\n[절차 전문]\n${절차텍스트(topic)}` }) }],
         };
       }
       return { content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }] };
@@ -2332,7 +2344,7 @@ app.get("/widgets/:kind", (req, res) => {
       return;
     }
     const p = PROCEDURES[top];
-    built = buildTriageWidget(q, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 });
+    built = buildTriageWidget(q, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 }, 판례요약of(top));
     heading = q;
   } else if (kind === "calc") {
     built = buildCalcWidget("퇴직금", calcSeverance(100_000, 1095)); // 일평균 10만원(월 300), 3년 재직
@@ -2349,7 +2361,7 @@ app.get("/widgets/:kind", (req, res) => {
       res.status(404).type("text/plain; charset=utf-8").send("주제 키를 확인하세요 (?topic=주제키)");
       return;
     }
-    built = buildProcedureWidget(p2);
+    built = buildProcedureWidget(p2, 판례요약of(t));
     heading = "임금체불 신고 절차 알려줘";
   } else if (kind === "checklist") {
     const t = (req.query.topic as string) || "임금체불";

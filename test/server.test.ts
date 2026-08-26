@@ -557,6 +557,23 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
   beforeAll(() => { process.env.WIDGETS = "on"; });
   afterAll(() => { delete process.env.WIDGETS; });
 
+  // 판례 배지는 '판단이 있다'는 신호까지만 준다. 요지를 실으면 "나도 이기겠네"로 읽히고,
+  // 이 서비스는 사건의 결론을 단정하지 않기로 되어 있다.
+  it("판례 배지 — 법원 종류를 정확히 구분하고 요지는 싣지 않는다", async () => {
+    const 기대: [string, RegExp][] = [
+      ["임금체불", /대법원 판단 \d+건/],
+      ["직장내괴롭힘", /하급심 판례 \d+건/],     // 서울남부지법만 수록 — 대법원이라고 하면 거짓말이다
+      ["검사불기소항고", /헌법재판소 판단 \d+건/], // 헌재는 하급심이 아니다
+    ];
+    for (const [topic, re] of 기대) {
+      const w = JSON.parse(await callText("get_procedure", { topic }));
+      expect(JSON.stringify(w.widget), topic).toMatch(re);
+    }
+    // 판례가 없는 주제엔 배지가 붙지 않는다
+    const 없음 = JSON.parse(await callText("get_procedure", { topic: "허위조작정보피해" }));
+    expect(JSON.stringify(없음.widget)).not.toContain("⚖️");
+  });
+
   it("get_form_template → {widget, copy_text, name} JSON 카드", async () => {
     const t = await callText("get_form_template", { form: "금전소비대차계약서" });
     const j = JSON.parse(t);
@@ -1103,5 +1120,6 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(t).toContain("6개월");
     expect(t).toContain("풍자");
   });
+
 
 });

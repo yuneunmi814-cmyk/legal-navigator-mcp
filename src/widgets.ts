@@ -54,6 +54,22 @@ const openUrl = (url: string, pcUrl?: string): ActionConfig => ({
 
 const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+// 판례 배지 — 요지는 싣지 않는다. 요지를 보여주면 "나도 이기겠네"로 읽히는데,
+// 이 서비스는 사건의 결론을 단정하지 않기로 되어 있다. '확인된 판단이 있다'는 신호까지만 준다.
+// 궁금한 사람은 물어보고, 그때 get_precedent가 요지를 준다.
+export type 판례요약 = { n: number; 최고심: "대법원" | "헌법재판소" | "하급심" };
+const 판례배지 = (p?: 판례요약): Badge[] =>
+  !p || p.n < 1
+    ? []
+    : [{
+        type: "Badge",
+        // 헌재는 하급심이 아니다. 지방·행정법원만 있는 주제는 '하급심'이라고 밝히는 편이 정직하다
+        // — 확정된 법리가 아니라는 뜻이 담기기 때문이다.
+        label: p.최고심 === "하급심" ? `⚖️ 하급심 판례 ${p.n}건` : `⚖️ ${p.최고심} 판단 ${p.n}건`,
+        color: p.최고심 === "하급심" ? "secondary" : "info",
+        variant: "soft",
+      }];
+
 // tools/call 위젯 응답 직렬화 — 가이드 별첨: text content에 JSON.stringify({widget, copy_text, name}).
 export function kakaoWidgetText(kw: KakaoWidget): string {
   return JSON.stringify(kw);
@@ -128,6 +144,7 @@ export function extractSubmitUrl(온라인접수: string): string | null {
 export function buildTriageWidget(
   situation: string,
   topic: { key: string; category: string; 제목: string; 기한: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
+  판례?: 판례요약,
 ): KakaoWidget {
   // 접수처 자유 텍스트에서 첫 URL/도메인 추출(있으면 버튼 제공)
   const url = extractSubmitUrl(topic.온라인접수);
@@ -143,6 +160,7 @@ export function buildTriageWidget(
       children: [
         { type: "Badge", label: topic.category, color: "secondary", variant: "soft" },
         { type: "Badge", label: `⏰ ${trunc(topic.기한, 28)}`, color: "danger", variant: "soft" },
+        ...판례배지(판례),
       ],
     },
     { type: "Divider" },
@@ -261,6 +279,7 @@ export function buildLegalAidWidget(
 // ── 5) 절차 카드 — get_procedure용: 기한을 맨 위에, 단계는 번호를 붙여 ──
 export function buildProcedureWidget(
   topic: { 제목: string; 기한: string; 관할기관: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
+  판례?: 판례요약,
 ): KakaoWidget {
   const url = extractSubmitUrl(topic.온라인접수);
   // 원본 단계는 "1) …"로 시작하는 것과 아닌 것이 섞여 있다. 한 곳에서 떼어내
@@ -280,6 +299,7 @@ export function buildProcedureWidget(
       children: [
         { type: "Badge", label: `⏰ ${trunc(topic.기한, 26)}`, color: "danger", variant: "soft" },
         { type: "Badge", label: trunc(topic.관할기관, 20), color: "secondary", variant: "soft" },
+        ...판례배지(판례),
       ],
     },
     { type: "Divider" },
