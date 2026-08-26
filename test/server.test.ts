@@ -557,6 +557,23 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
   beforeAll(() => { process.env.WIDGETS = "on"; });
   afterAll(() => { delete process.env.WIDGETS; });
 
+  // ListView 검증용(프리뷰 확인 전까지 find_legal_aid만). 스펙에서 벗어나면
+  // 카카오가 위젯을 통째로 버리므로, 형태만이라도 테스트로 붙잡아 둔다.
+  it("find_legal_aid ListView — 루트가 ListView이고 항목마다 tel:이 걸린다", async () => {
+    const w = JSON.parse(await callText("find_legal_aid", { keyword: "체불" }));
+    expect(w.widget.type).toBe("ListView");
+    expect(w.widget.children.length).toBeGreaterThan(0);
+    for (const it of w.widget.children) expect(it.type).toBe("ListViewItem");
+    const tels = w.widget.children
+      .map((it: any) => it.onClickAction?.payload?.target?.url)
+      .filter(Boolean);
+    expect(tels.length).toBeGreaterThan(0);
+    for (const u of tels) expect(String(u)).toMatch(/^tel:\d+$/);
+    // 카카오가 자동으로 넣는 자리 — 우리가 쓰면 안 된다
+    expect(JSON.stringify(w.widget)).not.toContain('"status"');
+    expect(w.copy_text).toBeTruthy();
+  });
+
   // 판례 배지는 '판단이 있다'는 신호까지만 준다. 요지를 실으면 "나도 이기겠네"로 읽히고,
   // 이 서비스는 사건의 결론을 단정하지 않기로 되어 있다.
   it("판례 배지 — 법원 종류를 정확히 구분하고 요지는 싣지 않는다", async () => {

@@ -39,7 +39,7 @@ import {
   calcCourtCost,
   calcDeadline,
 } from "./calc.js";
-import { buildFormWidget, buildTriageWidget, buildCalcWidget, buildLegalAidWidget, buildProcedureWidget, buildChecklistWidget, buildDeadlineWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl, type 판례요약 } from "./widgets.js";
+import { buildFormWidget, buildTriageWidget, buildCalcWidget, buildLegalAidWidget, buildLegalAidListView, buildProcedureWidget, buildChecklistWidget, buildDeadlineWidget, renderWidgetHtml, kakaoWidgetText, extractSubmitUrl, type 판례요약 } from "./widgets.js";
 import { logCall, recentLogs, debugLogEnabled, setCollecting, collectingBy } from "./debugLog.js";
 import { hwpxClientScript } from "./hwpx.js";
 import { bodyToParas, hwpxBuffer, docxBuffer, MIME, safeName } from "./formfile.js";
@@ -49,6 +49,12 @@ import { formLayoutClientScript, layoutParas } from "./formlayout.js";
 // 기본: 프로덕션 on / 테스트 off. WIDGETS=on|off 로 강제 가능(호출 시점 평가라 테스트에서 토글 가능).
 const widgetsOn = (): boolean =>
   process.env.WIDGETS === "on" || (process.env.WIDGETS !== "off" && process.env.NODE_ENV !== "test");
+
+// ⚠️ 프리뷰 검증용으로 켜둔 상태다. find_legal_aid 하나만 ListView로 나간다.
+// 스펙이 어긋나면 카카오가 위젯을 버리고 일반 텍스트로 처리하므로(가이드 §3.2.a),
+// 프리뷰에서 카드가 안 뜨면 ListView가 거부된 것 — 그때 이 함수만 false로 되돌린다.
+// 나머지 6종(서식·진단·계산·절차·체크리스트·기한)은 검증된 Card 그대로라 영향 없다.
+const listViewOn = (): boolean => process.env.LISTVIEW !== "off";
 
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
 const SVC = "법률 절차 길잡이(Legal Navigator)";
@@ -699,7 +705,7 @@ export function createServer(baseUrl?: string): McpServer {
       const more = matched.length > 8 ? `\n\n_(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)_` : "";
       if (widgetsOn()) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildLegalAidWidget(kw, matched, HOTLINES), name: "find_legal_aid", for_assistant: `${지원보조지침}\n\n[전체 목록]\n${shown.map(detail).join("\n\n")}` }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...(listViewOn() ? buildLegalAidListView : buildLegalAidWidget)(kw, matched, HOTLINES), name: "find_legal_aid", for_assistant: `${지원보조지침}\n\n[전체 목록]\n${shown.map(detail).join("\n\n")}` }) }],
         };
       }
       const text = `## 🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
@@ -2352,7 +2358,8 @@ app.get("/widgets/:kind", (req, res) => {
   } else if (kind === "aid") {
     const kw = safeInput((req.query.q as string) || "체불");
     const matched = SUPPORT_PROGRAMS.filter((x) => x.명칭.includes(kw) || x.대상.includes(kw) || x.내용.includes(kw) || x.키워드.some((k) => k.includes(kw) || kw.includes(k)));
-    built = buildLegalAidWidget(kw, matched.length ? matched : SUPPORT_PROGRAMS.slice(0, 3), HOTLINES);
+    const progs = matched.length ? matched : SUPPORT_PROGRAMS.slice(0, 3);
+    built = req.query.lv ? buildLegalAidListView(kw, progs, HOTLINES) : buildLegalAidWidget(kw, progs, HOTLINES);
     heading = "변호사 살 돈이 없어요";
   } else if (kind === "procedure") {
     const t = (req.query.topic as string) || "임금체불";

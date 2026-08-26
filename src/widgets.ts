@@ -35,7 +35,21 @@ export interface Card {
   children: WidgetComponent[];
   size?: "sm" | "md" | "lg" | "full";
 }
-export type WidgetRoot = Card;
+// ── ListView (검증 대기) ──────────────────────────────────────────
+// 카카오 가이드 §3.2.a: 스펙에 어긋나면 위젯이 조용히 사라지고 일반 텍스트로 처리된다.
+// 그래서 카드와 나란히 두고 환경변수로만 바꿔 끼운다 — 프리뷰에서 확인되면 그때 기본값으로.
+// ListViewItem의 onClickAction이 살아있다면 '기관을 눌러 바로 전화'가 되어 버튼보다 낫다.
+export interface ListViewItem {
+  type: "ListViewItem";
+  children: WidgetComponent[];
+  onClickAction?: ActionConfig;
+}
+export interface ListView {
+  type: "ListView";
+  children: ListViewItem[];
+  limit?: number | "auto";
+}
+export type WidgetRoot = Card | ListView;
 
 // 카카오 확정 봉투(개발가이드 §3) — 전체를 'widget'으로 감싸고, 카톡 공유용은 copy_text(간단 Markdown).
 export interface KakaoWidget {
@@ -276,6 +290,53 @@ export function buildLegalAidWidget(
   };
 }
 
+// ── 4-b) 지원처 ListView판 — 카드와 같은 데이터를 ListView로. 프리뷰 검증용.
+// 항목 자체를 눌러 전화가 걸리는지가 확인 포인트다(Card판은 버튼으로 건다).
+export function buildLegalAidListView(
+  keyword: string | undefined,
+  programs: { 명칭: string; 대상: string; 내용: string; 연락: string }[],
+  hotlines: { 번호: string; 기관: string; 용도: string }[],
+): KakaoWidget {
+  const 줄: ListViewItem[] = [];
+  const 담긴tel = new Set<string>();
+  for (const p of programs.slice(0, 5)) {
+    const 전화 = 전화추출(p.연락);
+    if (전화) 담긴tel.add(전화.tel);
+    줄.push({
+      type: "ListViewItem",
+      ...(전화 ? { onClickAction: openUrl(`tel:${전화.tel}`) } : {}),
+      children: [
+        {
+          type: "Col",
+          gap: 2,
+          children: [
+            { type: "Text", value: trunc(p.명칭, 40) },
+            { type: "Caption", value: trunc(전화 ? `${전화.표시} · ${p.대상}` : p.대상, 62) },
+          ],
+        },
+      ],
+    });
+  }
+  if (!담긴tel.has("132")) {
+    줄.push({
+      type: "ListViewItem",
+      onClickAction: openUrl("tel:132"),
+      children: [
+        {
+          type: "Col",
+          gap: 2,
+          children: [
+            { type: "Text", value: "대한법률구조공단 무료 법률상담" },
+            { type: "Caption", value: "132 · 소득 무관, 누구나" },
+          ],
+        },
+      ],
+    });
+  }
+  const card = buildLegalAidWidget(keyword, programs, hotlines);
+  return { widget: { type: "ListView", limit: "auto", children: 줄 }, copy_text: card.copy_text };
+}
+
 // ── 5) 절차 카드 — get_procedure용: 기한을 맨 위에, 단계는 번호를 붙여 ──
 export function buildProcedureWidget(
   topic: { 제목: string; 기한: string; 관할기관: string; 단계: string[]; 온라인접수: string; 근거법?: string[] },
@@ -409,6 +470,16 @@ function nodeHtml(c: WidgetComponent): string {
 
 export function renderWidgetHtml(kw: KakaoWidget, heading: string): string {
   const card = kw.widget;
+  const body =
+    card.type === "ListView"
+      ? card.children
+          .map((it) => {
+            const url = (it.onClickAction?.payload as { target?: { url?: string } } | undefined)?.target?.url;
+            const inner = it.children.map(nodeHtml).join("");
+            return url ? `<a class="w-li" href="${esc(String(url))}">${inner}</a>` : `<div class="w-li">${inner}</div>`;
+          })
+          .join("")
+      : card.children.map(nodeHtml).join("");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>위젯 미리보기 · ${esc(heading)}</title>
 <style>
@@ -430,13 +501,15 @@ body{margin:0;background:#aebdcb;font-family:"Apple SD Gothic Neo",Pretendard,sa
 .w-div{border:none;border-top:1px solid #eceff3;margin:2px 0}
 .w-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .w-col{display:flex;flex-direction:column;gap:8px}
+.w-li{display:block;text-decoration:none;color:inherit;padding:11px 2px;border-bottom:1px solid #f0f2f5}
+.w-li:last-child{border-bottom:none}
 .copy{width:min(94vw,380px);font-size:11.5px;color:#3d4a57;background:#ffffffaa;border-radius:8px;padding:8px 12px;white-space:pre-wrap}
 .copy b{display:block;margin-bottom:3px}
 </style></head><body>
 <p class="note">⚠️ 로컬 근사 미리보기입니다 — 실제 렌더는 카카오 툴즈 프리뷰에서 확인 (ChatKit 스펙 기반 프로토타입)</p>
 <div class="chat">
   <div class="bubble-q">${esc(heading)}</div>
-  <div class="w-card">${card.children.map(nodeHtml).join("")}</div>
+  <div class="w-card">${body}</div>
 </div>
 ${kw.copy_text ? `<div class="copy"><b>📤 카톡 공유 시 copy_text:</b>${esc(kw.copy_text)}</div>` : ""}
 </body></html>`;
