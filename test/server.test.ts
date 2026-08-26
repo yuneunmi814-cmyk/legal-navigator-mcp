@@ -1082,4 +1082,26 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     }
   });
 
+  // 2026-07-07 시행 정보통신망법(허위조작정보)·경찰 교제폭력 용어. 라이브에서 셋 다 매칭 실패했었다.
+  it("최신 법률 용어가 매칭된다 — 가짜뉴스·허위조작정보·교제폭력 (8/26 구멍 메움)", async () => {
+    for (const q of ["누가 나에 대해 가짜뉴스를 퍼뜨렸어요", "허위조작정보로 피해를 봤어요"]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, q).not.toContain("찾지 못했습니다");
+      expect(t, q).toContain("허위조작정보피해");
+    }
+    for (const q of ["교제폭력을 당하고 있어요", "데이트폭력 신고하고 싶어요"]) {
+      const t = await callText("search_topics", { query: q });
+      expect(t, q).not.toContain("찾지 못했습니다");
+      expect(t, q).toMatch(/스토킹|폭행|협박|가정폭력/);
+    }
+  });
+
+  it("허위조작정보 주제는 법정 요건과 기한을 그대로 전한다", async () => {
+    const t = await callText("get_procedure", { topic: "허위조작정보피해" });
+    // 5배 가중배상은 요건 3개를 다 갖춘 '업으로 하는 게재자'에게만 — 일반 이용자에게 겁주면 안 된다.
+    expect(t).toContain("5배");
+    expect(t).toContain("6개월");
+    expect(t).toContain("풍자");
+  });
+
 });
