@@ -1165,4 +1165,37 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
   });
 
 
+  // 근로기준법 시행령 별표 1: 상시 4명 이하 사업장에는 제23조가 "제2항"만 적용되고
+  // 제28조(노동위 구제신청)는 목록에 없다. 5인 미만인데 부당해고 구제를 안내하면
+  // 그 사람은 노동위에 갔다가 각하된다 — 못 찾는 것보다 나쁜 오안내다.
+  it("5인 미만 신호가 있으면 부당해고가 아니라 규모 주제로 간다", async () => {
+    for (const q of [
+      "5인 미만 사업장인데 부당해고 당했어요",
+      "직원이 나 혼자인 가게에서 잘렸어요",
+      "상시 근로자 4명인데 해고됐어요",
+    ]) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain("5인 미만 사업장");
+    }
+    // 규모 신호가 없으면 기존 부당해고 경로가 그대로여야 한다(과잉 적용 방지)
+    for (const q of ["부당해고 당했어요", "회사에서 갑자기 해고 통보를 받았어요"]) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain("부당해고 구제");
+      expect(t, q).not.toContain("5인 미만 사업장 —");
+    }
+  });
+
+  it("근로계약서·주휴수당 발화가 새 주제로 도달한다", async () => {
+    const pairs: [string, string][] = [
+      ["근로계약서를 안 썼어요", "근로계약서"],
+      ["계약서를 못 받았어요", "근로계약서"],
+      ["주휴수당을 안 줘요", "주휴수당"],
+      ["주휴 안 주는데요", "주휴수당"],
+    ];
+    for (const [q, 기대] of pairs) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain(기대);
+    }
+  });
+
 });
