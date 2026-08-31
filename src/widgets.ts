@@ -56,6 +56,11 @@ export interface KakaoWidget {
   widget: WidgetRoot;
   copy_text?: string;
   name?: string; // 별첨 예시의 응답 name 필드(도구 식별)
+  // 카카오 스펙 밖 필드 — 렌더러는 무시하고 호스트 LLM만 읽는다.
+  // 서식 본문·작성요령을 여기 실어야 어시스턴트가 초안을 만들 수 있다.
+  // 빼면 카드는 뜨지만 모델이 서식 내용을 몰라 지어낸다(2026-08-31 라이브에서 실제로 그 상태였다).
+  // 2026-08-26 카카오 툴즈 프리뷰에서 이 필드가 있어도 카드가 정상 렌더되는 것을 확인했다.
+  for_assistant?: string;
 }
 
 // 버튼 URL 액션 — 카카오 확정 스펙: onClickAction.payload.target.url (+선택 pcUrl, PC 카카오톡용 대체 URL).

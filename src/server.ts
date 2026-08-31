@@ -593,7 +593,7 @@ export function createServer(baseUrl?: string): McpServer {
       // 위젯은 카드 자체가 최종 답변이므로 카카오 확정 봉투 필드만 보낸다.
       if (widgetsOn()) {
         const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 }, 판례요약of(top));
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage", for_assistant: 진단보조지침(top) }) }] };
       }
       // 사용자에게는 주제 '키'가 아니라 제목을 보여준다. 키는 `외국인근로자_임금체불`처럼
       // 언더바가 든 내부 식별자라 화면에 그대로 나가면 읽히지 않는다.
@@ -709,7 +709,7 @@ export function createServer(baseUrl?: string): McpServer {
       const more = matched.length > 8 ? `\n\n_(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)_` : "";
       if (widgetsOn()) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...(listViewOn() ? buildLegalAidListView : buildLegalAidWidget)(kw, matched, HOTLINES), name: "find_legal_aid" }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...(listViewOn() ? buildLegalAidListView : buildLegalAidWidget)(kw, matched, HOTLINES), name: "find_legal_aid", for_assistant: `무료 법률지원 카드가 화면에 이미 표시되고, 전화번호는 눌러서 바로 걸 수 있게 나가 있다. 번호를 텍스트로 다시 읊지 말고, 이 사람 상황에 어디부터 걸어야 하는지 한 곳만 골라 이유와 함께 말한다. 자격은 기관이 최종 판단한다는 점을 밝히고, 자격이 안 될 것이라고 미리 단정하지 않는다. 도구 이름은 노출하지 말 것.\n\n[전체 목록]\n${shown.map(detail).join("\n\n")}` }) }],
         };
       }
       const text = `## 🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
@@ -734,7 +734,7 @@ export function createServer(baseUrl?: string): McpServer {
       const p = PROCEDURES[topic];
       if (widgetsOn() && p) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p, 판례요약of(topic)), name: "get_procedure" }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p, 판례요약of(topic)), name: "get_procedure", for_assistant: `${진단보조지침(topic)}\n\n[절차 전문]\n${절차텍스트(topic)}` }) }],
         };
       }
       return { content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }] };
@@ -772,7 +772,7 @@ export function createServer(baseUrl?: string): McpServer {
       // 준비서류를 확인한 사용자의 다음 행동은 거의 서식 작성이다. 여기서 키를 놓치면 흐름이 끊긴다.
       if (widgetsOn()) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildChecklistWidget(PROCEDURES[topic]?.제목 ?? topic, c), name: "get_checklist" }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildChecklistWidget(PROCEDURES[topic]?.제목 ?? topic, c), name: "get_checklist", for_assistant: `${진단보조지침(topic)}\n\n[전체 목록]\n${text}` }) }],
         };
       }
       return { content: [{ type: "text", text: withDisclaimer(text) + 지침주석(진단보조지침(topic)) }] };
@@ -812,7 +812,7 @@ export function createServer(baseUrl?: string): McpServer {
       const submit = formSubmitInfo(form);
       // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·접수처·HWPX 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
       if (widgetsOn() && baseUrl) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl, submit ?? undefined), name: "get_form_template" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl, submit ?? undefined), name: "get_form_template", for_assistant: 작성보조지침(f) }) }] };
       }
       const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
       if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
@@ -935,7 +935,7 @@ export function createServer(baseUrl?: string): McpServer {
         return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
       }
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount", for_assistant: 계산보조지침 }) }] };
       }
       const text = [
         `## 🧮 ${a.item} 계산 결과`,
@@ -1117,7 +1117,7 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ claim_amount, parties, track, e_litigation }) => {
       const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost" }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost", for_assistant: 계산보조지침 }) }] };
       }
       const text = `## 🧮 소송비용(개략)\n\n- **결과**: ${r.결과}\n- **계산식**: ${r.계산식}\n\n> 💡 ${r.비고}`;
       return { content: [{ type: "text", text: withDisclaimer(text) + `
@@ -1165,6 +1165,10 @@ export function createServer(baseUrl?: string): McpServer {
               text: kakaoWidgetText({
                 ...kw,
                 name: "calculate_deadline",
+                // 기한은 놓치면 권리가 사라진다 — 남은 일수를 흐리게 말하지 않도록 못 박는다.
+                for_assistant:
+                  `${계산보조지침} 기한이 지났거나 임박했으면(D-30 이내) 그 사실을 첫 문장에서 분명히 말하고, ` +
+                  "지금 당장 할 수 있는 것 한 가지를 제시한다.",
               }),
             },
           ],
@@ -1363,6 +1367,20 @@ function 빈칸항목(bodyRaw: string): { named: string[]; blanks: number; circl
     });
   }
   return { named: [...named], blanks, circles };
+}
+
+// 위젯 카드에는 서식 본문이 없다 → 본문·작성요령·지침을 for_assistant로 동봉해야
+// 호스트 AI가 사용자가 말한 사실로 채운 초안을 만들 수 있다.
+function 작성보조지침(f: { 본문: string; 작성요령: string[] }): string {
+  return [
+    작성지침(f),
+    "",
+    "[서식 본문 — 초안 작성용 원문. 위젯 카드가 이미 표시되므로 전문을 다시 출력하지 말고, 채운 초안 또는 질문만 제시]",
+    f.본문,
+    "",
+    "[작성요령]",
+    ...f.작성요령.map((x) => `- ${x}`),
+  ].join("\n");
 }
 
 function 작성지침(f: { 본문: string }): string {

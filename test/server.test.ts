@@ -621,7 +621,11 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
   it("위젯 봉투는 카카오 확정 필드만 보낸다", async () => {
     const t = await callText("get_form_template", { form: "금전소비대차계약서" });
     const j = JSON.parse(t);
-    expect(Object.keys(j).sort()).toEqual(["copy_text", "name", "widget"]);
+    // 카카오 공식 3종(widget·copy_text·name) + for_assistant.
+    // for_assistant는 가이드에 없는 확장이지만 2026-08-26 카카오 툴즈 프리뷰에서
+    // 카드가 정상 렌더되는 것을 실제 화면으로 확인했다. 이게 빠지면 카드는 떠도
+    // 호스트 AI가 서식 본문을 몰라 초안을 지어낸다.
+    expect(Object.keys(j).sort()).toEqual(["copy_text", "for_assistant", "name", "widget"]);
     expect(j.widget.type).toBe("Card");
     expect(t).toContain("민감번호는 채팅에 쓰지 말고");
   });
@@ -637,7 +641,7 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     ];
     for (const [name, args] of samples) {
       const j = JSON.parse(await callText(name, args));
-      expect(Object.keys(j).sort(), name).toEqual(["copy_text", "name", "widget"]);
+      expect(Object.keys(j).sort(), name).toEqual(["copy_text", "for_assistant", "name", "widget"]);
     }
   });
   it("triage → 진단 카드(기한 배지·name)", async () => {
@@ -669,7 +673,7 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     expect(JSON.stringify(j.widget)).toContain("⏰");
     expect(JSON.stringify(j.widget)).toMatch(/"1\. /);
     // 가이드에 없는 최상위 필드를 추가하지 않는다.
-    expect(Object.keys(j).sort()).toEqual(["copy_text", "name", "widget"]);
+    expect(Object.keys(j).sort()).toEqual(["copy_text", "for_assistant", "name", "widget"]);
   });
 
   it("get_checklist → 체크리스트 카드(증거·서류 두 묶음)", async () => {
