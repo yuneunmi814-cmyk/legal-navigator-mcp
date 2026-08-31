@@ -60,7 +60,12 @@ async function fetchJson(url: string): Promise<any> {
 
 /** "제10조의4" → "001004" (조 4자리 + 가지 2자리) */
 function buildJO(article: string): string | undefined {
-  const m = normalizeLawName(article).match(/^제(\d+)조(?:의(\d+))?$/);
+  // API의 JO는 '조' 단위까지만 받는다(4자리 조 + 2자리 가지번호).
+  // 우리는 "제44조의10제3항"처럼 항까지 적어두는 경우가 있는데, 항을 떼지 않으면
+  // 정규식이 통째로 실패해 MISMATCH로 떨어졌다 — 조문이 없는 게 아니라 못 읽은 것이다
+  // (2026-08-31 리포트의 정보통신망법 3건이 그 경우였다).
+  const 조까지 = normalizeLawName(article).replace(/제\d+항.*$/, "");
+  const m = 조까지.match(/^제(\d+)조(?:의(\d+))?$/);
   if (!m) return undefined;
   return String(m[1]).padStart(4, "0") + String(m[2] ?? 0).padStart(2, "0");
 }
@@ -110,7 +115,9 @@ async function checkStatute(s: { 법령: string; 조문: string; 요지: string 
       return { 법령: s.법령, 조문: s.조문, verdict: "ARTICLE_NOT_FOUND", 정식제명, note: "장·절 제목만 반환됨(해당 조문 없음)" };
     }
     // 가지조문 오조회 방지 — 돌아온 본문이 정말 그 조문인지 표기로 재확인
-    const expected = normalizeLawName(s.조문);
+    // 본문은 "제44조의7(불법정보 및 …)"처럼 조 단위로 시작한다. 우리가 항까지 적어둔 경우
+    // ("제44조의7제2항") 그대로 비교하면 영원히 안 맞는다 — 조 단위로 잘라서 대조한다.
+    const expected = normalizeLawName(s.조문).replace(/제\d+항.*$/, "");
     const one = units.find((u) => normalizeLawName(u.조문내용 ?? "").startsWith(expected));
     if (!one) {
       const body = String(units[0].조문내용 ?? "").trim();
