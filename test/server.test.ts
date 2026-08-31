@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app } from "../src/server.js";
-import { logCall, recentLogs, clearLogs } from "../src/debugLog.js";
+import { clearLogs } from "../src/debugLog.js";
 import { TOPIC_KEYS, FORM_KEYS, FORMS, PROCEDURES } from "../src/data/index.js";
 
 let base = "";
@@ -272,6 +272,8 @@ describe("핵심 동작", () => {
     const a = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     const b = await (await fetch(`${base}/forms/${encodeURIComponent(FORM_KEYS[0])}`)).text();
     expect(a).toBe(b); // 동일 요청 → 동일 응답(상태 없음)
+    expect(a).toContain("입력한 내용은 이 탭에만 임시 저장되고 채팅·서버로 전송되지 않습니다");
+    expect(a).toContain("민감번호는 카카오톡 대화에 쓰지 말고");
   });
   // 위젯의 "한글 서식 바로 받기"가 이 경로를 부른다. 여기가 죽으면 카톡에서
   // 버튼을 눌러도 아무 일이 안 일어난다 — 사용자는 이유를 알 수 없다.
@@ -426,10 +428,15 @@ describe("가족·지인 간 차용증 없는 대여('떼인 돈')", () => {
     expect(t).not.toContain("신고·대응을 고민하는 쪽이라면");
     expect(t).toContain("단순 채무불이행은 사기죄가 아니라 민사");
   });
-  it("search_topics query 없이 호출 → 전체 주제 목록 (구 list_topics 통합)", async () => {
+  it("search_topics query 없이 호출 → 짧은 분야 색인 (결과 최소화)", async () => {
     const t = await callText("search_topics", {});
-    expect(t).toContain("주제 목록");
-    expect(t).toContain("### 노동");
+    expect(t).toContain("어떤 분야를 찾으세요?");
+    expect(t).toContain("**노동**");
+    expect(t).not.toContain("`임금체불`");
+
+    const labor = await callText("search_topics", { category: "노동" });
+    expect(labor).toContain("노동 주제");
+    expect(labor).toContain("`임금체불`");
   });
   // 동의어가 낱말 사이에 말이 끼면 안 걸리던 문제. "계속 찾아"는 "계속 집 앞에 찾아와요"도
   // 잡으라고 적어둔 말인데 붙어 있을 때만 재고 있었다 — 스토킹 신고의 가장 전형적인 문장이
@@ -560,18 +567,28 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
   // ListView 검증용(프리뷰 확인 전까지 find_legal_aid만). 스펙에서 벗어나면
   // 카카오가 위젯을 통째로 버리므로, 형태만이라도 테스트로 붙잡아 둔다.
   it("find_legal_aid ListView — 루트가 ListView이고 항목마다 tel:이 걸린다", async () => {
+    process.env.LISTVIEW = "on";
+    try {
+      const w = JSON.parse(await callText("find_legal_aid", { keyword: "체불" }));
+      expect(w.widget.type).toBe("ListView");
+      expect(w.widget.children.length).toBeGreaterThan(0);
+      for (const it of w.widget.children) expect(it.type).toBe("ListViewItem");
+      const tels = w.widget.children
+        .map((it: any) => it.onClickAction?.payload?.target?.url)
+        .filter(Boolean);
+      expect(tels.length).toBeGreaterThan(0);
+      for (const u of tels) expect(String(u)).toMatch(/^tel:\d+$/);
+      expect(JSON.stringify(w.widget)).not.toContain('"status"');
+      expect(w.copy_text).toBeTruthy();
+    } finally {
+      delete process.env.LISTVIEW;
+    }
+  });
+
+  it("find_legal_aid는 Preview 검증 전까지 기본 Card로 내보낸다", async () => {
+    delete process.env.LISTVIEW;
     const w = JSON.parse(await callText("find_legal_aid", { keyword: "체불" }));
-    expect(w.widget.type).toBe("ListView");
-    expect(w.widget.children.length).toBeGreaterThan(0);
-    for (const it of w.widget.children) expect(it.type).toBe("ListViewItem");
-    const tels = w.widget.children
-      .map((it: any) => it.onClickAction?.payload?.target?.url)
-      .filter(Boolean);
-    expect(tels.length).toBeGreaterThan(0);
-    for (const u of tels) expect(String(u)).toMatch(/^tel:\d+$/);
-    // 카카오가 자동으로 넣는 자리 — 우리가 쓰면 안 된다
-    expect(JSON.stringify(w.widget)).not.toContain('"status"');
-    expect(w.copy_text).toBeTruthy();
+    expect(w.widget.type).toBe("Card");
   });
 
   // 판례 배지는 '판단이 있다'는 신호까지만 준다. 요지를 실으면 "나도 이기겠네"로 읽히고,
@@ -601,13 +618,27 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     expect(btn.onClickAction.payload.target.url).toContain("/forms/");
     expect(t).not.toContain('"status"'); // 카카오 전용 프로퍼티 미사용
   });
-  it("get_form_template 위젯 응답에 for_assistant(지침+서식 본문) 동봉 — 카드만으론 초안 불가하므로", async () => {
+  it("위젯 봉투는 카카오 확정 필드만 보낸다", async () => {
     const t = await callText("get_form_template", { form: "금전소비대차계약서" });
     const j = JSON.parse(t);
-    expect(j.for_assistant).toContain("어시스턴트 작성 보조 지침");
-    expect(j.for_assistant).toContain("서식 본문"); // 호스트 AI가 초안을 만들 원문
-    expect(j.for_assistant).toContain("[성명]");
-    expect(j.widget.type).toBe("Card"); // 봉투 구조는 그대로
+    expect(Object.keys(j).sort()).toEqual(["copy_text", "name", "widget"]);
+    expect(j.widget.type).toBe("Card");
+    expect(t).toContain("민감번호는 채팅에 쓰지 말고");
+  });
+  it("모든 위젯 응답에 미지원 최상위 필드가 없다", async () => {
+    const samples: Array<[string, Record<string, unknown>]> = [
+      ["triage", { situation: "임금체불 3개월" }],
+      ["find_legal_aid", { keyword: "체불" }],
+      ["get_procedure", { topic: "임금체불" }],
+      ["get_checklist", { topic: "임금체불" }],
+      ["calculate_amount", { item: "퇴직금", daily_avg_wage: 100000, tenure_days: 1095 }],
+      ["calculate_court_cost", { claim_amount: 10000000, parties: 2, track: "소액" }],
+      ["calculate_deadline", { start_date: "2026-06-23", deadline_type: "상속포기_한정승인" }],
+    ];
+    for (const [name, args] of samples) {
+      const j = JSON.parse(await callText(name, args));
+      expect(Object.keys(j).sort(), name).toEqual(["copy_text", "name", "widget"]);
+    }
   });
   it("triage → 진단 카드(기한 배지·name)", async () => {
     const t = await callText("triage", { situation: "임금체불 3개월" });
@@ -637,8 +668,8 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     // 기한을 맨 위 배지로 — 놓치면 권리가 사라지는 정보라 본문에 묻으면 안 된다.
     expect(JSON.stringify(j.widget)).toContain("⏰");
     expect(JSON.stringify(j.widget)).toMatch(/"1\. /);
-    // 카드에는 요약만 담기므로 전문은 for_assistant로 넘어가야 모델이 답을 만든다.
-    expect(j.for_assistant).toContain("절차 전문");
+    // 가이드에 없는 최상위 필드를 추가하지 않는다.
+    expect(Object.keys(j).sort()).toEqual(["copy_text", "name", "widget"]);
   });
 
   it("get_checklist → 체크리스트 카드(증거·서류 두 묶음)", async () => {
@@ -1076,7 +1107,7 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     delete process.env.DEBUG_LOG;
   });
 
-  it("매칭 실패(no_match)만 자유 텍스트를 남기고, 그것도 마스킹해서 남긴다", async () => {
+  it("매칭 실패(no_match)여도 사용자 원문을 남기지 않는다", async () => {
     process.env.DEBUG_LOG = "on";
     clearLogs();
     const 원문 = "즐거운 캠핑 장비 추천 부탁 010-1234-5678 me@example.com";
@@ -1085,27 +1116,15 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
 
     const [최근] = (await logsJson()).entries;
     expect(최근.flag).toBe("no_match");
-    const 저장된 = 최근.args.situation as string;
-    expect(저장된).toContain("캠핑 장비"); // 실패 원인을 볼 수 있게 문장 자체는 남되
-    expect(저장된).toContain("[전화번호]"); // 연락처·이메일은 가려서 남는다
-    expect(저장된).toContain("[이메일]");
-    expect(저장된).not.toContain("1234-5678");
-    expect(저장된).not.toContain("me@example.com");
+    expect(최근.argKeys).toEqual(["situation"]);
+    expect(최근.args).toBeUndefined();
+    expect(JSON.stringify(최근)).not.toContain("캠핑 장비");
+    expect(JSON.stringify(최근)).not.toContain("1234-5678");
+    expect(await logsHtml()).toContain("입력값 미저장");
 
     delete process.env.DEBUG_LOG;
   });
 
-  it("자유 텍스트는 200자에서 잘린다", () => {
-    // MCP 인자는 zod가 이미 200자로 막고 있어 도구 호출로는 긴 값이 들어올 수 없다.
-    // 그래도 저장 단계에서 한 번 더 자른다 — 인자 제한이 느슨해져도 로그는 길어지지 않도록.
-    process.env.DEBUG_LOG = "on";
-    clearLogs();
-    logCall({ tool: "triage", args: { situation: "가".repeat(500) }, ms: 1, ok: true, flag: "no_match" });
-    const 저장된 = recentLogs(1)[0].args!.situation as string;
-    expect(저장된.length).toBeLessThanOrEqual(201); // 200자 + 잘렸음을 알리는 '…'
-    expect(저장된.endsWith("…")).toBe(true);
-    delete process.env.DEBUG_LOG;
-  });
   // 카카오 개발가이드 §5.3 — 주민등록번호 등 6종을 '요구'하지 않는다.
   // 서식 본문의 [______] 빈칸은 종이에 직접 적는 칸이지, 채팅에서 받아낼 값이 아니다.
   it("서식 응답은 민감번호를 묻지 말라고 어시스턴트에게 지시한다", async () => {

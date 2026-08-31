@@ -56,9 +56,6 @@ export interface KakaoWidget {
   widget: WidgetRoot;
   copy_text?: string;
   name?: string; // 별첨 예시의 응답 name 필드(도구 식별)
-  // 카카오 스펙 외 추가 필드 — 렌더러는 무시하고 호스트 LLM만 읽는 어시스턴트용 지침(서식 초안 작성 보조).
-  // ⚠️ 카카오 가이드 §3에 없는 필드이므로 프리뷰(preview-chatgpt.kakao.com)에서 카드 렌더 정상 여부 필수 확인.
-  for_assistant?: string;
 }
 
 // 버튼 URL 액션 — 카카오 확정 스펙: onClickAction.payload.target.url (+선택 pcUrl, PC 카카오톡용 대체 URL).
@@ -123,6 +120,7 @@ export function buildFormWidget(
       : []),
     { type: "Button", label: "📄 한글 서식 바로 받기 (.hwpx)", onClickAction: openUrl(hwpUrl), style: "secondary", block: true },
     ...(submit ? [{ type: "Caption", value: trunc(`🏛️ 제출: ${submit.관할}`, 70) } as Caption] : []),
+    { type: "Caption", value: "🔒 민감번호는 채팅에 쓰지 말고 열린 문서에서 직접 입력하세요." },
     { type: "Caption", value: "일반 정보이며 개별 법률 자문이 아닙니다 · 법률 절차 길잡이" },
   ];
   return {
@@ -130,6 +128,7 @@ export function buildFormWidget(
     copy_text:
       `${f.제목}\n빈칸을 탭해서 바로 채우고 인쇄·PDF·한글(.hwpx)·워드(.docx)로 받기: ${previewUrl}` +
       (submit ? `\n제출처: ${submit.관할}` : "") +
+      `\n🔒 주민등록번호·계좌번호 등은 채팅에 쓰지 말고 문서에서 직접 입력하세요.` +
       `\n— 법률 절차 길잡이`,
   };
 }

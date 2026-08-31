@@ -1,5 +1,8 @@
 # 제출 패키지 — 카카오 AGENTIC PLAYER 10
 
+> ⚠️ 이 문서의 아래 내용은 **예선 등록 기록**입니다. 2026-08-31 본선용 서버·임시등록·메타정보·Preview 절차는
+> [KAKAO_TOOLS_FINAL.md](./KAKAO_TOOLS_FINAL.md)를 따릅니다. **예선용 `legal-navigator-full`은 유지하고, 본선용 `legal-navigator-kakaotools`만 재배포합니다.**
+
 ## ⏰ 일정 (이게 제일 중요)
 
 | | 날짜 |

@@ -50,14 +50,13 @@ import { formLayoutClientScript, layoutParas } from "./formlayout.js";
 const widgetsOn = (): boolean =>
   process.env.WIDGETS === "on" || (process.env.WIDGETS !== "off" && process.env.NODE_ENV !== "test");
 
-// ⚠️ 프리뷰 검증용으로 켜둔 상태다. find_legal_aid 하나만 ListView로 나간다.
-// 스펙이 어긋나면 카카오가 위젯을 버리고 일반 텍스트로 처리하므로(가이드 §3.2.a),
-// 프리뷰에서 카드가 안 뜨면 ListView가 거부된 것 — 그때 이 함수만 false로 되돌린다.
-// 나머지 6종(서식·진단·계산·절차·체크리스트·기한)은 검증된 Card 그대로라 영향 없다.
-const listViewOn = (): boolean => process.env.LISTVIEW !== "off";
+// ListView는 카카오 Preview에서 실제 렌더링을 확인한 뒤에만 켠다.
+// 미검증 실험을 프로덕션 기본값으로 두면 JSON 형식 하나가 어긋났을 때 전체가
+// 일반 텍스트로 떨어진다(개발가이드 §3.2.a). 기본은 이미 검증된 Card.
+const listViewOn = (): boolean => process.env.LISTVIEW === "on";
 
 // 서비스명 — PlayMCP 개발가이드: description에 영문/국문 병기 서비스명 포함 필수
-const SVC = "법률 절차 길잡이(Legal Navigator)";
+const SVC = "Legal Navigator(법률 절차 길잡이)";
 
 // 자유 텍스트 입력 안전화 — ①과도한 길이로 응답이 부풀지 않게 자르고, ②응답에 그대로 반사될 때
 // 진행 지침 주석(<!-- ... -->)의 경계를 사용자 입력으로 위조해 끼어들 수 없도록 주석 마커를 무력화한다.
@@ -77,13 +76,13 @@ const SERVER_INSTRUCTIONS =
   "사용자가 번호로 답하면 그 뜻으로 받아들이고 되묻지 마세요. " +
   // 3번은 복잡한 사안에 모자라고, 상한만 늘리면 다시 우다다 묻는다. 개수가 아니라
   // '답이 갈리는 지점인가'를 기준으로 준다.
-  "질문은 **3~5번 사이**에서 사안에 맞게 조절하되, **답이 절차·기한·서식을 실제로 가르는 것만** 물으세요. " +
-  "궁금해서 묻는 질문, 이미 알 수 있는 것을 되묻는 질문은 하지 마세요. 5번을 채울 필요는 없습니다. " +
+  "질문은 **2~3번**으로 끝내고, 복잡한 사안도 4번을 넘지 않습니다. " +
+  "**답이 절차·기한·서식을 실제로 가르는 것만** 묻고, 이미 알 수 있거나 모르더라도 안내할 수 있는 값은 되묻지 마세요. " +
   // 인터뷰의 끝을 눈에 보이는 신호로 만든다. 끝을 모호하게 두면 모델이 계속 묻거나
   // 반대로 말로만 정리하고 끝내버린다(2026-08-22 프리뷰 확인).
   "마지막 질문은 반드시 \"마지막으로\"로 시작하세요. 사용자가 그 질문에 답하면 인터뷰는 끝입니다. " +
   // 전체 흐름을 한 줄로 고정한다. 이게 없으면 매 호출마다 답변 모양이 달라진다.
-  "[전체 흐름] 상황 접수 → 확인 질문 3~5회 → **마무리: 상황 정리 한 줄 + 관련 법령 + 접수처 + 서식 카드(get_form_template 호출)**. " +
+  "[전체 흐름] 상황 접수 → 확인 질문 2~3회 → **마무리: 상황 정리 한 줄 + 관련 법령 + 접수처 + 서식 카드(get_form_template 호출)**. " +
   // 한 대화에서 진단은 한 번뿐이다. 인터뷰 중 재진단은 맥락을 잃는다.
   "**진단(triage)은 대화 한 건에 한 번만 합니다.** 인터뷰를 진행하는 중에는 다시 호출하지 마세요 — " +
   "요약해서 다시 넣는 과정에서 처음 말한 맥락이 사라져 전혀 다른 주제가 나옵니다. 사용자가 새로운 문제를 꺼냈을 때만 다시 진단합니다. " +
@@ -200,17 +199,6 @@ const 계산보조지침 =
   "청구·신청 문서가 필요해지면 get_form_template을 호출한다 — 서식 본문을 직접 지어내지 말 것. " +
   "도구 이름을 사용자 화면에 노출하지 말 것.";
 
-const 지원보조지침 =
-  "무료 법률지원 카드가 화면에 이미 표시되고, 전화번호는 눌러서 바로 걸 수 있는 버튼으로 나가 있다. " +
-  "번호를 텍스트로 다시 읊지 말고, 이 사람 상황에 어디부터 걸어야 하는지 한 곳만 골라 이유와 함께 말한다. " +
-  "자격 요건은 기관이 최종 판단한다는 점을 밝히고, 자격이 안 될 것이라고 미리 단정하지 않는다. " +
-  "도구 이름을 사용자 화면에 노출하지 말 것.";
-
-const 체크리스트보조지침 =
-  "체크리스트 카드가 화면에 이미 표시된다. 항목을 다시 나열하지 말고, " +
-  "이 중 사용자가 지금 당장 확보하기 어려워 보이는 것 한두 가지를 짚어 대안(발급처·대체 증거)을 알려준다. " +
-  "서류가 준비되면 get_form_template을 호출한다. 도구 이름을 사용자 화면에 노출하지 말 것.";
-
 /**
  * 확인 질문 한 개. 주제가 259개라 질문을 손으로 쓸 수 없어 데이터에서 만든다.
  *
@@ -241,7 +229,7 @@ function 확인질문(topic: string, p: { 기한: string }, c?: { 증거?: strin
 }
 
 /**
- * 모델에게만 주는 지시 블록. 텍스트 응답에는 위젯의 `for_assistant` 같은 통로가 없어
+ * 모델에게만 주는 지시 블록. 텍스트 응답은 본문 끝에 이 블록을 붙여
  * 본문 끝에 HTML 주석으로 붙인다. 예전처럼 `get_procedure("임금체불")`를 사용자 문장
  * 속에 흘리지 않고 전부 여기로 모은다.
  */
@@ -326,9 +314,8 @@ function 진단보조지침(topic: string): string {
 }
 
 /**
- * 텍스트 응답용 포장. `for_assistant` 필드가 없는 경로에서만 쓴다 —
- * 위젯 응답은 지침을 필드로 직접 넘기므로, 거기까지 주석 마커를 붙이면
- * 모델이 "주석이니 무시해도 되는 것"으로 읽을 수 있다.
+ * 위젯을 쓰지 않는 텍스트 응답에 모델용 진행 지침을 붙인다.
+ * 위젯 응답은 카드 자체가 최종 답변이므로 카카오 확정 필드만 보낸다.
  */
 function 지침주석(본문: string): string {
   return `\n\n<!-- 진행 지침 (사용자에게 읽어주지 말 것)\n${본문}\n-->`;
@@ -491,14 +478,32 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ query, category }) => {
       const q = query ? safeInput(query) : query;
       if (!q) {
-        const list = category ? TOPICS.filter((t) => t.category === category) : TOPICS;
+        // 전체 주제를 한 번에 써 내려가면 카톡에서 수십 화면이 되고,
+        // 가이드의 "result는 최소한"에도 어긋난다. 처음에는 분야 색인만,
+        // 분야를 고른 뒤에만 그 안의 주제를 보여준다.
+        if (!category) {
+          const counts = new Map<string, number>();
+          for (const t of TOPICS) counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
+          const index = CATEGORIES.map((c) => `- **${c}** — ${counts.get(c) ?? 0}개`).join("\n");
+          return {
+            content: [{
+              type: "text",
+              text: withDisclaimer(
+                `## 🗂️ 어떤 분야를 찾으세요?\n\n${index}\n\n` +
+                `궁금한 분야 하나를 고르거나, 상황을 편하게 한 문장으로 말해주세요.`,
+              ) +
+              `\n\n<!-- 진행 지침: 사용자가 분야를 고르면 그 값으로 search_topics의 category를 넣어 한 번만 다시 호출한다. 도구 이름은 노출하지 말 것. -->`,
+            }],
+          };
+        }
+        const list = TOPICS.filter((t) => t.category === category);
         const byCat = new Map<string, string[]>();
         for (const t of list) {
           if (!byCat.has(t.category)) byCat.set(t.category, []);
           byCat.get(t.category)!.push(`- \`${t.key}\` — ${t.제목}`);
         }
         const catBody = [...byCat.entries()].map(([c, items]) => `### ${c}\n${items.join("\n")}`).join("\n\n");
-        return { content: [{ type: "text", text: withDisclaimer(`## 🗂️ 주제 목록 (${list.length}개)\n\n${catBody}`) }] };
+        return { content: [{ type: "text", text: withDisclaimer(`## 🗂️ ${category} 주제 (${list.length}개)\n\n${catBody}`) }] };
       }
       const ranked = rankTopics(q).slice(0, 12);
       if (!ranked.length) {
@@ -585,11 +590,10 @@ export function createServer(baseUrl?: string): McpServer {
       const p = PROCEDURES[top];
       const c = CHECKLISTS[top];
       // 카카오 툴즈: 진단 카드 위젯(기한 배지·첫 단계·접수처 버튼).
-      // 위젯을 반환하면 이 아래 마크다운은 모델에게 가지 않는다. 그래서 진행 지침을
-      // for_assistant로 함께 실어 보낸다 — 이게 없으면 모델이 서식 존재를 모른 채 답한다.
+      // 위젯은 카드 자체가 최종 답변이므로 카카오 확정 봉투 필드만 보낸다.
       if (widgetsOn()) {
         const kw = buildTriageWidget(situation, { key: top, category: p.category, 제목: p.제목, 기한: p.기한, 단계: p.단계, 온라인접수: p.온라인접수, 근거법: p.근거법 }, 판례요약of(top));
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage", for_assistant: 진단보조지침(top) }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...kw, name: "triage" }) }] };
       }
       // 사용자에게는 주제 '키'가 아니라 제목을 보여준다. 키는 `외국인근로자_임금체불`처럼
       // 언더바가 든 내부 식별자라 화면에 그대로 나가면 읽히지 않는다.
@@ -705,7 +709,7 @@ export function createServer(baseUrl?: string): McpServer {
       const more = matched.length > 8 ? `\n\n_(외 ${matched.length - 8}개 — 키워드를 더 좁혀보세요)_` : "";
       if (widgetsOn()) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...(listViewOn() ? buildLegalAidListView : buildLegalAidWidget)(kw, matched, HOTLINES), name: "find_legal_aid", for_assistant: `${지원보조지침}\n\n[전체 목록]\n${shown.map(detail).join("\n\n")}` }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...(listViewOn() ? buildLegalAidListView : buildLegalAidWidget)(kw, matched, HOTLINES), name: "find_legal_aid" }) }],
         };
       }
       const text = `## 🤝 '${kw}' 관련 무료 법률지원·구제 (${matched.length}개)\n\n${shown.map(detail).join("\n\n")}${more}${꼬리}`;
@@ -730,7 +734,7 @@ export function createServer(baseUrl?: string): McpServer {
       const p = PROCEDURES[topic];
       if (widgetsOn() && p) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p, 판례요약of(topic)), name: "get_procedure", for_assistant: `${진단보조지침(topic)}\n\n[절차 전문]\n${절차텍스트(topic)}` }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildProcedureWidget(p, 판례요약of(topic)), name: "get_procedure" }) }],
         };
       }
       return { content: [{ type: "text", text: withDisclaimer(절차텍스트(topic)) + 지침주석(진단보조지침(topic)) }] };
@@ -768,7 +772,7 @@ export function createServer(baseUrl?: string): McpServer {
       // 준비서류를 확인한 사용자의 다음 행동은 거의 서식 작성이다. 여기서 키를 놓치면 흐름이 끊긴다.
       if (widgetsOn()) {
         return {
-          content: [{ type: "text", text: kakaoWidgetText({ ...buildChecklistWidget(PROCEDURES[topic]?.제목 ?? topic, c), name: "get_checklist", for_assistant: `${체크리스트보조지침}\n${진단보조지침(topic)}\n\n[전체 목록]\n${text}` }) }],
+          content: [{ type: "text", text: kakaoWidgetText({ ...buildChecklistWidget(PROCEDURES[topic]?.제목 ?? topic, c), name: "get_checklist" }) }],
         };
       }
       return { content: [{ type: "text", text: withDisclaimer(text) + 지침주석(진단보조지침(topic)) }] };
@@ -806,10 +810,9 @@ export function createServer(baseUrl?: string): McpServer {
         return { content: [{ type: "text", text: withDisclaimer(`'${form}' 서식이 없습니다.`) }] };
       }
       const submit = formSubmitInfo(form);
-      // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·접수처·txt 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
-      // for_assistant: 카드에는 본문이 없어 호스트 AI가 초안을 못 만들므로, 렌더러가 무시하는 별도 필드로 본문+지침 동봉.
+      // 카카오 툴즈: 서식 카드 위젯(빈칸 채우기·접수처·HWPX 버튼) — 본문·작성요령은 미리보기 페이지가 담당.
       if (widgetsOn() && baseUrl) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl, submit ?? undefined), name: "get_form_template", for_assistant: 작성보조지침(f) }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildFormWidget(form, f, baseUrl, submit ?? undefined), name: "get_form_template" }) }] };
       }
       const head = [`## 📝 ${f.제목}`, `**용도**: ${f.용도}`];
       if (f.공식양식) head.push(`**📄 공식 양식 받는 곳**: ${f.공식양식}`);
@@ -932,7 +935,7 @@ export function createServer(baseUrl?: string): McpServer {
         return { isError: true, content: [{ type: "text", text: withDisclaimer((e as Error).message) }] };
       }
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount", for_assistant: 계산보조지침 }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget(a.item, r!), name: "calculate_amount" }) }] };
       }
       const text = [
         `## 🧮 ${a.item} 계산 결과`,
@@ -1114,7 +1117,7 @@ export function createServer(baseUrl?: string): McpServer {
     async ({ claim_amount, parties, track, e_litigation }) => {
       const r = calcCourtCost(claim_amount, parties, track, e_litigation ?? false);
       if (widgetsOn()) {
-        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost", for_assistant: 계산보조지침 }) }] };
+        return { content: [{ type: "text", text: kakaoWidgetText({ ...buildCalcWidget("소송비용(개략)", r), name: "calculate_court_cost" }) }] };
       }
       const text = `## 🧮 소송비용(개략)\n\n- **결과**: ${r.결과}\n- **계산식**: ${r.계산식}\n\n> 💡 ${r.비고}`;
       return { content: [{ type: "text", text: withDisclaimer(text) + `
@@ -1162,9 +1165,6 @@ export function createServer(baseUrl?: string): McpServer {
               text: kakaoWidgetText({
                 ...kw,
                 name: "calculate_deadline",
-                for_assistant:
-                  `${계산보조지침} 기한이 지났거나 임박했으면(D-30 이내) 그 사실을 첫 문장에서 분명히 말하고, ` +
-                  "지금 당장 할 수 있는 것 한 가지를 제시한다.",
               }),
             },
           ],
@@ -1381,19 +1381,6 @@ function 작성지침(f: { 본문: string }): string {
   ].join("\n");
 }
 
-// 위젯 카드에는 서식 본문이 없어 호스트 AI가 초안을 못 만든다 → 본문·작성요령·지침을 for_assistant로 동봉
-function 작성보조지침(f: { 본문: string; 작성요령: string[] }): string {
-  return [
-    작성지침(f),
-    "",
-    "[서식 본문 — 초안 작성용 원문. 위젯 카드가 이미 표시되므로 전문을 다시 출력하지 말고, 채운 초안 또는 질문만 제시]",
-    f.본문,
-    "",
-    "[작성요령]",
-    ...f.작성요령.map((s) => `- ${s}`),
-  ].join("\n");
-}
-
 // 관공서 서식의 '○○' 자리(○○지방법원·○○경찰서장·○○고용센터장 등) — 기관·법원 이름이 들어갈 곳.
 // 단, 대괄호 안의 ○는 건드리지 않는다: 그 대괄호가 이미 통째로 빈칸 하나이고,
 // 안의 ○는 쓰는 법을 보여주는 예시다([○○은행 등]·[○○지방법원 20○○가소○○○○ 판결정본]).
@@ -1600,6 +1587,8 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 /* 안내문은 한 덩어리 문장으로 흐르게 — flex로 두면 조각조각 칼럼처럼 쪼개져 읽기 어려움 */
 .hint{display:block;margin:16px 2px 8px;font-size:12.5px;color:var(--ink2);line-height:1.9;word-break:keep-all}
 .hint .k{background:var(--fld);border:1px dashed var(--fld-line);color:var(--fld-ink);border-radius:6px;padding:1px 7px;font-weight:700;white-space:nowrap}
+.privacy{margin:10px 2px 12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--accent) 8%,var(--paper));border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));font-size:12.5px;color:var(--ink2);line-height:1.65;word-break:keep-all}
+.privacy b{color:var(--ink)}
 .doc{background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 40px -22px rgba(0,0,0,.3);padding:clamp(18px,5vw,34px);word-break:keep-all;overflow-wrap:anywhere;font-size:15px;line-height:1.95;}
 /* 관공서 배치 — 내보내기(layoutParas)와 같은 판정을 화면에도 그대로 입힌다. */
 .doc .ln{white-space:pre-wrap}
@@ -1657,7 +1646,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 @page{size:A4;margin:20mm 20mm 22mm}
 @media print{
   html,body{background:#fff;color:#000}
-  .bar,.hint,.tips,.foot,.hd{display:none!important}
+  .bar,.hint,.privacy,.tips,.foot,.hd{display:none!important}
   .wrap{max-width:none;padding:0;margin:0}
   .doc{border:none;box-shadow:none;border-radius:0;padding:0;font-size:11.5pt;line-height:1.75;
        font-family:"Batang","바탕","Nanum Myeongjo","Apple SD Gothic Neo","Malgun Gothic",serif;
@@ -1696,6 +1685,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
     ${official ? `<p class="official"><b>공식 양식 받는 곳</b> · ${official}</p>` : ""}
   </div>
   <div class="hint"><span class="k">[빈칸]</span> 과 <span class="k">○○</span>(법원·기관 이름) 을 탭해 입력하고, <b>☐</b> 는 탭하면 체크됩니다. 경위·사유처럼 길게 쓰는 항목은 <b>아래 넓은 칸</b>에 적으면 됩니다. 다 채우면 <b>인쇄·PDF로 저장</b>하거나, <b>서식 다운로드</b>에서 작성한 내용을 파일로 받아 이어서 편집할 수 있습니다. 한글(<b>.hwpx</b> — 한글 2014 이상)·워드(<b>.docx</b>)·마크다운·텍스트 중에 고르시면 됩니다.</div>
+  <div class="privacy">🔒 <b>입력한 내용은 이 탭에만 임시 저장되고 채팅·서버로 전송되지 않습니다.</b> 주민등록번호·계좌번호 등 민감번호는 카카오톡 대화에 쓰지 말고 이 문서에서만 직접 입력하세요.</div>
   <div class="doc" id="doc">${body}</div>
   <div class="tips">
     <h2>작성요령</h2>
@@ -2184,8 +2174,8 @@ function renderAdminLogsHtml(): string {
       : l.flag === "no_match"
         ? `<span class="warn">매칭실패</span>`
         : `<span class="ok">성공</span>`;
-    const free = l.error ?? (l.args ? JSON.stringify(l.args) : "");
-    return `<tr><td>${htmlEscape(l.ts)}</td><td>${htmlEscape(l.tool)}</td><td>${badge}</td><td>${l.ms}ms</td><td>${htmlEscape(l.argKeys.join(", "))}</td><td class="detail">${htmlEscape(free)}</td></tr>`;
+    const detail = l.error ?? (l.flag === "no_match" ? "입력값 미저장" : "");
+    return `<tr><td>${htmlEscape(l.ts)}</td><td>${htmlEscape(l.tool)}</td><td>${badge}</td><td>${l.ms}ms</td><td>${htmlEscape(l.argKeys.join(", "))}</td><td class="detail">${htmlEscape(detail)}</td></tr>`;
   };
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2211,10 +2201,10 @@ ${수집스위치안내()}
 <div class="stat"><b>${noMatches.length}</b>주제 매칭 실패</div>
 </div>
 <div class="tablewrap">
-<table><thead><tr><th>시각</th><th>도구</th><th>결과</th><th>소요</th><th>인자 키</th><th>매칭실패 내용 / 에러</th></tr></thead>
+<table><thead><tr><th>시각</th><th>도구</th><th>결과</th><th>소요</th><th>인자 키</th><th>상세</th></tr></thead>
 <tbody>${logs.map(row).join("") || `<tr><td colspan="6">아직 기록된 호출이 없습니다.</td></tr>`}</tbody></table>
 </div>
-<p class="sub" style="margin-top:16px">사용자가 쓴 문장은 ‘매칭실패’ 줄에만 남고, 그것도 주민번호·전화번호·이메일을 가리고 200자로 잘라 저장합니다. 정상 호출은 인자의 키 이름만 남습니다.</p>
+<p class="sub" style="margin-top:16px">사용자가 쓴 문장·이름·연락처 등 인자 값은 저장하지 않습니다. 매칭 실패여도 도구명과 인자 키만 남습니다.</p>
 </div></body></html>`;
 }
 
@@ -2341,7 +2331,7 @@ app.get("/widgets/:kind", (req, res) => {
     }
     const sub = formSubmitInfo(key);
     built = buildFormWidget(key, f, baseUrl, sub ?? undefined);
-    heading = "차용증 양식 좀 만들어줘";
+    heading = `${f.제목.replace(/\s*\(.*?\)\s*$/, "")} 양식 보여줘`;
   } else if (kind === "triage") {
     const q = safeInput((req.query.q as string) || "월급을 3개월째 못 받았어요");
     const top = rankTopics(q)[0];
