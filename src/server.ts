@@ -1391,7 +1391,10 @@ function 작성지침(f: { 본문: string }): string {
     (circles ? `${named.length || blanks ? " " : ""}(○○ = 법원·기관 이름 ${circles}곳)` : "");
   return [
     "### 🤖 어시스턴트 작성 보조 지침",
-    "- 사용자가 이 대화에서 **이미 말한 사실**(이름·날짜·금액·주소 등)이 있으면 해당 [빈칸]을 채운 **초안**을 만들어 보여주세요. 모르는 칸은 [빈칸] 그대로 두고, 필요한 정보를 2~3개씩 질문하세요.",
+    // 순서를 못 박지 않으면 모델이 초안을 건너뛰고 "문서에서 직접 입력하세요"로 넘어간다
+    // (2026-08-31 프리뷰에서 "홍길동, 300만원"을 말했는데도 초안을 안 보여줬다).
+    "- 사용자가 이 대화에서 **이미 말한 사실**(이름·날짜·금액·주소 등)을 하나라도 말했다면, **먼저 그 값을 채운 서식 초안을 코드블록으로 화면에 보여주세요.** 링크로 넘기기 전에 초안부터 보여주는 것이 순서입니다.",
+    "- 모르는 칸은 [빈칸] 그대로 두고, 초안을 보여준 다음에 필요한 정보를 2~3개씩 질문하세요.",
     "- 사실을 지어내거나 법률적 주장·문구를 창작하지 마세요 — 사용자가 말한 사실만 옮겨 적습니다.",
     "- ⛔ 주민등록번호·운전면허번호·여권번호·외국인등록번호·카드번호·계좌번호는 묻지도, 받아 적지도, 화면에 다시 쓰지도 마세요. 그 칸은 [빈칸]으로 남기고 '인쇄한 뒤 종이에 직접 적으세요'라고 안내합니다. 사용자가 먼저 말하더라도 초안에 옮기지 마세요.",
     "- 초안은 '예시'임을 밝히고, 최종 확인·수정·인쇄는 사용자 본인이 미리보기 링크에서 직접 하도록 안내하세요.",
@@ -1420,14 +1423,25 @@ function 대괄호밖(s: string, fn: (seg: string) => string): string {
 //  · ☐ → 탭 토글 체크박스.  (사용자가 본인 사실만 입력 — AI 대필 아님)
 const wideCls = (minw: number) => (minw >= 20 ? " wide" : "");
 
+// 입력칸 최소 너비 — ch는 숫자 '0' 폭 기준이라 한글에서 절반 이하로 잡힌다.
+// 그래서 "입사일"(3자)이 4ch(≈30px) 칸에 들어가 앞 글자 위로 흘러넘쳤다
+// (2026-08-31 프리뷰·로컬 양쪽에서 "본인옯사일"로 겹쳐 보이는 것을 확인).
+// 한글·한자는 1em, 그 외는 0.55em으로 재서 em으로 준다.
+function 칸너비em(라벨: string, 밑줄개수 = 0): number {
+  const 글자 = [...라벨].reduce((a, c) => a + (/[가-힣ㄱ-ㅎ一-龥ぁ-ヿ]/.test(c) ? 1 : 0.55), 0);
+  // 좌우 안쪽 여백(0.8em)까지 더해야 글자가 칸 밖으로 흘러 앞말을 덮지 않는다.
+  // 브라우저가 한글 폭을 실제보다 좁게 재는 환경이 있어, 자동 크기에 맡기지 않고 못 박는다.
+  return Math.min(Math.max(Math.max(글자, 밑줄개수 * 0.55) + 0.8, 4), 26);
+}
+
 function 본문HTML(bodyRaw: string): string {
   let s = htmlEscape(bodyRaw);
   // 0) ○○ → 입력 필드. 반드시 대괄호 처리보다 먼저 — 나중에 하면 생성된 필드의
   //    data-ph 속성값 안에 든 ○까지 다시 치환해 HTML이 깨진다.
   s = 대괄호밖(s, (seg) =>
     seg.replace(동그라미자리, (m) => {
-      const minw = Math.min(Math.max(m.length, 4), 28);
-      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw}ch"></span>`;
+      const minw = 칸너비em(m);
+      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${m}" style="min-width:${minw.toFixed(1)}em"></span>`;
     }),
   );
   // 넓은 칸(20ch 이상)은 좁은 화면에서 제 줄을 차지하게 표시해 둔다.
@@ -1438,8 +1452,8 @@ function 본문HTML(bodyRaw: string): string {
   //    data-ph 안의 밑줄까지 치환한다(예: 항소장 "[○○지방법원 20 가단 ____ … 선고]").
   s = 대괄호밖(s, (seg) =>
     seg.replace(/_{3,}/g, (m) => {
-      const minw = Math.min(Math.max(m.length, 4), 28);
-      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw}ch"></span>`;
+      const minw = 칸너비em("", m.length);
+      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw.toFixed(1)}em"></span>`;
     }),
   );
   // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
@@ -1465,8 +1479,8 @@ function 본문HTML(bodyRaw: string): string {
       return `<span class="fld big" contenteditable="true" role="textbox" data-ph="${ph}"></span>`;
     }
     const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
-    const minw = Math.min(Math.max(width, 4), 28);
-    return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw}ch"></span>`;
+    const minw = 칸너비em(ph, width);
+    return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw.toFixed(1)}em"></span>`;
   });
   // 4) 줄 단위로 감싸며 관공서 배치를 화면에도 입힌다.
   //    내려받는 파일에만 배치가 걸리고 화면은 왼쪽 정렬 평문이라, 받아보기 전엔 결과를 알 수 없었다
@@ -1621,7 +1635,7 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
    좌우 여백도 1px은 너무 붙는다 — 앞 글자와 칸이 한 덩어리로 읽힌다.
    max-width는 여백을 빼고 잡아야 한다. 100%로 두면 넓은 칸이 좌우 여백만큼
    문서 밖으로 밀려 가로 스크롤이 생긴다(320px 전수 검사에서 3종 적발). */
-.fld{display:inline-block;max-width:calc(100% - 6px);border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 5px;margin:0 3px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
+.fld{display:inline-block;max-width:calc(100% - 10px);white-space:nowrap;border:none;border-bottom:1.6px solid var(--fld-line);background:var(--fld);color:var(--fld-ink);border-radius:4px 4px 0 0;padding:0 6px;margin:0 5px;min-height:1.5em;line-height:1.5;font-weight:600;outline:none;vertical-align:baseline;font-family:inherit;}
 .fld:focus{box-shadow:0 0 0 2px color-mix(in srgb,var(--fld-line) 45%,transparent);background:color-mix(in srgb,var(--fld) 70%,var(--paper));}
 .fld:empty::before{content:attr(data-ph);color:var(--ph);font-weight:400}
 /* 긴 서술형 칸 — 항목명(예: "- 경위:")은 윗줄에 그대로 두고, 입력은 아래 전용 칸에서.

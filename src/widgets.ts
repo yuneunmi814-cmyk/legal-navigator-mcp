@@ -74,6 +74,16 @@ const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n 
 // 이 서비스는 사건의 결론을 단정하지 않기로 되어 있다. '확인된 판단이 있다'는 신호까지만 준다.
 // 궁금한 사람은 물어보고, 그때 get_precedent가 요지를 준다.
 export type 판례요약 = { n: number; 최고심: "대법원" | "헌법재판소" | "하급심" };
+// 배지에 넣을 짧은 기한 — "임금채권 소멸시효 3년 — 받지 못한 임금이…"에서 "소멸시효 3년"만 남긴다.
+// 앞 낱말을 붙이면 "해고일부 3개월"처럼 잘린 말이 나온다. 숫자+단위만 남긴다 —
+// 무엇의 기한인지는 바로 아래 본문 줄이 전부 말해 준다.
+const 짧은기한 = (기한: string): string => {
+  const m = /(\d+)\s*(년|개월|일|주|시간)/.exec(기한);
+  if (m) return `${m[1]}${m[2]}`;
+  const 앞 = 기한.replace(/^★\s*/, "").split(/[—·(]/)[0].trim();
+  return 앞.length <= 8 ? 앞 : "기한 있음";
+};
+
 const 판례배지 = (p?: 판례요약): Badge[] =>
   !p || p.n < 1
     ? []
@@ -81,7 +91,7 @@ const 판례배지 = (p?: 판례요약): Badge[] =>
         type: "Badge",
         // 헌재는 하급심이 아니다. 지방·행정법원만 있는 주제는 '하급심'이라고 밝히는 편이 정직하다
         // — 확정된 법리가 아니라는 뜻이 담기기 때문이다.
-        label: p.최고심 === "하급심" ? `⚖️ 하급심 판례 ${p.n}건` : `⚖️ ${p.최고심} 판단 ${p.n}건`,
+        label: p.최고심 === "하급심" ? `⚖️ 하급심 ${p.n}건` : `⚖️ ${p.최고심} ${p.n}건`,
         color: p.최고심 === "하급심" ? "secondary" : "info",
         variant: "soft",
       }];
@@ -176,11 +186,12 @@ export function buildTriageWidget(
       type: "Row",
       gap: 8,
       children: [
-        { type: "Badge", label: topic.category, color: "secondary", variant: "soft" },
-        { type: "Badge", label: `⏰ ${trunc(topic.기한, 28)}`, color: "danger", variant: "soft" },
+        { type: "Badge", label: trunc(topic.category, 10), color: "secondary", variant: "soft" },
         ...판례배지(판례),
       ],
     },
+    // 기한은 배지에 넣으면 잘린다(Row는 줄바꿈되지 않음) — 본문 줄로 둔다.
+    { type: "Text", value: trunc(`⏰ ${topic.기한}`, 96), size: "sm" },
     { type: "Divider" },
     { type: "Text", value: "✅ 지금 할 일" },
     ...steps,
@@ -358,15 +369,19 @@ export function buildProcedureWidget(
   const children: WidgetComponent[] = [
     { type: "Caption", value: "절차 안내" },
     { type: "Title", value: trunc(topic.제목, 40) },
+    // ⚠️ 카카오 렌더러는 Row를 줄바꿈하지 않는다 — 넘치면 잘려서 사라진다
+    // (2026-08-31 프리뷰에서 판례 배지가 화면 밖으로 밀려난 것을 확인).
+    // 배지는 짧은 것 둘까지만 두고, 잘리면 안 되는 기한·관할은 본문 줄로 내린다.
     {
       type: "Row",
       gap: 8,
       children: [
-        { type: "Badge", label: `⏰ ${trunc(topic.기한, 26)}`, color: "danger", variant: "soft" },
-        { type: "Badge", label: trunc(topic.관할기관, 20), color: "secondary", variant: "soft" },
+        { type: "Badge", label: `⏰ ${trunc(짧은기한(topic.기한), 14)}`, color: "danger", variant: "soft" },
         ...판례배지(판례),
       ],
     },
+    { type: "Text", value: trunc(`⏰ ${topic.기한}`, 96), size: "sm" },
+    { type: "Text", value: trunc(`🏛️ ${topic.관할기관}`, 72), size: "sm" },
     { type: "Divider" },
     ...단계,
     ...(topic.단계.length > 5 ? [{ type: "Caption", value: `외 ${topic.단계.length - 5}단계` } as Caption] : []),
@@ -503,7 +518,7 @@ body{margin:0;background:#aebdcb;font-family:"Apple SD Gothic Neo",Pretendard,sa
 .w-btn.pri{background:#1c2230;color:#fff}
 .w-btn.sec{background:#f1f3f6;color:#1c2230}
 .w-div{border:none;border-top:1px solid #eceff3;margin:2px 0}
-.w-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.w-row{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;overflow:hidden}
 .w-col{display:flex;flex-direction:column;gap:8px}
 .w-li{display:block;text-decoration:none;color:inherit;padding:11px 2px;border-bottom:1px solid #f0f2f5}
 .w-li:last-child{border-bottom:none}
