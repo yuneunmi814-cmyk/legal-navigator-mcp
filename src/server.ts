@@ -1629,6 +1629,10 @@ body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",Pre
 .doc .ln-t{text-align:center;font-size:1.5em;font-weight:800;letter-spacing:.28em;margin:.2em 0 1.1em;line-height:1.5}
 .doc .ln-s{font-size:1.12em;font-weight:700;margin-top:.5em}
 .doc .ln-h{padding-left:1.5em;text-indent:-1.5em}
+/* text-indent는 상속된다 — ln-h의 -1.5em이 inline-block 입력칸 '안'까지 내려가
+   칸 속 글자가 22.5px 왼쪽으로 그려져 앞말을 덮었다("본인옯사일", 2026-08-31 확인).
+   레이아웃 박스는 멀쩡해서 좌표 검사로는 안 잡히고 화면에만 나타난다. */
+.doc .fld,.doc .cbx{text-indent:0}
 /* vertical-align은 baseline이어야 한다. top으로 두면 칸이 줄 맨 위에 붙고 글자는 기준선에
    앉아서, 같은 줄인데도 칸마다 세로 위치가 -5px·-2px로 들쭉날쭉해진다. 좁은 화면에서는
    그게 "글자에 칸이 올라탄" 것처럼 보인다(8/24 예은님 폰 제보 → 320px에서 22곳 재현).
