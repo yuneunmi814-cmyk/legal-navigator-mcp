@@ -315,7 +315,9 @@ describe("핵심 동작", () => {
   });
   it("healthz OK", async () => {
     const res = await fetch(`${base}/healthz`);
-    expect(await res.json()).toEqual({ status: "ok" });
+    const j: any = await res.json();
+    expect(j.status).toBe("ok");
+    // scale은 배포 확인용으로 함께 나간다(아래 별도 검사). 봉투를 못 박지 않는다.
   });
 });
 
