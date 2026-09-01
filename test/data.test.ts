@@ -204,10 +204,22 @@ describe("데이터 정합성", () => {
     expect(FORMS["학교폭력신고서"].작성요령.join(" ")).toContain("117");
   });
 
+  // 한 주제에 거의 같은 문서가 둘 있으면 어느 쪽이 나갈지 호스트 LLM이 정한다 —
+  // 더 나쁜 쪽이 나갈 수 있다. 행정심판·정보공개가 실제로 그랬다(9/1 정리).
+  it("공식 별지본이 있는 주제에 예시본을 다시 만들지 않는다", () => {
+    expect(FORM_KEYS).toContain("행정심판_청구서");
+    expect(FORM_KEYS).toContain("정보공개_청구서");
+    expect(FORM_KEYS).not.toContain("행정심판청구서");
+    expect(FORM_KEYS).not.toContain("정보공개청구서");
+    // 예시본에만 있던 항목이 공식본으로 옮겨졌는지
+    expect(FORMS["행정심판_청구서"].본문).toContain("처분이 있었던 날");
+    expect(FORMS["정보공개_청구서"].작성요령.join(" ")).toContain("30일 이내");
+  });
+
   it("규모 스냅샷(회귀 감지)", () => {
     expect(TOPIC_KEYS.length).toBe(279);   // 9/1 공권력 계열 5종 추가(체포적법성·임의동행보호조치·형사보상·압수수색·공무원불친절)
     expect(CATEGORIES.length).toBe(57);
-    expect(FORM_KEYS.length).toBe(121);
+    expect(FORM_KEYS.length).toBe(119);   // 9/1 중복 2종 정리(행정심판·정보공개 예시본 → 공식 별지본만)
     expect(GLOSSARY.length).toBe(125);
     expect(Object.values(PRECEDENTS).flat().length).toBe(194);
   });
