@@ -1249,6 +1249,52 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
   // 공권력 행사(체포·비자의입원)의 적법성을 따지고 사후 구제로 가는 경로가 통째로 없었다.
   // "가정폭력이든 뭐든 현행범으로 입건할 때 그 절차가 적법한지"에 답할 주제가 아예 없었고,
   // 위법으로 판명된 뒤의 손해배상·징계 경로도 응급입원 주제에서 이어지지 않았다(2026-09-01).
+  // 2026-09-01 커버리지 확대 — 공권력 계열에서 체포 '이전'(임의동행·보호조치),
+  // '이후'(형사보상·압수 다툼), 그리고 일상 접점(공무원 불친절)이 통째로 비어 있었다.
+  it("공권력 계열 신규 4주제가 제 발화에 닿는다", async () => {
+    const pairs: [string, string][] = [
+      ["경찰이 같이 가자고 해서 파출소에 갔어요", "임의동행"],
+      ["술 취했다고 경찰서에 하루 넘게 잡아놨어요", "임의동행"],
+      ["무죄 받았는데 갇혀 있던 기간 보상받을 수 있나요", "형사보상"],
+      ["불기소 처분 받았는데 구금됐던 건 보상 안 되나요", "형사보상"],
+      ["경찰이 휴대폰을 그냥 달라고 해서 줬어요", "압수·수색"],
+      ["압수한 물건을 돌려받고 싶어요", "압수·수색"],
+      ["주민센터 공무원이 너무 불친절해요", "불친절"],
+      ["사람 봐가면서 친절하던데 신고할 수 있나요", "불친절"],
+    ];
+    for (const [q, 기대] of pairs) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain(기대);
+    }
+    // 각 주제에 핵심 숫자·요건이 실려 있어야 한다
+    const 동행 = await callText("get_procedure", { topic: "임의동행보호조치" });
+    expect(동행).toContain("거절할 수 있");   // 경직법 제3조② 후단
+    expect(동행).toContain("6시간");
+    expect(동행).toContain("24시간");
+    const 보상 = await callText("get_procedure", { topic: "형사보상청구" });
+    expect(보상).toContain("피의자보상");
+    expect(보상).toContain("3년");
+    const 압수 = await callText("get_procedure", { topic: "압수수색적법성" });
+    expect(압수).toContain("임의제출");
+    expect(압수).toContain("준항고");
+    const 공무원 = await callText("get_procedure", { topic: "공무원불친절부당대우" });
+    expect(공무원).toContain("친절");
+    expect(공무원).toContain("고충민원");
+    // 과장하지 않는다 — 민원인이 직접 징계를 시킬 수는 없다는 한계를 밝혀야 한다
+    expect(공무원).toContain("소속기관장");
+    // 뺏기면 안 되는 것
+    const 유지: [string, string][] = [
+      ["행정처분에 불복하고 싶어요", "행정심판"],
+      ["국가배상 신청하려면 어떻게 하나요", "국가배상"],
+      ["고소를 하고 싶어요", "고소"],
+      ["국선변호인 신청하고 싶어요", "국선변호인"],
+    ];
+    for (const [q, 기대] of 유지) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain(기대);
+    }
+  });
+
   it("체포 적법성·사후 구제 발화가 제 주제로 간다", async () => {
     for (const q of [
       "가정폭력으로 현행범 체포됐는데 절차가 적법했는지 알고 싶어요",
