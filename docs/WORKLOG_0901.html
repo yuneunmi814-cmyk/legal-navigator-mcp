@@ -1,0 +1,599 @@
+<title>법률 길잡이 9월 1일 작업 보고</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --ink:#17212C;
+    --paper:#F4F6F8;
+    --surface:#FFFFFF;
+    --surface-2:#EDF0F4;
+    --rule:#D6DCE4;
+    --rule-soft:#E6EAF0;
+    --muted:#5C6878;
+    --steel:#2B5178;
+    --steel-soft:#E7EEF6;
+    --before:#95382A;
+    --before-soft:#F6EAE7;
+    --after:#1F6552;
+    --after-soft:#E5F0EC;
+    --amber:#8A6420;
+    --amber-soft:#F7F0E0;
+    --shadow:0 1px 2px rgba(23,33,44,.05), 0 8px 24px -16px rgba(23,33,44,.25);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E3E9F0;
+      --paper:#0F151C;
+      --surface:#161E28;
+      --surface-2:#1D2733;
+      --rule:#2C3846;
+      --rule-soft:#232E3A;
+      --muted:#96A3B3;
+      --steel:#8AB4E0;
+      --steel-soft:#1B2836;
+      --before:#DF9384;
+      --before-soft:#2B1D1A;
+      --after:#71C4A9;
+      --after-soft:#152720;
+      --amber:#D9B571;
+      --amber-soft:#282114;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E3E9F0;
+    --paper:#0F151C;
+    --surface:#161E28;
+    --surface-2:#1D2733;
+    --rule:#2C3846;
+    --rule-soft:#232E3A;
+    --muted:#96A3B3;
+    --steel:#8AB4E0;
+    --steel-soft:#1B2836;
+    --before:#DF9384;
+    --before-soft:#2B1D1A;
+    --after:#71C4A9;
+    --after-soft:#152720;
+    --amber:#D9B571;
+    --amber-soft:#282114;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+    font-weight:400;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px 88px}
+
+  /* ── 머리 ── */
+  .masthead{
+    border-bottom:2px solid var(--ink);
+    padding:44px 0 20px;
+    display:flex;flex-wrap:wrap;align-items:flex-end;
+    gap:20px 32px;justify-content:space-between;
+  }
+  .masthead h1{
+    font-family:"Nanum Myeongjo",serif;
+    font-weight:800;
+    font-size:clamp(28px,4.4vw,44px);
+    line-height:1.15;
+    letter-spacing:-.01em;
+    margin:6px 0 0;
+    text-wrap:balance;
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;
+    color:var(--steel);
+  }
+  .masthead .meta{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;color:var(--muted);
+    text-align:right;line-height:1.9;
+    font-variant-numeric:tabular-nums;
+  }
+  .masthead .meta b{color:var(--ink);font-weight:600}
+
+  .lede{
+    margin:22px 0 0;
+    font-size:16.5px;
+    max-width:66ch;
+    color:var(--muted);
+  }
+  .lede strong{color:var(--ink);font-weight:600}
+
+  /* ── 섹션 ── */
+  section{margin-top:52px}
+  .sec-head{
+    display:flex;align-items:baseline;gap:14px;
+    border-bottom:1px solid var(--rule);
+    padding-bottom:9px;margin-bottom:22px;
+  }
+  .sec-head h2{
+    font-family:"Nanum Myeongjo",serif;
+    font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;
+  }
+  .sec-head .note{
+    font-size:12.5px;color:var(--muted);margin-left:auto;text-align:right;
+  }
+
+  /* ── 숫자 스트립 ── */
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(158px,1fr));
+    gap:1px;background:var(--rule);
+    border:1px solid var(--rule);border-radius:3px;overflow:hidden;
+  }
+  .stat{background:var(--surface);padding:16px 18px 15px}
+  .stat .k{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);display:block;margin-bottom:9px;
+  }
+  .stat .v{
+    display:flex;align-items:baseline;gap:8px;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat .from{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:15px;color:var(--muted);text-decoration:line-through;
+    text-decoration-thickness:1px;text-decoration-color:var(--rule);
+  }
+  .stat .arrow{color:var(--muted);font-size:12px}
+  .stat .to{
+    font-family:"Nanum Myeongjo",serif;
+    font-size:27px;font-weight:800;line-height:1;color:var(--after);
+  }
+  .stat .same .to{color:var(--ink)}
+  .stat .sub{font-size:11.5px;color:var(--muted);margin-top:7px;display:block}
+
+  /* ── 매칭 표 ── */
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:720px;font-size:13.5px}
+  thead th{
+    background:var(--surface-2);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);text-align:left;
+    padding:11px 14px;border-bottom:1px solid var(--rule);
+    white-space:nowrap;
+  }
+  tbody td{padding:13px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  td.topic{font-weight:600;white-space:nowrap}
+  td.topic small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:2px;font-family:"IBM Plex Mono",monospace}
+  .chip{
+    display:inline-block;font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;font-weight:600;letter-spacing:.04em;
+    padding:2px 7px;border-radius:2px;white-space:nowrap;
+  }
+  .chip.ok{background:var(--after-soft);color:var(--after)}
+  .chip.deep{background:var(--before-soft);color:var(--before)}
+  .chip.info{background:var(--steel-soft);color:var(--steel)}
+  .chip.hold{background:var(--amber-soft);color:var(--amber)}
+  td .why{color:var(--muted);display:block;margin-top:4px;font-size:12.5px}
+
+  /* ── 전후 비교 ── */
+  .ba{display:grid;gap:12px}
+  .ba-row{
+    border:1px solid var(--rule);border-radius:3px;background:var(--surface);
+    overflow:hidden;
+  }
+  .ba-q{
+    padding:12px 16px;border-bottom:1px solid var(--rule-soft);
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--steel);
+    background:var(--surface-2);
+  }
+  .ba-q b{font-weight:600}
+  .ba-cols{display:grid;grid-template-columns:1fr 1fr}
+  @media (max-width:660px){.ba-cols{grid-template-columns:1fr}}
+  .ba-cell{padding:13px 16px 15px}
+  .ba-cell + .ba-cell{border-left:1px solid var(--rule-soft)}
+  @media (max-width:660px){.ba-cell + .ba-cell{border-left:0;border-top:1px solid var(--rule-soft)}}
+  .ba-tag{
+    font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:6px;
+  }
+  .ba-cell.before .ba-tag{color:var(--before)}
+  .ba-cell.after .ba-tag{color:var(--after)}
+  .ba-cell p{margin:0;font-size:13.5px;line-height:1.6}
+  .ba-cell.before p{color:var(--muted)}
+  .ba-cell .risk{
+    display:block;margin-top:8px;font-size:12px;
+    padding-left:10px;border-left:2px solid var(--before);color:var(--before);
+  }
+  .ba-cell.after .risk{border-left-color:var(--after);color:var(--after)}
+
+  /* ── 목록 ── */
+  ul.plain{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+  ul.plain li{
+    display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+    font-size:14px;
+  }
+  ul.plain li .mk{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--steel);
+    padding-top:3px;white-space:nowrap;font-weight:600;
+  }
+  ul.plain li .d{color:var(--muted);display:block;font-size:12.5px;margin-top:2px}
+
+  /* ── 남은 일정 ── */
+  .plan{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+  .plan-row{
+    background:var(--surface);display:grid;
+    grid-template-columns:132px 1fr auto;gap:16px;align-items:baseline;
+    padding:14px 16px;
+  }
+  @media (max-width:640px){.plan-row{grid-template-columns:1fr;gap:6px}}
+  .plan-when{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;
+    color:var(--steel);font-variant-numeric:tabular-nums;
+  }
+  .plan-what{font-size:14px}
+  .plan-what small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .plan-row.hot{background:var(--amber-soft)}
+  .plan-row.hot .plan-when{color:var(--amber)}
+
+  .callout{
+    border:1px solid var(--rule);border-left:3px solid var(--amber);
+    background:var(--surface);border-radius:3px;
+    padding:16px 18px;font-size:13.5px;
+  }
+  .callout h3{
+    margin:0 0 7px;font-size:14.5px;font-weight:600;
+    font-family:"IBM Plex Sans KR",sans-serif;
+  }
+  .callout p{margin:0;color:var(--muted);line-height:1.65}
+  .callout p + p{margin-top:8px}
+  .callout b{color:var(--ink);font-weight:600}
+
+  footer{
+    margin-top:56px;padding-top:16px;border-top:1px solid var(--rule);
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);
+    display:flex;flex-wrap:wrap;gap:6px 20px;justify-content:space-between;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <span class="eyebrow">프로젝트윤 · 법률 절차 길잡이</span>
+      <h1>검수 이후 하루, 무엇이 달라졌나</h1>
+    </div>
+    <div class="meta">
+      작성 <b>2026-09-01</b><br>
+      기준 커밋 <b>f83e9b7</b><br>
+      비교 기준 <b>f873125</b> (8/31 마감)
+    </div>
+  </header>
+
+  <p class="lede">
+    예은님 검수 리포트를 받은 8월 31일 밤부터 오늘까지의 기록입니다. 지적하신 <strong>6개는 그날 밤 전부 반영</strong>했고,
+    그 반영분을 다시 법제처 원문으로 재검증한 결과 <strong>같은 주제에서 더 깊은 문제 7건</strong>이 나왔습니다.
+    이어서 실제 카카오톡에서 돌려보며 <strong>라우팅 12건과 화면 버그 1건</strong>을 잡았고,
+    그 과정에서 드러난 공백을 메우려 <strong>새 주제 5종</strong>을 만들었습니다.
+  </p>
+
+  <!-- 숫자 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">01</span>
+      <h2>숫자로 본 하루</h2>
+      <span class="note">8/31 마감 시점 → 지금</span>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <span class="k">주제</span>
+        <span class="v"><span class="from">274</span><span class="arrow">→</span><span class="to">279</span></span>
+        <span class="sub">공권력 계열 5종 신설</span>
+      </div>
+      <div class="stat">
+        <span class="k">법령 조문</span>
+        <span class="v"><span class="from">277</span><span class="arrow">→</span><span class="to">321</span></span>
+        <span class="sub">전수 대조 321 · 불일치 0</span>
+      </div>
+      <div class="stat">
+        <span class="k">테스트</span>
+        <span class="v"><span class="from">229</span><span class="arrow">→</span><span class="to">234</span></span>
+        <span class="sub">회귀 검사 23건 추가</span>
+      </div>
+      <div class="stat">
+        <span class="k">서식</span>
+        <span class="v same"><span class="to">121</span></span>
+        <span class="sub">변동 없음</span>
+      </div>
+      <div class="stat">
+        <span class="k">판례</span>
+        <span class="v same"><span class="to">194</span></span>
+        <span class="sub">변동 없음</span>
+      </div>
+      <div class="stat">
+        <span class="k">커밋</span>
+        <span class="v"><span class="to">9</span></span>
+        <span class="sub">전부 라이브 반영 완료</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 검수 매칭 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">02</span>
+      <h2>예은님 검수 리포트 ↔ 조치 내역</h2>
+      <span class="note">리포트 기준 커밋 <code>621d408</code> (8/24) · 당시 주제 263 · 서식 114 · 법령 258</span>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:150px">지적하신 주제</th>
+            <th style="width:96px">1차 반영</th>
+            <th>2차 검증에서 더 나온 것 <span style="text-transform:none;letter-spacing:0">(9/1)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="topic">5인 미만 사업장<small>labor.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td>
+              <span class="chip deep">절반만 잡았음</span>
+              <span class="why">노동위 구제 불가는 맞게 썼지만, 시행령 별표 1에 <b>제46조(휴업수당)·제56조(가산수당)·제60조(연차)</b>가 없다는 것을 빠뜨렸습니다. “임금은 그대로 청구 가능”만 읽으면 야근수당도 받을 수 있다고 오해합니다. 해고예고수당의 <b>3개월 미만 예외</b>(제26조 단서)도 추가했습니다.</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="topic">자전거·킥보드 사고<small>traffic.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td>
+              <span class="chip deep">형량이 뒤집혀 있었음</span>
+              <span class="why">전동킥보드는 도로교통법상 ‘원동기장치자전거’라 도주하면 <b>특가법 제5조의3</b>이 적용됩니다 — 상해는 <b>1년 이상</b>의 유기징역. 종전엔 도로교통법 제148조 <b>5년 이하</b>만 실려 있어 가볍게 읽혔습니다. 합의해도 기소되는 <b>교특법 12개 예외</b>도 넣었습니다.</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="topic">연대보증 채무<small>money.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td>
+              <span class="chip deep">안 통하는 경우가 있었음</span>
+              <span class="why">보증인 보호법은 <b>제2조1호 가~바목</b>에 해당하면 아예 적용되지 않습니다(회사 대표의 배우자·직계존비속, 동업자 보증 등). 그 경우에도 살아 있는 <b>민법 제428조의2·제428조의3②</b>를 근거로 넣었습니다.</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="topic">프리랜서 근로자성<small>labor.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td>
+              <span class="chip deep">같은 함정이 남아 있었음</span>
+              <span class="why">근로자로 인정받아도 <b>상시 4명 이하면 노동위 구제신청이 각하</b>됩니다. 5인 미만 주제를 만든 바로 그 이유가 옆 주제에 그대로 남아 있었습니다.</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="topic">주휴수당 미지급<small>labor.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td>
+              <span class="chip deep">기준이 달랐음</span>
+              <span class="why">15시간은 어느 한 주가 아니라 <b>4주를 평균</b>해서 봅니다(근로기준법 제18조③). 시간이 들쭉날쭉한 아르바이트는 이 차이로 결론이 뒤집힙니다.</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="topic">근로계약서 미작성<small>labor.ts</small></td>
+            <td><span class="chip ok">8/31 반영</span></td>
+            <td><span class="chip info">추가 지적 없음</span><span class="why">2차 검증에서 조문·표현 모두 문제 없음으로 확인됐습니다.</span></td>
+          </tr>
+          <tr>
+            <td class="topic">전세보증보험</td>
+            <td><span class="chip info">기반영</span></td>
+            <td><span class="why">리포트 이전에 이미 들어가 있던 항목입니다.</span></td>
+          </tr>
+          <tr>
+            <td class="topic">판례 10건 미검증</td>
+            <td><span class="chip info">정정</span></td>
+            <td>
+              <span class="why">미검증이 아니라 <b>중복</b>이었습니다. 194건 중 10건은 같은 사건번호를 두 주제에 인용한 것이고(예: <code>2005다4529</code>), 고유 184건은 이미 전수 대조를 마친 상태였습니다. 대신 진짜 부채를 하나 찾았습니다 — 검사기가 <code>제44조의10제3항</code>처럼 항까지 적힌 표기를 못 읽어 불일치 3건을 계속 띄우고 있었습니다. 지금은 <b>불일치 0</b>입니다.</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 전후 비교 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">03</span>
+      <h2>같은 질문, 어제와 오늘의 답</h2>
+      <span class="note">실제 발화를 넣었을 때 나오는 안내</span>
+    </div>
+    <div class="ba">
+
+      <div class="ba-row">
+        <div class="ba-q"><b>“전동킥보드 타다 사람을 쳤어요”</b></div>
+        <div class="ba-cols">
+          <div class="ba-cell before">
+            <span class="ba-tag">어제</span>
+            <p>도로교통법 제148조 — 조치를 하지 않으면 <b>5년 이하</b>의 징역.</p>
+            <span class="risk">상한만 보여 집행유예 범위로 읽힙니다.</span>
+          </div>
+          <div class="ba-cell after">
+            <span class="ba-tag">오늘</span>
+            <p>전동킥보드는 ‘원동기장치자전거’라 특가법 제5조의3 적용 — 상해 후 도주는 <b>1년 이상</b>의 유기징역. 자전거는 이 조항 대상이 아니라는 구분도 함께.</p>
+            <span class="risk">하한이 있는 형이라는 걸 알고 판단하게 됩니다.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ba-row">
+        <div class="ba-q"><b>“직원이 나 포함 세 명인데 갑자기 나오지 말래요”</b></div>
+        <div class="ba-cols">
+          <div class="ba-cell before">
+            <span class="ba-tag">어제</span>
+            <p>어느 주제에도 닿지 못함. 비슷한 표현 4개는 <b>부당해고 구제 절차</b>로 갔습니다.</p>
+            <span class="risk">그대로 가면 노동위원회에서 각하됩니다.</span>
+          </div>
+          <div class="ba-cell after">
+            <span class="ba-tag">오늘</span>
+            <p>「5인 미만 사업장 — 되는 것과 안 되는 것」으로 도달. 안 되는 것(노동위·가산수당·연차·휴업수당)과 되는 것(해고예고수당·임금·퇴직금·주휴)을 갈라서 안내.</p>
+            <span class="risk">헛걸음을 막습니다.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ba-row">
+        <div class="ba-q"><b>“친구 대출에 보증 서줬는데 은행에서 저한테 갚으래요”</b></div>
+        <div class="ba-cols">
+          <div class="ba-cell before">
+            <span class="ba-tag">어제</span>
+            <p>어느 주제에도 닿지 못함.</p>
+            <span class="risk">동의어에 ‘보증 섰’은 있는데 ‘보증 <b>서줬</b>’이 없어서 통째로 0건이었습니다.</span>
+          </div>
+          <div class="ba-cell after">
+            <span class="ba-tag">오늘</span>
+            <p>「연대보증을 섰다가 빚을 떠안게 됐을 때」로 도달 + 보증인 보호법이 <b>적용되지 않는 경우</b>부터 가르도록 순서 변경.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ba-row">
+        <div class="ba-q"><b>“5인 미만 사업장 카드” — 화면에 찍히던 글자</b></div>
+        <div class="ba-cols">
+          <div class="ba-cell before">
+            <span class="ba-tag">어제</span>
+            <p><code>• 명 이상이면 부당해고 주제로 간다</code></p>
+            <span class="risk">목록 번호를 지우는 규칙이 본문 앞 숫자까지 먹었습니다. 같은 방식으로 “30일 전”은 “일 전”, “2주 안에”는 “주 안에”가 됩니다.</span>
+          </div>
+          <div class="ba-cell after">
+            <span class="ba-tag">오늘</span>
+            <p><code>5명 이상이면 부당해고 주제로 간다</code></p>
+            <span class="risk">법률 안내에서 숫자가 조용히 사라지는 건 틀린 안내와 같아서, 회귀 검사로 고정했습니다.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ba-row">
+        <div class="ba-q"><b>“경찰 응급입원 적법한 절차인지 따지고 싶어”</b></div>
+        <div class="ba-cols">
+          <div class="ba-cell before">
+            <span class="ba-tag">어제</span>
+            <p><b>「경찰의 긴급응급조치(스토킹 접근금지)」</b>로 갔습니다. 비슷한 문장은 <b>「군 내 인권침해 진정」</b>으로 갔습니다.</p>
+            <span class="risk">주제는 있었는데 동의어가 하나도 없어, ‘인권침해’·‘경찰’이라는 낱말이 엉뚱한 주제를 끌어당겼습니다.</span>
+          </div>
+          <div class="ba-cell after">
+            <span class="ba-tag">오늘</span>
+            <p>「본인 뜻과 달리 입원됐을 때」로 도달. 정신건강복지법 제50조의 여섯 가지 요건(의사와 경찰관 <b>둘 다</b>의 동의 / 3일 한도 / 즉시 퇴원 / 서면 통지 등)을 확인 항목으로 제시.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 그 외 작업 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">04</span>
+      <h2>검수 리포트 밖에서 한 일</h2>
+    </div>
+    <ul class="plain">
+      <li>
+        <span class="mk">라우팅</span>
+        <span>발화 12건 교정 — 못 찾던 5건, 엉뚱하게 가던 3건, 순서가 뒤집혀 있던 2건, 규모 신호 5건
+        <span class="d">원인이 전부 한 끗 차이였습니다. ‘직원 세 명’은 있는데 ‘직원 3명’이 없고, ‘직원이 나 혼자’는 있는데 ‘저 혼자’가 없고, ‘개인사업자로 계약’은 있는데 ‘등록’이 없었습니다.</span></span>
+      </li>
+      <li>
+        <span class="mk">새 주제</span>
+        <span>공권력 계열 5종 — 체포 적법성 / 임의동행·보호조치 / 형사보상 / 압수·수색 / 공무원 불친절
+        <span class="d">실기기 테스트 중 나온 질문에 답할 곳이 없어 만들었습니다. 특히 경찰관 직무집행법 제4조 보호조치는 응급입원의 바로 앞 단계라 두 주제를 서로 연결했습니다.</span></span>
+      </li>
+      <li>
+        <span class="mk">화면</span>
+        <span>카드 본문에서 앞 숫자가 사라지던 버그 수정
+        <span class="d">기한 숫자까지 지워지던 문제라 서비스 전체에 영향이 있었습니다.</span></span>
+      </li>
+      <li>
+        <span class="mk">검증</span>
+        <span>법령 321건 법제처 전수 대조 — 실존확인 321 · 부재 0 · 불일치 0
+        <span class="d">새로 넣은 조문은 전부 원문을 조회해 요지를 직접 확인했습니다.</span></span>
+      </li>
+      <li>
+        <span class="mk">기록</span>
+        <span>검수 보고서 2건을 레포에 보관 · 인계장 갱신 · 팀 시트 T-12~T-14 추가
+        <span class="d"><code>audit/REVIEW_RESULT_0901_A.md</code>, <code>audit/UTTERANCE_TEST_0901.md</code></span></span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- 확인된 것 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">05</span>
+      <h2>우리가 못 고치는 것 하나</h2>
+    </div>
+    <div class="callout">
+      <h3>카카오톡에서 툴이 자동으로 붙지 않고, 붙어도 몇 턴 뒤 풀립니다</h3>
+      <p>실기기에서 그냥 질문하면 우리 툴이 <b>호출되지 않고</b> ChatGPT가 자기 지식과 웹검색으로 답합니다.
+      입력창의 <code>Kakao Tools</code>를 눌러 「법률 절차 길잡이」를 선택해야 카드가 뜹니다.
+      그런데 같은 대화방에서 <b>몇 턴 뒤 선택이 풀리는 것</b>을 확인했습니다.</p>
+      <p>역설적으로 이 화면이 우리가 왜 필요한지를 보여줍니다. 툴 없이 답했을 때 주휴수당은 “1주 15시간”,
+      5인 미만 해고는 “부당해고를 따져볼 필요”, 진정서는 <b>지어낸 양식</b>이 나왔습니다 — 오늘 고친 것들이 그대로 재현됐습니다.</p>
+      <p>선택이 유지되지 않는 것이 정상 동작인지 <b>팀 채널에 문의가 필요합니다.</b> 코드로 해결할 수 있는 영역이 아닙니다.</p>
+    </div>
+  </section>
+
+  <!-- 남은 계획 -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">06</span>
+      <h2>남은 일정과 할 일</h2>
+    </div>
+    <div class="plan">
+      <div class="plan-row hot">
+        <span class="plan-when">~9/10 11:00</span>
+        <span class="plan-what">실기기 테스트 기간 — 발견 · 수정 · 재배포 사이클
+          <small>이 기간이 지나면 MY에서 서비스가 일괄 제거됩니다. ⚠️ ‘제거’를 직접 누르면 재추가가 불가능하고, 화면 사진·대화내역은 팀 채널 밖으로 나가면 안 됩니다.</small></span>
+        <span class="chip hold">진행 중</span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-when">9/1 ~ 9/11</span>
+        <span class="plan-what">카카오 내부 심사 QA 대응
+          <small>지적은 팀 디스코드로 옵니다. 수신 당일 분류 → 해당 영역만 수정 → 테스트 → 재배포.</small></span>
+        <span class="chip hold">진행 중</span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-when">9/11까지</span>
+        <span class="plan-what">서식 리뷰 — 현재 1 / 114
+          <small>예은님 56종 · 용우님 58종. 심사 담당자가 보기 전에 우리가 먼저 보는 편이 낫습니다. 전부는 어려우니 자주 쓰일 것부터 몇 개만이라도.</small></span>
+        <span class="chip deep">가장 밀림</span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-when">미정</span>
+        <span class="plan-what">서식 초안 흐름 재확인 (프리뷰)
+          <small><code>for_assistant</code> 복구 이후 아직 검증하지 못했습니다. “진정서 양식 보여줘” → “제 이름 홍길동이고 …채워서 보여줘”로 채운 초안이 나오는지.</small></span>
+        <span class="chip info">대기</span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-when">9/14</span>
+        <span class="plan-what">코드 프리징 — 최종 태그
+          <small>이후 수정 불가. 실기기 테스트가 나흘 먼저 끝나므로 실질 마감은 9/10입니다.</small></span>
+        <span class="chip info">예정</span>
+      </div>
+      <div class="plan-row">
+        <span class="plan-when">9/16 14:00</span>
+        <span class="plan-what">본선 시작 · 공개 투표 (~10/12)
+          <small>그 전에는 “카카오톡에서 써보세요” 홍보 금지 — 서식 페이지로만 안내합니다.</small></span>
+        <span class="chip info">예정</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>커밋 95013a7 · bad147c · 9e9e281 · 4b7619a · 1da23fe · f83e9b7</span>
+    <span>테스트 234 통과 · 타입 체크 통과 · 라이브 반영 확인 완료</span>
+  </footer>
+
+</div>
