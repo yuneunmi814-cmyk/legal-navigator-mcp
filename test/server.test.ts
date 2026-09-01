@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { app } from "../src/server.js";
+import { app, SERVER_INSTRUCTIONS } from "../src/server.js";
 import { clearLogs } from "../src/debugLog.js";
 import { TOPIC_KEYS, FORM_KEYS, FORMS, PROCEDURES } from "../src/data/index.js";
 
@@ -1223,6 +1223,21 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
   // 「군 내 인권침해·고충 진정(군인권보호관)」으로, "경찰 응급입원 적법한 절차인지"가
   // '경찰·긴급' 때문에 「경찰의 긴급응급조치(스토킹)」로 갔다(2026-09-01). 둘 다 완전히 다른 절차다.
   // 주제는 있었는데 동의어가 하나도 없어 발화가 닿지 못한 것이었다.
+  // initialize의 instructions 첫 문단이 호스트 LLM의 "이 서버를 부를까" 판단 지점이다.
+  // 여기에 없는 영역은 주제가 있어도 신호가 가지 않는다 — 실기기에서 "경찰이 응급입원
+  // 시켰어"에 우리 툴이 호출되지 않았고, 분야 목록에 경찰·입원·체포가 통째로 빠져 있었다.
+  // ⛔ 주제를 새로 만들면 이 목록에도 반드시 넣을 것. 이 검사가 그걸 붙잡는다.
+  it("서버 안내문의 분야 목록이 실제 주제를 따라간다", () => {
+    const ins = SERVER_INSTRUCTIONS;
+    for (const 영역 of [
+      "5인 미만", "전동킥보드", "현행범", "임의동행", "보호조치",
+      "압수수색", "형사보상", "국가배상", "공무원 불친절", "응급입원",
+    ]) {
+      expect(ins, 영역).toContain(영역);
+    }
+    expect(ins).toContain(String(TOPIC_KEYS.length));
+  });
+
   it("비자의입원·응급입원 발화가 제 주제로 간다", async () => {
     for (const q of [
       "경찰에서 나를 응급입원 시켰어 이거 인권침해아니야?",
