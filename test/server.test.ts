@@ -1227,6 +1227,17 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
   // 여기에 없는 영역은 주제가 있어도 신호가 가지 않는다 — 실기기에서 "경찰이 응급입원
   // 시켰어"에 우리 툴이 호출되지 않았고, 분야 목록에 경찰·입원·체포가 통째로 빠져 있었다.
   // ⛔ 주제를 새로 만들면 이 목록에도 반드시 넣을 것. 이 검사가 그걸 붙잡는다.
+  // 재배포가 안 올라갔는데 콘솔은 계속 Active였고 빌드 로그를 볼 화면도 없었다(9/1).
+  // 어느 커밋이 라이브인지 서식 본문을 뒤져 추측하던 것을 한 번에 보게 만든 필드다.
+  it("/healthz가 규모를 함께 돌려준다 — 라이브가 어느 빌드인지 한 번에 본다", async () => {
+    const r = await fetch(`${base}/healthz`);
+    const j: any = await r.json();
+    expect(j.status).toBe("ok");
+    expect(j.scale.topics).toBe(TOPIC_KEYS.length);
+    expect(j.scale.forms).toBe(FORM_KEYS.length);
+    expect(j.scale.statutes).toBeGreaterThan(300);
+  });
+
   it("서버 안내문의 분야 목록이 실제 주제를 따라간다", () => {
     const ins = SERVER_INSTRUCTIONS;
     for (const 영역 of [

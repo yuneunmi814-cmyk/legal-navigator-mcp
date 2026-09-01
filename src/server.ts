@@ -1337,8 +1337,22 @@ app.get("/", (_req, res) => {
   res.type("text/plain").send("법률 절차 길잡이 MCP 서버 — POST /mcp (Streamable HTTP)");
 });
 
+// 9/1에 재배포가 세 시간 넘게 안 올라갔는데 콘솔은 계속 Active였다. 'Active'는 지금 돌고
+// 있다는 뜻이지 최신이라는 뜻이 아니고, 빌드 로그를 볼 수 있는 화면도 없었다. 그래서 매번
+// 서식 본문 같은 것을 뒤져 어느 커밋인지 추측해야 했다. 규모 숫자를 여기 실어 한 번에 본다.
+//   curl -s https://…/healthz
+// ⛔ 이 필드를 지우지 말 것 — 지우면 다시 추측으로 돌아간다.
 app.get("/healthz", (_req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    scale: {
+      topics: TOPIC_KEYS.length,
+      forms: FORM_KEYS.length,
+      statutes: STATUTES.length,
+      precedents: Object.values(PRECEDENTS).reduce((n, v) => n + v.length, 0),
+      categories: CATEGORIES.length,
+    },
+  });
 });
 
 // X-Forwarded-Host/Host는 클라이언트가 보내는 값이라 그대로 믿으면 공격자가 헤더를 조작해
