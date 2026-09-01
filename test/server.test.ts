@@ -585,6 +585,27 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     }
   });
 
+  // 실기기(카카오톡) 캡처에서 "5명 이상이면"이 "• 명 이상이면"으로 나왔다(2026-09-01).
+  // 목록 번호를 벗기는 정규식이 구두점을 선택사항(`[)\-]?`)으로 둬서 `^\d+`만으로도 걸렸고,
+  // 숫자로 시작하는 본문의 앞 숫자를 통째로 먹었다. 같은 방식으로 "30일 전"·"2주 안에" 같은
+  // 기한 숫자도 사라진다 — 법률 안내에서 숫자가 조용히 없어지는 건 틀린 안내와 같다.
+  // 텍스트 모드에는 이 처리가 없으므로 반드시 위젯 모드에서 검사해야 한다.
+  it("본문 앞 숫자를 목록 번호로 오인해 지우지 않는다", async () => {
+    // for_assistant에는 절차 원문이 그대로 들어가므로, 화면에 그려지는 widget만 본다.
+    const 카드 = async (topic: string) =>
+      JSON.stringify(JSON.parse(await callText("get_procedure", { topic })).widget);
+    const w = await 카드("오인미만사업장");
+    expect(w).toContain("5명 이상이면");
+    expect(w).toContain("4명 이하라면");
+    // 앞의 숫자가 잘리면 "• 명 이상이면" / "2. 명 이상이면" 꼴이 된다
+    expect(w).not.toMatch(/(•|\d+\.)\s*명 이상이면/);
+    // (프리랜서근로자성의 같은 형태는 6번째 단계라 카드에서 잘려 나가 검사 대상이 아니다)
+    // 진짜 목록 번호("1) ")는 그대로 벗겨져야 한다
+    const g = await 카드("교통사고후속절차");
+    expect(g).not.toContain("1) 현장 안전");
+    expect(g).toContain("현장 안전");
+  });
+
   it("find_legal_aid는 Preview 검증 전까지 기본 Card로 내보낸다", async () => {
     delete process.env.LISTVIEW;
     const w = JSON.parse(await callText("find_legal_aid", { keyword: "체불" }));
@@ -1198,6 +1219,33 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
 
   // 2026-09-01 라이브 발화 점검(48개) 회귀 고정. 동의어가 '글자 그대로' 일치할 때만
   // 걸리는 구조라, 활용형·표기 하나가 어긋나면 통째로 0건이 됐다.
+  // 실기기에서 "경찰에서 나를 응급입원 시켰어 이거 인권침해아니야?"가 '인권침해'라는 낱말 때문에
+  // 「군 내 인권침해·고충 진정(군인권보호관)」으로, "경찰 응급입원 적법한 절차인지"가
+  // '경찰·긴급' 때문에 「경찰의 긴급응급조치(스토킹)」로 갔다(2026-09-01). 둘 다 완전히 다른 절차다.
+  // 주제는 있었는데 동의어가 하나도 없어 발화가 닿지 못한 것이었다.
+  it("비자의입원·응급입원 발화가 제 주제로 간다", async () => {
+    for (const q of [
+      "경찰에서 나를 응급입원 시켰어 이거 인권침해아니야?",
+      "경찰 응급입원 적법한 절차인지 따지고 싶어",
+      "강제로 정신병원에 입원당했어요",
+      "보호입원 됐는데 퇴원하고 싶어요",
+    ]) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain("입원");
+      expect(t, q).not.toContain("군인권보호관");
+      expect(t, q).not.toContain("스토킹");
+    }
+    // 응급입원의 적법성을 따질 근거가 실제로 실려 있어야 한다(제50조 요건)
+    const p = await callText("get_procedure", { topic: "정신질환_비자의입원_심사" });
+    expect(p).toContain("의사와 경찰관");
+    expect(p).toContain("3일(공휴일 제외)");
+    // 뺏기면 안 되는 것
+    const 군 = await callText("triage", { situation: "군대에서 인권침해를 당했어요" });
+    expect(군).toContain("군인권");
+    const 스 = await callText("triage", { situation: "스토킹 당하고 있어요" });
+    expect(스).toContain("스토킹");
+  });
+
   it("표현이 달라도 같은 주제에 닿는다 — 9/1 발화 점검분", async () => {
     const pairs: [string, string][] = [
       // 아라비아 숫자·1인칭 '저'·중간 삽입형 (전부 노동위 각하 경로로 가고 있었다)

@@ -6,6 +6,13 @@
 
 // ── ChatKit 위젯 타입(사용하는 부분집합만) ─────────────────────────────
 // 가이드 샘플 기준: onClickAction은 payload.target.url(+pcUrl)만으로 동작(type 생략).
+// 단계 앞에 붙은 목록 번호("1) ", "2. ", "3- ")만 벗긴다.
+// 종전 정규식은 구두점이 선택사항(`[)\-]?`)이라 `^\d+`만으로도 걸려서, 숫자로 시작하는
+// 본문의 앞 숫자를 통째로 먹었다. 실기기에서 "5명 이상이면"이 "명 이상이면"으로 나왔고
+// (2026-09-01 카카오톡 캡처), 같은 방식으로 "30일 전"·"2주 안에"의 기한 숫자도 사라진다.
+// 법률 안내에서 숫자가 조용히 사라지는 건 틀린 안내와 같다 — 구두점을 필수로 바꿨다.
+const 목록번호 = /^\d+\s*[).\-]\s*/;
+
 export type ActionConfig = { type?: string; payload?: Record<string, unknown> };
 
 export interface Title { type: "Title"; value: string; size?: "sm" | "md" | "lg" }
@@ -177,7 +184,7 @@ export function buildTriageWidget(
   // 접수처 자유 텍스트에서 첫 URL/도메인 추출(있으면 버튼 제공)
   const url = extractSubmitUrl(topic.온라인접수);
   const steps = topic.단계.slice(0, 3).map(
-    (s): TextC => ({ type: "Text", value: trunc(s.replace(/^\d+[)\-]?\s*/, "• "), 70), size: "sm" }),
+    (s): TextC => ({ type: "Text", value: trunc(s.replace(목록번호, "• "), 70), size: "sm" }),
   );
   const children: WidgetComponent[] = [
     { type: "Caption", value: `빠른 진단 · ${trunc(situation, 30)}` },
@@ -360,7 +367,7 @@ export function buildProcedureWidget(
   const url = extractSubmitUrl(topic.온라인접수);
   // 원본 단계는 "1) …"로 시작하는 것과 아닌 것이 섞여 있다. 한 곳에서 떼어내
   // 카드와 copy_text가 같은 문자열을 쓰게 한다(따로 처리하면 "1. 1) …"가 된다).
-  const 벗긴단계 = topic.단계.map((s) => s.replace(/^\d+[)\-.]?\s*/, ""));
+  const 벗긴단계 = topic.단계.map((s) => s.replace(목록번호, ""));
   const 단계: TextC[] = 벗긴단계.slice(0, 5).map((s, i) => ({
     type: "Text",
     value: trunc(`${i + 1}. ${s}`, 74),
