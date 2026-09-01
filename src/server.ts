@@ -1473,6 +1473,34 @@ function 칸너비em(라벨: string, 밑줄개수 = 0): number {
   return Math.min(Math.max(Math.max(글자, 밑줄개수 * 0.55) + 0.8, 4), 26);
 }
 
+// 이름 없는 빈칸(`[______]`·`____`)은 회색 예시 글자가 비어 있어, 같은 문서 안에서도
+// 어떤 칸은 "성명"이 흐리게 보이고 어떤 칸은 아무것도 안 보였다(2026-09-01 서식 점검에서
+// 62종 적발). 데이터를 62종 고치는 대신, 빈칸 **바로 앞의 항목명**을 예시로 끌어온다.
+//   "주민등록번호 [______]" → 회색 "주민등록번호"
+//   "③ 지급받지 못한 임금등 총 확정금액: [______]원" → 회색 "확정금액"
+// 앞이 번호·기호뿐이면(①, 1., 가.) 가져올 이름이 없다는 뜻이라 빈 채로 둔다.
+function 앞항목명(prefixHtml: string): string {
+  const 평문 = prefixHtml.replace(/<[^>]*>/g, "");
+  const 줄 = 평문.slice(평문.lastIndexOf("\n") + 1);
+  const m = /([^\s:：()\[\]\/]{1,16})\s*[:：]?\s*$/.exec(줄);
+  if (!m) return "";
+  const 이름 = m[1].replace(/^[·∙・\-]+/, "").trim();
+  // 목록 번호·순번·단위만 남은 것은 항목명이 아니다
+  if (!이름) return "";
+  if (이름.length === 1) return 한글자항목[이름] ?? "";
+  if (/^[0-9①-⑳가-힣]?[.)]$/.test(이름)) return "";
+  if (/^[0-9]+$/.test(이름)) return "";
+  if (/^[①-⑳㉠-㉿]+$/.test(이름)) return "";
+  return 이름;
+}
+
+// 한 글자짜리 앞말은 위에서 걸러지는데, 서식에서 자주 쓰이는 몇 개는 실제로 항목명이다.
+const 한글자항목: Record<string, string> = { 금: "금액", 총: "합계", 월: "월", 년: "연도", 일: "일" };
+
+// "20[__]. [__]. [__]." 는 서식 맨 아래 작성일 자리다. 앞말이 "20"·"." 뿐이라
+// 항목명을 끌어올 수 없어 세 칸 모두 비어 있었다 — 연·월·일로 못 박는다.
+const 작성일자리 = /20\s*\[[_\s]*\]\s*\.\s*\[[_\s]*\]\s*\.\s*\[[_\s]*\]\s*\./g;
+
 function 본문HTML(bodyRaw: string): string {
   let s = htmlEscape(bodyRaw);
   // 0) ○○ → 입력 필드. 반드시 대괄호 처리보다 먼저 — 나중에 하면 생성된 필드의
@@ -1490,9 +1518,10 @@ function 본문HTML(bodyRaw: string): string {
   //    ○○와 같은 이유로 대괄호 처리보다 먼저·대괄호 밖에서만. 뒤로 미루면 3)이 만든
   //    data-ph 안의 밑줄까지 치환한다(예: 항소장 "[○○지방법원 20 가단 ____ … 선고]").
   s = 대괄호밖(s, (seg) =>
-    seg.replace(/_{3,}/g, (m) => {
-      const minw = 칸너비em("", m.length);
-      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="" style="min-width:${minw.toFixed(1)}em"></span>`;
+    seg.replace(/_{3,}/g, (m, off: number) => {
+      const ph = 앞항목명(seg.slice(0, off));
+      const minw = 칸너비em(ph, m.length);
+      return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw.toFixed(1)}em"></span>`;
     }),
   );
   // 1) 줄머리 라벨: 줄 시작(공백 허용) 직후의 대괄호 — 단, 밑줄/공백만 든 빈칸은 제외
@@ -1504,21 +1533,27 @@ function 본문HTML(bodyRaw: string): string {
   s = s
     .replace(/[☐□]/g, '<span class="cbx" role="checkbox" aria-checked="false" tabindex="0">☐</span>')
     .replace(/[☑☒]/g, '<span class="cbx" role="checkbox" aria-checked="true" tabindex="0">☑</span>');
+  // 2-5) 작성일 자리(20__. __. __.)를 먼저 연·월·일 칸으로 만든다 — 일반 대괄호 처리보다 앞서야 한다.
+  s = s.replace(작성일자리, () => {
+    const 칸 = (ph: string, w: number) =>
+      `<span class="fld" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${칸너비em(ph, w).toFixed(1)}em"></span>`;
+    return `20${칸("연도", 2)}. ${칸("월", 2)}. ${칸("일", 2)}.`;
+  });
   // 3) 남은 대괄호 → 입력 필드
   //    긴 서술형(경위·사실관계·목록 등)은 줄 안에서 부풀어 앞의 항목명을 밀어내므로
   //    '.big' 블록 입력칸으로 분리 — 항목명은 그 줄에 고정되고 입력은 아래 칸에서 한다(8/11 회의 결정 ②).
-  s = s.replace(/\[([^\]]*)\]/g, (_m, innerRaw: string) => {
+  s = s.replace(/\[([^\]]*)\]/g, (_m, innerRaw: string, off: number) => {
     const inner = String(innerRaw); // 이미 htmlEscape됨 → 텍스트/속성값 모두 안전
     // 대괄호 안이 선택지 묶음이면([☐정기신청 ☐기한 후 신청]) 채워 넣는 빈칸이 아니다.
     // 이걸 필드로 만들면 체크박스 마크업이 data-ph 속성값 안으로 들어가 화면이 깨진다.
     if (inner.includes('class="cbx"')) return _m;
     const isBlank = /^[_\s]*$/.test(inner);
-    const ph = isBlank ? "" : inner;
+    const ph = isBlank ? 앞항목명(s.slice(0, off)) : inner;
     if (!isBlank && inner.length >= 12) {
       return `<span class="fld big" contenteditable="true" role="textbox" data-ph="${ph}"></span>`;
     }
     const width = isBlank ? (inner.match(/_/g) || []).length : inner.length;
-    const minw = 칸너비em(ph, width);
+    const minw = 칸너비em(ph, Math.max(width, 0));
     return `<span class="fld${wideCls(minw)}" contenteditable="true" role="textbox" data-ph="${ph}" style="min-width:${minw.toFixed(1)}em"></span>`;
   });
   // 4) 줄 단위로 감싸며 관공서 배치를 화면에도 입힌다.
