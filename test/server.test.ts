@@ -1246,6 +1246,34 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(스).toContain("스토킹");
   });
 
+  // 공권력 행사(체포·비자의입원)의 적법성을 따지고 사후 구제로 가는 경로가 통째로 없었다.
+  // "가정폭력이든 뭐든 현행범으로 입건할 때 그 절차가 적법한지"에 답할 주제가 아예 없었고,
+  // 위법으로 판명된 뒤의 손해배상·징계 경로도 응급입원 주제에서 이어지지 않았다(2026-09-01).
+  it("체포 적법성·사후 구제 발화가 제 주제로 간다", async () => {
+    for (const q of [
+      "가정폭력으로 현행범 체포됐는데 절차가 적법했는지 알고 싶어요",
+      "경찰이 영장도 없이 저를 체포했어요",
+      "체포가 부당했는데 어떻게 다투나요",
+      "체포할 때 아무 설명도 안 해줬어요",
+    ]) {
+      const t = await callText("triage", { situation: q });
+      expect(t, q).toContain("체포");
+    }
+    // 요건이 실제로 실려 있어야 한다
+    const p = await callText("get_procedure", { topic: "체포적법성확인구제" });
+    expect(p).toContain("48시간");
+    expect(p).toContain("변명할 기회");
+    expect(p).toContain("50만원");          // 제214조 경미사건 제한
+    expect(p).toContain("적부심사");
+    // 위법으로 판명된 뒤의 구제 — 응급입원 주제에서도 이어져야 한다
+    const 입원 = await callText("get_procedure", { topic: "정신질환_비자의입원_심사" });
+    expect(입원).toContain("국가배상");
+    expect(입원).toContain("징계");
+    // 뺏기면 안 되는 것
+    expect(await callText("triage", { situation: "가정폭력을 당하고 있어요" })).toContain("가정폭력");
+    expect(await callText("triage", { situation: "고소를 하고 싶어요" })).toContain("고소");
+  });
+
   it("표현이 달라도 같은 주제에 닿는다 — 9/1 발화 점검분", async () => {
     const pairs: [string, string][] = [
       // 아라비아 숫자·1인칭 '저'·중간 삽입형 (전부 노동위 각하 경로로 가고 있었다)
