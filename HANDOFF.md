@@ -1,6 +1,6 @@
 # HANDOFF — 법률 절차 길잡이 MCP
 
-- **마지막 갱신**: 2026-09-01 22:25 · 클로드코드
+- **마지막 갱신**: 2026-09-01 23:45 · 클로드코드
 - **지금 하는 일**: 8/31 개발 완료 마감 **끝남**(제출 상태 완성). 그 뒤 ORCA 법률 검수를 돌려 **고쳐야 할 것 7건**을 확인했다. **다음 세션의 첫 일감이 이것이다.**
 
 ## 🔴 내일 아침 첫 일감 — 재배포가 f83e9b7에서 멈춰 있다
@@ -21,18 +21,34 @@
 - 미커밋·미추적 파일 0
 - 깨끗한 클론에서 `npm ci` + `npm run build` 둘 다 성공
 
-→ 콘솔 쪽이다. 확인할 것 셋:
-1. 배포 이력에 19~20시 배포가 **실패**로 찍혀 있는지
-2. 소스 커밋이 `f83e9b7`로 **고정**돼 있는지 (최신으로 다시 잡아야 함)
-3. 「빌드」가 배포와 **별도 단계**인지 (배포만 누르면 옛 이미지가 다시 올라간다)
+**콘솔을 실제로 봤다(9/1 밤). 확인된 것:**
+- 재배포는 **PlayMCP 콘솔이 아니라 KakaoCloud MCP Hub**에 있다 →
+  `playmcp.kakaocloud.io/mcp-detail/3539` 상단 우측 `[재배포] [중지] [삭제]`.
+  (PlayMCP 콘솔 playmcp.kakao.com에는 `[심사 요청][수정][삭제]`뿐이다.)
+- 등록 방식 **Git 소스 빌드** — GitHub `main` + `Dockerfile`, 컨테이너 포트 8000.
+  Git URL·브랜치 정상, 저장소는 공개라 익명으로도 최신 커밋이 보인다. 설정 문제 아님.
+- **빌드 로그를 볼 화면이 없다.** `모니터링` 탭은 요청 RPS 그래프용이고 그마저
+  Prometheus 연결이 끊겨 있다(ECONNREFUSED — 카카오 쪽 문제, 우리 것 아님).
+- ⚠️ **`Active`는 "최신"이 아니다.** 새 빌드가 실패해도 옛 컨테이너가 살아 있으면
+  Active로 보인다. 이게 세 시간을 헤맨 이유다.
 
-반영 확인 한 줄:
+### 🔑 배포 여부를 가리는 법 두 가지
+1. **리비전 번호** — 모니터링 탭의 Prometheus 에러 메시지 안에 있다.
+   `destination_workload="legal-navigator-kakaotools-000NN-deployment"`
+   **9/1 23:00 기준 `00059`.** 재배포 후 `00060`이 되면 배포가 걸린 것,
+   그대로면 재배포 버튼이 아무 일도 안 한 것 → 팀 채널 문의 사안.
+2. **`/healthz`** — 9/1에 규모를 함께 내보내도록 고쳤다(`72acf48`).
 ```
-curl -s -X POST https://legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io/mcp \
-  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_form_template","arguments":{"key":"부당해고구제신청서"}}}' | grep -c 각하
+curl -s https://legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io/healthz
 ```
-1이 나오면 반영된 것이다.
+   기대값: `{"status":"ok","scale":{"topics":279,"forms":119,"statutes":321,
+   "precedents":194,"categories":57}}` — 숫자가 다르면 배포가 안 올라간 것이다.
+
+### 내일 순서
+① 모니터링 탭에서 리비전 번호 확인 → ② 재배포 → ③ 몇 분 뒤 번호가 올랐는지 →
+④ `/healthz`로 규모 확인 → ⑤ PlayMCP 콘솔 설명을 `docs/CONSOLE_META.md` 문안으로 교체.
+⛔ KC 화면의 「중지」·「삭제」는 재배포 바로 옆이다. 누르지 말 것.
+※ KC의 Description이 "56개 분야 233개 주제"로 아주 낡았다(자동 갱신 안 됨). 겸사겸사 갱신.
 
 ⚠️ 팀에는 "서식 수정분은 배포가 밀려서 내일 올라간다"고 공지했다(9/1 디스코드).
 
