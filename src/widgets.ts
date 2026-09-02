@@ -142,7 +142,10 @@ export function buildFormWidget(
       : []),
     { type: "Button", label: "📄 한글 서식 바로 받기 (.hwpx)", onClickAction: openUrl(hwpUrl), style: "secondary", block: true },
     ...(submit ? [{ type: "Caption", value: trunc(`🏛️ 제출: ${submit.관할}`, 70) } as Caption] : []),
-    { type: "Caption", value: "🔒 민감번호는 채팅에 쓰지 말고 열린 문서에서 직접 입력하세요." },
+    // 2026-09-02 — 이 줄이 너무 넓게 읽혔다. 모델이 "서식에서 직접 입력해 주세요"라며
+    // 모든 칸을 사용자에게 미루고 초안 작성을 건너뛰었다(실기기 확인).
+    // 민감번호에만 해당한다는 것을 문장 안에 못 박는다.
+    { type: "Caption", value: "🔒 주민등록번호·계좌번호만 채팅에 쓰지 말고, 이 문서를 열어 직접 입력하세요." },
     { type: "Caption", value: "일반 정보이며 개별 법률 자문이 아닙니다 · 법률 절차 길잡이" },
   ];
   return {

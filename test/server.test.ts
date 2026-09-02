@@ -592,6 +592,14 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
   // 숫자로 시작하는 본문의 앞 숫자를 통째로 먹었다. 같은 방식으로 "30일 전"·"2주 안에" 같은
   // 기한 숫자도 사라진다 — 법률 안내에서 숫자가 조용히 없어지는 건 틀린 안내와 같다.
   // 텍스트 모드에는 이 처리가 없으므로 반드시 위젯 모드에서 검사해야 한다.
+  // 카드 하단 안내가 "민감번호는 채팅에 쓰지 말고 직접 입력하세요"로 넓게 적혀 있어,
+  // 모델이 그것을 모든 칸으로 일반화해 초안 작성을 사용자에게 미뤘다(2026-09-02 실기기).
+  it("카드의 직접입력 안내는 민감번호로 한정한다", async () => {
+    const w = JSON.stringify(JSON.parse(await callText("get_form_template", { form: "임금체불진정서" })).widget);
+    expect(w).toContain("주민등록번호·계좌번호만");
+    expect(w).not.toContain("민감번호는 채팅에 쓰지 말고 열린 문서에서 직접 입력");
+  });
+
   it("본문 앞 숫자를 목록 번호로 오인해 지우지 않는다", async () => {
     // for_assistant에는 절차 원문이 그대로 들어가므로, 화면에 그려지는 widget만 본다.
     const 카드 = async (topic: string) =>
@@ -650,7 +658,9 @@ describe("위젯 응답 모드 (WIDGETS=on — 카카오 툴즈 본선)", () => 
     // 호스트 AI가 서식 본문을 몰라 초안을 지어낸다.
     expect(Object.keys(j).sort()).toEqual(["copy_text", "for_assistant", "name", "widget"]);
     expect(j.widget.type).toBe("Card");
-    expect(t).toContain("민감번호는 채팅에 쓰지 말고");
+    // 민감번호 안내는 남아 있어야 하되, 모든 칸으로 읽히지 않게 한정된 문구여야 한다
+    // (2026-09-02 — 넓은 문구가 초안 작성을 미루게 만들었다).
+    expect(t).toContain("주민등록번호·계좌번호만 채팅에 쓰지 말고");
   });
   it("모든 위젯 응답에 미지원 최상위 필드가 없다", async () => {
     const samples: Array<[string, Record<string, unknown>]> = [
@@ -1243,6 +1253,9 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     // 민감번호 금지선은 그대로 살아 있어야 한다
     expect(fa).toContain("주민등록번호");
     expect(fa).toContain("종이에 직접");
+    // 카드의 버튼·안내를 이유로 미루지 못하게 막은 것도 함께 고정한다(2026-09-02 2차).
+    expect(fa).toContain("초안을 미루지 마세요");
+    expect(fa).toContain("초안을 건너뛰지 말 것");
     // 서버 안내문 쪽도 '채우는 것은 할 일'로 바뀌었는지
     expect(SERVER_INSTRUCTIONS).toContain("거절하지 마세요");
     expect(SERVER_INSTRUCTIONS).not.toContain("채우는 수준까지만");
