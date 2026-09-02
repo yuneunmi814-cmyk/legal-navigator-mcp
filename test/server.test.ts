@@ -1231,6 +1231,23 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
   // ⛔ 주제를 새로 만들면 이 목록에도 반드시 넣을 것. 이 검사가 그걸 붙잡는다.
   // 재배포가 안 올라갔는데 콘솔은 계속 Active였고 빌드 로그를 볼 화면도 없었다(9/1).
   // 어느 커밋이 라이브인지 서식 본문을 뒤져 추측하던 것을 한 번에 보게 만든 필드다.
+  // 실기기에서 이름·금액을 다 말했는데도 모델이 "제가 임의로 채워서 제공하기보다는"이라며
+  // 초안을 거절하고 값을 목록으로만 나열했다(2026-09-02). declaw의 "채우는 수준까지만"이
+  // 브레이크로 읽힌 것으로 보여, 채우는 것 자체는 '하라'고 뒤집어 적었다.
+  // ⛔ 이 문구를 되돌리지 말 것 — 되돌리면 서식 초안 기능이 다시 죽는다.
+  it("서식 초안을 거절하지 못하게 못 박는다", async () => {
+    // 이 describe는 텍스트 모드라 지침이 마크다운 본문에 그대로 실려 나온다
+    const fa = await callText("get_form_template", { form: "임금체불진정서" });
+    expect(fa).toContain("초안 작성을 거절하지 마세요");
+    expect(fa).toContain("서식 모양 그대로");
+    // 민감번호 금지선은 그대로 살아 있어야 한다
+    expect(fa).toContain("주민등록번호");
+    expect(fa).toContain("종이에 직접");
+    // 서버 안내문 쪽도 '채우는 것은 할 일'로 바뀌었는지
+    expect(SERVER_INSTRUCTIONS).toContain("거절하지 마세요");
+    expect(SERVER_INSTRUCTIONS).not.toContain("채우는 수준까지만");
+  });
+
   it("/healthz가 규모를 함께 돌려준다 — 라이브가 어느 빌드인지 한 번에 본다", async () => {
     const r = await fetch(`${base}/healthz`);
     const j: any = await r.json();
