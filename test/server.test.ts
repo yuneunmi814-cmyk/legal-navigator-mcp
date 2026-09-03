@@ -1281,6 +1281,22 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(ins).toContain(String(TOPIC_KEYS.length));
   });
 
+  // 호스트 LLM이 실제로 보는 것은 도구 description뿐이다(2026-09-03 PlayMCP 아린님 확답:
+  // "결국 LLM이 확인할 수 있는 정보는 description 뿐"). 그러면 위의 분야 목록은 모델에
+  // 닿지 않을 수 있다 — 9/1에 "경찰이 응급입원 시켰어"가 호출되지 않은 것도 그 구멍으로
+  // 설명된다. 그래서 공권력 계열 발화를 입구 도구 description에 직접 심었고, 여기서 고정한다.
+  // ⛔ 이 예시들을 지우지 말 것. 지우면 그 계열은 다시 호출 신호를 잃는다.
+  it("triage의 트리거 예시에 공권력 계열 발화가 들어 있다", async () => {
+    const tools = (await rpc("tools/list", {})).result.tools;
+    const triage = tools.find((t: any) => t.name === "triage");
+    expect(triage).toBeTruthy();
+    for (const 발화 of ["병원에 입원시켰어", "현행범", "경찰서 잠깐 가자", "공무원이 반말"]) {
+      expect(triage.description, 발화).toContain(발화);
+    }
+    // PlayMCP 규격 1024자 상한에 여유가 남아 있는지도 같이 본다
+    expect(triage.description.length).toBeLessThanOrEqual(1024);
+  });
+
   it("비자의입원·응급입원 발화가 제 주제로 간다", async () => {
     for (const q of [
       "경찰에서 나를 응급입원 시켰어 이거 인권침해아니야?",

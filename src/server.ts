@@ -614,7 +614,14 @@ export function createServer(baseUrl?: string): McpServer {
         `[트리거 예시] "나 월급을 못받고 있어" / "회사에서 돈을 안 줍니다" / "야 나 잘렸어 어떡할까" / ` +
         `"집주인이 보증금을 안 줘" / "친구한테 빌려준 돈 못 받았어" / "전 남친이 계속 연락해" / ` +
         `"법원에서 뭐가 날아왔는데" / "사기당한 것 같아" / "보일러 고장났는데 집주인이 나보고 고치래" / ` +
-        `"월급을 두 달째 못 받고 있어요" / "살고 있는 집이 경매에 넘어갔어요"\n` +
+        `"살고 있는 집이 경매에 넘어갔어요" / ` +
+        // 공권력 계열은 SERVER_INSTRUCTIONS의 분야 목록에만 있었다. 그런데 호스트 LLM이
+        // 보는 것은 도구 description뿐이다(2026-09-03 아린님 확답). 그렇다면 9/1에 분야
+        // 목록을 고친 것은 모델에 닿지 않았고, "경찰이 응급입원 시켰어"가 호출되지 않은
+        // 것도 이 구멍으로 설명된다. 그래서 입구 도구인 여기에 직접 심는다.
+        // (중복이던 "월급을 두 달째" 하나를 빼서 길이를 상쇄했다.)
+        `"경찰이 갑자기 병원에 입원시켰어" / "현행범이라며 수갑 채워서 데려갔어" / ` +
+        `"경찰서 잠깐 가자고 해서 따라갔는데" / "공무원이 반말하고 그냥 가라고 했어"\n` +
         `[EN] Triages a described situation into the closest Korean legal procedure - deadline, first steps, evidence to secure, and where to file.\n` +
         `Service: ${SVC}.`,
       inputSchema: {
