@@ -171,6 +171,8 @@ curl -s https://legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io/health
 - 명령: `npm test` · `npm run typecheck` · `npm run build` · 로컬 `WIDGETS=on PORT=4188 node dist/server.js`
 - 위젯 미리보기: `/widgets/{form|triage|calc|aid|procedure|checklist|deadline}` (aid는 `?lv=1`)
 - 소개 이미지 원본: `assets/kakao-tools-examples/` · 사본 `~/Downloads/카카오툴즈_소개이미지/`
+  ✅ **9/4 13:56 새 5장으로 콘솔 교체 완료**(진단·서식·전화·계산기·기한 D-day).
+  다시 뽑을 땐 `npm run capture:intro` — 서버 응답을 그대로 그리므로 손으로 만들지 말 것.
 
 ## 콘솔 실물 확인 (2026-09-04 04:10)
 
