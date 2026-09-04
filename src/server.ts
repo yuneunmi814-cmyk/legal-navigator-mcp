@@ -1365,6 +1365,10 @@ app.get("/healthz", (_req, res) => {
       statutes: STATUTES.length,
       precedents: Object.values(PRECEDENTS).reduce((n, v) => n + v.length, 0),
       categories: CATEGORIES.length,
+      // 웹 랜딩(legal-navigator-web)이 이 값을 읽어 숫자를 다시 쓴다.
+      // 손으로 적어 두면 낡는다 — 실제로 법령 258·서식 114로 몇 달째 낡아 있었다(9/4 확인).
+      elements: ELEMENT_KEYS.length,
+      glossary: Object.keys(GLOSSARY).length,
     },
   });
 });

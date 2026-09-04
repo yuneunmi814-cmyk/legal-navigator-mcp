@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { app, SERVER_INSTRUCTIONS } from "../src/server.js";
 import { clearLogs } from "../src/debugLog.js";
-import { TOPIC_KEYS, FORM_KEYS, FORMS, PROCEDURES } from "../src/data/index.js";
+import { TOPIC_KEYS, FORM_KEYS, FORMS, PROCEDURES, ELEMENT_KEYS } from "../src/data/index.js";
 
 let base = "";
 let server: Server;
@@ -1268,6 +1268,9 @@ describe("도구 호출 디버그 로그 (/admin/logs)", () => {
     expect(j.scale.topics).toBe(TOPIC_KEYS.length);
     expect(j.scale.forms).toBe(FORM_KEYS.length);
     expect(j.scale.statutes).toBeGreaterThan(300);
+    // 웹 랜딩이 이 둘을 읽어 숫자를 다시 쓴다. 빠지면 랜딩이 다시 손글씨로 낡는다.
+    expect(j.scale.elements).toBe(ELEMENT_KEYS.length);
+    expect(j.scale.glossary).toBeGreaterThan(100);
   });
 
   it("서버 안내문의 분야 목록이 실제 주제를 따라간다", () => {
