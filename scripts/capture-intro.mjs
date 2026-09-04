@@ -167,7 +167,12 @@ function 페이지(발화, widget) {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{width:960px;height:960px;background:#fff;overflow:hidden;
+  /* ⛔ 캔버스 바깥은 투명이어야 한다(가이드 p.2 "배경은 반드시 투명하게").
+     카카오 상세화면이 라이트/다크에 맞춰 자기 배경을 깔고 그 위에 이 그림을 얹는다.
+     흰색으로 칠하면 좌우 여백이 흰 판때기로 떠 보인다 — 9/4 19:08 아린님 3차 지적.
+     반대로 폰 '화면 안쪽'은 흰 불투명이어야 한다. 8/31 원본은 여기가 투명이라
+     어두운 화면에서 검게 비쳤고 그게 1차 지적이었다. 둘은 다른 자리다. */
+  body{width:960px;height:960px;background:transparent;overflow:hidden;
        font-family:Pretendard,"Apple SD Gothic Neo",-apple-system,sans-serif;
        -webkit-font-smoothing:antialiased}
   /* ── 템플릿 고정 좌표. 카드 길이에 따라 움직이지 않는다 ── */
@@ -264,7 +269,7 @@ for (const s of SCENES) {
   const png = join(OUT, `${s.file}.png`);
   const r = spawnSync(CHROME, [
     "--headless", "--disable-gpu", "--hide-scrollbars",
-    "--default-background-color=FFFFFFFF",   // ⛔ 투명배경 금지(9/4 아린님 지적)
+    "--default-background-color=00000000",   // 바깥은 투명 — 위 주석 참조
     "--force-device-scale-factor=1", "--window-size=960,960",
     `--screenshot=${png}`, `file://${html}`,
   ], { stdio: "ignore" });

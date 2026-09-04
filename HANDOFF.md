@@ -171,9 +171,10 @@ curl -s https://legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io/health
 - 명령: `npm test` · `npm run typecheck` · `npm run build` · 로컬 `WIDGETS=on PORT=4188 node dist/server.js`
 - 위젯 미리보기: `/widgets/{form|triage|calc|aid|procedure|checklist|deadline}` (aid는 `?lv=1`)
 - 소개 이미지 원본: `assets/kakao-tools-examples/` · 사본 `~/Downloads/카카오툴즈_소개이미지/`
-  ✅ **9/4 19:06 콘솔 교체 완료 — 2차판**(진단·계산기·체크리스트·서식·전화).
-  아린님 지적 두 번을 모두 반영한 판이다. ①배경 투명 → 흰색 ②비율 확대 →
+  ⏳ **9/4 19:5x 3차판 생성 완료 — 콘솔 업로드 대기**(진단·계산기·체크리스트·서식·전화).
+  아린님 지적 세 번을 모두 반영한 판이다. ①폰 화면 안쪽 투명 → 흰색 ②비율 확대 →
   공식 가이드 PDF를 300dpi로 실측한 좌표(폰 664/좌148/상74/목업색 #383838)로 고정.
+  ③좌우 여백을 흰색으로 칠한 것 → 바깥은 투명으로 되돌림(라이트/다크 대응 때문).
   ⛔ 폰 크기·위치를 카드 길이에 맞춰 조절하지 말 것 — 가이드 p.16이 금지한 짓이고
      그래서 지적받았다. 상세는 `docs/CONSOLE_META.md`.
   다시 뽑을 땐 `npm run capture:intro` — 서버 응답을 그대로 그리므로 손으로 만들지 말 것.
