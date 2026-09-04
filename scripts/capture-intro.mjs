@@ -27,6 +27,9 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 //     주제 279개·57개 분야를 다루는데 목록에선 '노동 전문 도구'로 보였다.
 //  ③ 답변 영역(554px)을 채울 것 — 절반만 찬 화면은 '내용이 모자란' 인상을 준다.
 // 순서는 이용자 여정: 내 상황 → 뭘 준비 → 서류 → 비용 → 도움.
+// 파일명에 분야를 넣는다. 3차판에서 01·05만 이름이 그대로여서 콘솔 파일 선택창이
+// 이전 업로드의 낡은 참조를 붙들고 그 둘을 회색으로 막았다(9/4 20:2x).
+// 내용이 바뀌면 이름도 바뀌게 해 둔다.
 //
 //   카드 종류    분야      채움
 //   진단        노동      100%
@@ -36,31 +39,31 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 //   전화(tel:)  일반       90%
 const SCENES = [
   {
-    file: "01_오인미만해고",
+    file: "1_노동_해고",
     발화: "직원이 나 포함 세 명인데 갑자기 나오지 말래요",
     tool: "triage",
     args: { situation: "직원이 나 포함 세 명인데 갑자기 나오지 말래요" },
   },
   {
-    file: "02_전세준비서류",
+    file: "2_임대차_증거",
     발화: "전세금 소송에 필요한 증거가 뭐예요?",
     tool: "get_checklist",
     args: { topic: "전세보증금반환" },
   },
   {
-    file: "03_사기고소장",
+    file: "3_형사_고소장",
     발화: "사기 고소장 양식 보여줘",
     tool: "get_form_template",
     args: { form: "사기_고소장" },
   },
   {
-    file: "04_소송비용계산",
+    file: "4_민사_소송비용",
     발화: "500만원 소송하면 비용이 얼마나 들어요?",
     tool: "calculate_court_cost",
     args: { claim_amount: 5000000, parties: 2, track: "소액" },
   },
   {
-    file: "05_전화바로걸기",
+    file: "5_무료지원_전화",
     발화: "변호사 살 돈이 없어요",
     tool: "find_legal_aid",
     args: { keyword: "무료변호사" },
