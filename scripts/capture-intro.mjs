@@ -21,8 +21,13 @@ const BASE = `http://localhost:${PORT}`;
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 // ── 장면 5개 ────────────────────────────────────────────────────────────────
-// 카드 종류가 겹치지 않게 골랐다. 8/31판은 5장 중 3장이 같은 '빠른 진단' 카드였고,
-// 계산기·기한 카드는 한 번도 보여준 적이 없었다.
+// 고른 기준 둘.
+//  ① 카드 종류가 겹치지 않을 것 — 8/31판은 5장 중 3장이 같은 '빠른 진단' 카드였다.
+//  ② 답변 영역(554px)을 채울 것 — 절반만 찬 화면은 '내용이 모자란' 인상을 준다.
+//     실측 채움률: 진단 100% · 계산기 61% · 체크리스트 100% · 서식 94% · 전화 90%.
+//     계산기만 짧은데, 큰 금액이 한눈에 박히는 카드라 자리를 지킨다.
+//     (기한 D-day 카드는 69%에 그쳐 체크리스트에 자리를 내줬다.)
+// 순서는 이용자 여정: 내 상황 → 얼마 → 뭘 준비 → 서류 작성 → 도움 받기.
 const SCENES = [
   {
     file: "01_오인미만해고",
@@ -31,36 +36,60 @@ const SCENES = [
     args: { situation: "직원이 나 포함 세 명인데 갑자기 나오지 말래요" },
   },
   {
-    file: "02_서식카드",
-    발화: "임금체불 진정서 양식 보여줘",
-    tool: "get_form_template",
-    args: { form: "임금체불진정서" },
-  },
-  {
-    file: "03_전화바로걸기",
-    발화: "변호사 살 돈이 없어요",
-    tool: "find_legal_aid",
-    args: { keyword: "무료변호사" },
-  },
-  {
     // 발화는 사람 말 그대로 두고, 도구에는 모델이 환산해 넘기는 값을 넣는다.
     // (1일 평균임금 = 월 300만 × 3개월 ÷ 91일 ≈ 98,901원 · 3년 = 1,095일)
-    file: "04_퇴직금계산",
+    file: "02_퇴직금계산",
     발화: "3년 일했고 월급 300만원인데 퇴직금 얼마예요?",
     tool: "calculate_amount",
     args: { item: "퇴직금", daily_avg_wage: 98901, tenure_days: 1095 },
   },
   {
-    file: "05_기한디데이",
-    발화: "아버지 돌아가신 지 두 달인데 상속포기 아직 돼요?",
-    tool: "calculate_deadline",
-    args: { start_date: "2026-07-05", deadline_type: "상속포기_한정승인" },
+    file: "03_준비서류",
+    발화: "임금체불 신고하려면 뭘 준비해야 해요?",
+    tool: "get_checklist",
+    args: { topic: "임금체불" },
+  },
+  {
+    file: "04_서식카드",
+    발화: "임금체불 진정서 양식 보여줘",
+    tool: "get_form_template",
+    args: { form: "임금체불진정서" },
+  },
+  {
+    file: "05_전화바로걸기",
+    발화: "변호사 살 돈이 없어요",
+    tool: "find_legal_aid",
+    args: { keyword: "무료변호사" },
   },
 ];
 
-// ── 색 ──────────────────────────────────────────────────────────────────────
-// 8/31판 화면에서 그대로 뽑았다. 여기서 임의로 바꾸면 콘솔의 다섯 장이
-// 서로 다른 제품처럼 보인다.
+// ── 템플릿 실측값 (960×960) ──────────────────────────────────────────────────
+// 공식 가이드 `KakaoTools_서비스소개이미지제작가이드v1.1.pdf`의 제작 예시(p.15)와
+// 템플릿 도해(p.2)를 300dpi로 렌더해 픽셀로 쟀다. 눈대중이 아니다.
+//   폰 바깥폭 664.4 · 좌여백 148.0 · 우여백 147.6 · 상여백 72.9 · 프레임 16.5
+//   화면 안쪽 좌 164.2 · 폭 631.7
+//   상단바 텍스트 y 144.8~173.8 / 말풍선 텍스트 y 253.2~276.0
+//   서비스명 y 357.0~383.4 / 답변 영역 y 406~960(아래로 흘러 나감)
+// ⛔ 가이드 p.16 Don't: "위치를 임의로 조정하지 않습니다" — 이 값들을 흔들지 말 것.
+//    9/4 1차판은 카드 길이에 맞춰 폰을 1.22배까지 키우고 위아래로 옮겼다가
+//    "비율이 조금 확대되어 나온다"는 지적을 받았다(아린님).
+const T = {
+  폰좌: 148, 폰상: 74, 폰폭: 664, 프레임: 16.5, 라운드: 49,
+  // ⛔ 가이드 p.16 "목업 컬러는 임의로 변경하지 않습니다" — 실측 #383838. 순검정 아니다.
+  목업색: "#383838",
+  화면좌: 164.2, 화면폭: 631.7,
+  상단바중심: 159, 말풍선중심: 264.5, 서비스명중심: 370, 답변상: 406,
+  // 가이드가 못박은 값 — 변경 금지(p.3, p.5)
+  질문폰트: 27, 질문색: "#181818",
+  서비스폰트: 24, 서비스색: "#5D5D5D",
+};
+// 답변 이미지는 "width 393px · zoom 100% · DPR 2.0"으로 캡처해 넣도록 되어 있다(p.9).
+// 즉 393px 폭으로 그린 화면이 631.7px 자리에 들어간다 → 이 배율로 키운다.
+T.화면상 = T.폰상 + T.프레임;               // 화면 안쪽 위 = 90.5
+// 1줄 말풍선 기준으로 실측 좌표(상단바 159 · 말풍선 264.5 · 서비스명 370)에 맞춘 간격
+const 간격 = 52.6;
+const 답변배율 = T.화면폭 / 393;
+
 const C = {
   잉크: "#191F28",
   본문: "#333D4B",
@@ -68,7 +97,7 @@ const C = {
   선: "#EDEFF2",
   카드선: "#E5E8EB",
   연회색: "#F2F4F6",
-  말풍선: "#EDEFF2",
+  말풍선: "#F4F4F4",   // 가이드 예시에서 실측
   파랑배경: "#E8F0FE",
   파랑글자: "#2563EB",
   버튼: "#1B2028",
@@ -78,17 +107,18 @@ const esc = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // ── 위젯 JSON → HTML ────────────────────────────────────────────────────────
+// 크기는 전부 '393px 폭 휴대폰' 기준이다. 위에서 답변배율로 한 번에 키운다.
 function 컴포넌트(c) {
   switch (c.type) {
     case "Title": {
-      const px = c.size === "lg" ? 30 : c.size === "sm" ? 21 : 25;
+      const px = c.size === "lg" ? 19 : c.size === "sm" ? 13.5 : 16;
       return `<div class="t" style="font-size:${px}px">${esc(c.value)}</div>`;
     }
     case "Caption":
       return `<div class="cap">${esc(c.value)}</div>`;
     case "Text":
       return `<div class="tx${c.italic ? " it" : ""}" style="font-size:${
-        c.size === "sm" ? 17 : 18
+        c.size === "sm" ? 12 : 13
       }px">${esc(c.value)}</div>`;
     case "Markdown":
       return `<div class="tx">${esc(c.value)}</div>`;
@@ -106,97 +136,89 @@ function 컴포넌트(c) {
     case "Divider":
       return `<div class="div"></div>`;
     case "Row":
-      return `<div class="row" style="gap:${c.gap ?? 8}px">${c.children.map(컴포넌트).join("")}</div>`;
+      return `<div class="row" style="gap:${(c.gap ?? 8) / 2}px">${c.children.map(컴포넌트).join("")}</div>`;
     case "Col":
-      return `<div class="col" style="gap:${c.gap ?? 8}px">${c.children.map(컴포넌트).join("")}</div>`;
+      return `<div class="col" style="gap:${(c.gap ?? 8) / 2}px">${c.children.map(컴포넌트).join("")}</div>`;
     case "ListViewItem":
       return `<div class="lvi"><div class="tx">${esc(c.title ?? "")}</div>${
         c.description ? `<div class="cap">${esc(c.description)}</div>` : ""
       }</div>`;
     case "ListView":
-      return `<div class="col" style="gap:14px">${(c.children ?? []).map(컴포넌트).join("")}</div>`;
+      return `<div class="col" style="gap:9px">${(c.children ?? []).map(컴포넌트).join("")}</div>`;
     default:
       return "";
   }
 }
 
-// 상단 우측 아이콘 — 이모지 글리프는 헤드리스 크롬에서 깨져 SVG로 그린다
+// 상단바 우측 아이콘 — 이모지 글리프는 헤드리스 크롬에서 깨져 SVG로 그린다
 const 아이콘 = [
-  `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/>
      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
-  `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
-  `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
 ].join("");
 
 function 페이지(발화, widget) {
   const 본문 = (widget.children ?? []).map(컴포넌트).join("");
   return `<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{width:960px;height:960px;background:#fff;overflow:hidden;
-       font-family:"Apple SD Gothic Neo","Pretendard",-apple-system,sans-serif;
+       font-family:Pretendard,"Apple SD Gothic Neo",-apple-system,sans-serif;
        -webkit-font-smoothing:antialiased}
-  /* 폰은 아래로 흘러 나가게 둔다 — 8/31판과 같은 구도다 */
-  .phone{position:absolute;left:100px;top:18px;width:760px;height:1020px;
-         background:#0F1115;border-radius:56px;padding:11px}
-  .screen{width:100%;height:100%;background:#fff;border-radius:46px;
-          padding:26px 30px;overflow:hidden}
-  .bar{display:flex;align-items:center;gap:12px;margin-bottom:26px}
-  .x{font-size:26px;color:${C.잉크};font-weight:300}
-  .gpt{font-size:25px;font-weight:800;color:${C.잉크};letter-spacing:-.4px}
-  .fk{font-size:24px;color:#9AA3AD;letter-spacing:-.3px}
-  .icons{margin-left:auto;display:flex;gap:18px;align-items:center}
-  .me{display:flex;justify-content:flex-end;margin-bottom:24px}
-  .me span{background:${C.말풍선};border-radius:22px;padding:15px 22px;
-           font-size:19px;color:${C.잉크};max-width:560px;letter-spacing:-.3px}
-  .who{display:flex;align-items:center;gap:9px;margin-bottom:16px;
-       font-size:19px;color:#4E5968;letter-spacing:-.3px}
-  .ring{width:17px;height:17px;border-radius:50%;border:4px solid #FF4E24}
-  .card{border:1px solid ${C.카드선};border-radius:20px;padding:26px 24px;
-        display:flex;flex-direction:column;gap:12px}
-  .t{font-weight:800;color:${C.잉크};letter-spacing:-.6px;line-height:1.32}
-  .cap{font-size:16px;color:${C.흐림};letter-spacing:-.3px;line-height:1.5}
-  .tx{font-size:18px;color:${C.본문};letter-spacing:-.3px;line-height:1.55}
+  /* ── 템플릿 고정 좌표. 카드 길이에 따라 움직이지 않는다 ── */
+  .phone{position:absolute;left:${T.폰좌}px;top:${T.폰상}px;width:${T.폰폭}px;height:1180px;
+         background:${T.목업색};border-radius:${T.라운드}px;padding:${T.프레임}px}
+  .screen{width:100%;height:100%;background:#fff;display:flex;flex-direction:column;
+          border-radius:${T.라운드 - T.프레임}px;overflow:hidden;position:relative}
+  /* 흐름 배치 — 1줄 말풍선일 때 실측 좌표에 정확히 떨어지고,
+     2줄이면 아래가 밀린다(가이드 p.4: "질문 텍스트가 길어질수록 답변 영역이 좁아지므로"). */
+  .bar{display:flex;align-items:center;gap:13px;height:34px;
+       margin:${T.상단바중심 - T.화면상 - 17}px 20px 0}
+  .x{font-size:28px;color:${C.잉크};font-weight:300}
+  .gpt{font-size:27px;font-weight:700;color:${C.잉크};letter-spacing:-.4px}
+  .fk{font-size:26px;color:#9AA3AD;letter-spacing:-.3px}
+  .icons{margin-left:auto;display:flex;gap:19px;align-items:center}
+  /* 질문 말풍선 — 폰트·크기·색은 가이드 고정값(p.3). 절대 바꾸지 말 것. */
+  .me{display:flex;justify-content:flex-end;margin:${간격}px 16px 0}
+  .me span{background:${C.말풍선};border-radius:24px;padding:17px 24px;
+           font-size:${T.질문폰트}px;font-weight:400;color:${T.질문색};
+           line-height:1.4;letter-spacing:-.3px;max-width:540px}
+  /* 서비스명 — 폰트·크기·색은 가이드 고정값(p.5). 절대 바꾸지 말 것. */
+  .who{display:flex;align-items:center;gap:10px;height:34px;margin:${간격}px 20px 0;
+       font-size:${T.서비스폰트}px;font-weight:500;color:${T.서비스색};letter-spacing:-.3px}
+  .ring{width:16px;height:16px;border-radius:50%;border:4px solid #FF4E24;flex:none}
+  /* 답변 영역 — 393px 폭으로 그려 ${답변배율.toFixed(4)}배로 키운다(가이드 p.9 캡처 규격) */
+  .ans{flex:1;margin-top:19px;overflow:hidden}
+  .ans-in{width:393px;transform:scale(${답변배율});transform-origin:top left}
+  .card{margin:0 10px;border:1px solid ${C.카드선};border-radius:14px;padding:16px 15px;
+        display:flex;flex-direction:column;gap:7px}
+  .t{font-weight:700;color:${C.잉크};letter-spacing:-.4px;line-height:1.34}
+  .cap{font-size:10.5px;color:${C.흐림};letter-spacing:-.2px;line-height:1.5}
+  .tx{color:${C.본문};letter-spacing:-.2px;line-height:1.55}
   .it{font-style:italic}
-  .bg{display:inline-block;font-size:15px;font-weight:700;border-radius:999px;
-      padding:7px 15px;letter-spacing:-.3px}
-  .div{height:1px;background:${C.선};margin:4px 0}
+  .bg{display:inline-block;font-size:10px;font-weight:600;border-radius:999px;
+      padding:4px 9px;letter-spacing:-.2px}
+  .div{height:1px;background:${C.선};margin:2px 0}
   .row{display:flex;align-items:center;flex-wrap:wrap}
   .col{display:flex;flex-direction:column}
-  .lvi{display:flex;flex-direction:column;gap:5px}
-  .btn{border-radius:14px;height:62px;display:flex;align-items:center;
-       justify-content:center;font-size:19px;font-weight:800;letter-spacing:-.4px}
+  .lvi{display:flex;flex-direction:column;gap:3px}
+  .btn{border-radius:9px;height:39px;display:flex;align-items:center;
+       justify-content:center;font-size:12.5px;font-weight:700;letter-spacing:-.3px}
   .btn.p{background:${C.버튼};color:#fff}
   .btn.s{background:${C.연회색};color:${C.잉크}}
 </style>
-<div class="phone" id="phone"><div class="screen">
+<div class="phone"><div class="screen">
   <div class="bar"><span class="x">✕</span><span class="gpt">ChatGPT</span>
-    <span class="fk">for Kakao</span>
-    <span class="icons">${아이콘}</span></div>
+    <span class="fk">for Kakao</span><span class="icons">${아이콘}</span></div>
   <div class="me"><span>${esc(발화)}</span></div>
   <div class="who"><span class="ring"></span>Kakao Tools · 법률 절차 길잡이</div>
-  <div class="card" id="card">${본문}</div>
-</div></div>
-<script>
-  // 카드가 짧으면(계산기·기한) 폰 아래가 크게 비어 "내용이 모자란" 인상을 준다.
-  // 내용 높이에 맞춰 조금 키우고, 남는 여백을 위아래로 나눈다. 폰 아래는 계속 흘러 나간다.
-  (function () {
-    var phone = document.getElementById("phone");
-    var card = document.getElementById("card");
-    var 아래 = card.getBoundingClientRect().bottom + 26;   // 카드 아래 여백까지
-    var s = Math.max(1, Math.min(1.22, 880 / 아래));       // 1.22 = 폰 폭 927px, 화면 안에 들어온다
-    var 높이 = 아래 * s;
-    // 정중앙에 두면 위가 크게 비어 다섯 장의 구도가 서로 어긋난다.
-    // 위쪽으로 붙이되 아래 여백이 더 남도록 4:6으로 나눈다.
-    var top = Math.max(18, Math.round(18 + (960 - 높이) * 0.28));
-    phone.style.transformOrigin = "top center";
-    phone.style.transform = "scale(" + s + ")";
-    phone.style.top = top + "px";
-  })();
-</script>`;
+  <div class="ans"><div class="ans-in"><div class="card">${본문}</div></div></div>
+</div></div>`;
 }
 
 // ── 서버 호출 ───────────────────────────────────────────────────────────────
