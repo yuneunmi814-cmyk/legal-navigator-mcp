@@ -21,13 +21,19 @@ const BASE = `http://localhost:${PORT}`;
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 // ── 장면 5개 ────────────────────────────────────────────────────────────────
-// 고른 기준 둘.
+// 고른 기준 셋. 전부 실측으로 정했다(`node scripts/check-intro.mjs`가 지킨다).
 //  ① 카드 종류가 겹치지 않을 것 — 8/31판은 5장 중 3장이 같은 '빠른 진단' 카드였다.
-//  ② 답변 영역(554px)을 채울 것 — 절반만 찬 화면은 '내용이 모자란' 인상을 준다.
-//     실측 채움률: 진단 100% · 계산기 61% · 체크리스트 100% · 서식 94% · 전화 90%.
-//     계산기만 짧은데, 큰 금액이 한눈에 박히는 카드라 자리를 지킨다.
-//     (기한 D-day 카드는 69%에 그쳐 체크리스트에 자리를 내줬다.)
-// 순서는 이용자 여정: 내 상황 → 얼마 → 뭘 준비 → 서류 작성 → 도움 받기.
+//  ② 분야가 겹치지 않을 것 — 9/4 1·2차판은 5장 중 4장이 전부 임금체불이었다.
+//     주제 279개·57개 분야를 다루는데 목록에선 '노동 전문 도구'로 보였다.
+//  ③ 답변 영역(554px)을 채울 것 — 절반만 찬 화면은 '내용이 모자란' 인상을 준다.
+// 순서는 이용자 여정: 내 상황 → 뭘 준비 → 서류 → 비용 → 도움.
+//
+//   카드 종류    분야      채움
+//   진단        노동      100%
+//   체크리스트   임대차     100%
+//   서식        형사       94%
+//   계산기      민사소송    72%   ← 계산기 카드는 원래 짧다. 퇴직금(58%)보다 낫다.
+//   전화(tel:)  일반       90%
 const SCENES = [
   {
     file: "01_오인미만해고",
@@ -36,24 +42,22 @@ const SCENES = [
     args: { situation: "직원이 나 포함 세 명인데 갑자기 나오지 말래요" },
   },
   {
-    // 발화는 사람 말 그대로 두고, 도구에는 모델이 환산해 넘기는 값을 넣는다.
-    // (1일 평균임금 = 월 300만 × 3개월 ÷ 91일 ≈ 98,901원 · 3년 = 1,095일)
-    file: "02_퇴직금계산",
-    발화: "3년 일했고 월급 300만원인데 퇴직금 얼마예요?",
-    tool: "calculate_amount",
-    args: { item: "퇴직금", daily_avg_wage: 98901, tenure_days: 1095 },
-  },
-  {
-    file: "03_준비서류",
-    발화: "임금체불 신고하려면 뭘 준비해야 해요?",
+    file: "02_전세준비서류",
+    발화: "전세금 소송에 필요한 증거가 뭐예요?",
     tool: "get_checklist",
-    args: { topic: "임금체불" },
+    args: { topic: "전세보증금반환" },
   },
   {
-    file: "04_서식카드",
-    발화: "임금체불 진정서 양식 보여줘",
+    file: "03_사기고소장",
+    발화: "사기 고소장 양식 보여줘",
     tool: "get_form_template",
-    args: { form: "임금체불진정서" },
+    args: { form: "사기_고소장" },
+  },
+  {
+    file: "04_소송비용계산",
+    발화: "500만원 소송하면 비용이 얼마나 들어요?",
+    tool: "calculate_court_cost",
+    args: { claim_amount: 5000000, parties: 2, track: "소액" },
   },
   {
     file: "05_전화바로걸기",
@@ -88,6 +92,7 @@ const T = {
 T.화면상 = T.폰상 + T.프레임;               // 화면 안쪽 위 = 90.5
 // 1줄 말풍선 기준으로 실측 좌표(상단바 159 · 말풍선 264.5 · 서비스명 370)에 맞춘 간격
 const 간격 = 52.6;
+const 여백 = 27;    // 화면 안쪽 좌우 여백 — 가이드 실측
 const 답변배율 = T.화면폭 / 393;
 
 const C = {
@@ -151,13 +156,18 @@ function 컴포넌트(c) {
 }
 
 // 상단바 우측 아이콘 — 이모지 글리프는 헤드리스 크롬에서 깨져 SVG로 그린다
+// ✕ 도 아이콘 상자로 그린다. 문자로 쓰면 폰트마다 좌우 여백(사이드 베어링)이 달라
+// 템플릿 위치에 못 맞춘다 — 가이드 예시에선 잉크가 x199에서 시작한다.
+const 닫기 = `<svg width="30.5" height="30.5" viewBox="0 0 24 24" fill="none" stroke="#191F28"
+   stroke-width="1.5" stroke-linecap="round"><path d="M4.5 4.5 19.5 19.5M19.5 4.5 4.5 19.5"/></svg>`;
+
 const 아이콘 = [
-  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/>
      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
-  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
-  `<svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
+  `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4E5968" stroke-width="1.7"
      stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
 ].join("");
 
@@ -182,21 +192,31 @@ function 페이지(발화, widget) {
           border-radius:${T.라운드 - T.프레임}px;overflow:hidden;position:relative}
   /* 흐름 배치 — 1줄 말풍선일 때 실측 좌표에 정확히 떨어지고,
      2줄이면 아래가 밀린다(가이드 p.4: "질문 텍스트가 길어질수록 답변 영역이 좁아지므로"). */
-  .bar{display:flex;align-items:center;gap:13px;height:34px;
-       margin:${T.상단바중심 - T.화면상 - 17}px 20px 0}
-  .x{font-size:28px;color:${C.잉크};font-weight:300}
-  .gpt{font-size:27px;font-weight:700;color:${C.잉크};letter-spacing:-.4px}
-  .fk{font-size:26px;color:#9AA3AD;letter-spacing:-.3px}
-  .icons{margin-left:auto;display:flex;gap:19px;align-items:center}
+  /* 좌우 안쪽 여백 27px — 가이드 예시 실측(링 왼끝 191 · 말풍선 오른끝 769 · 화면 164.2~795.9) */
+  .bar{display:flex;align-items:center;height:34px;
+       margin:${T.상단바중심 - T.화면상 - 17}px ${여백}px 0}
+  .x{display:flex;margin:0 27px 0 3px}
+  .gpt{font-size:29.6px;color:${C.잉크};letter-spacing:-.4px}
+  .gpt b{font-weight:700}
+  .fk{color:#9AA3AD}
+  .icons{margin-left:auto;display:flex;gap:24px;align-items:center;margin-right:-4px}
   /* 질문 말풍선 — 폰트·크기·색은 가이드 고정값(p.3). 절대 바꾸지 말 것. */
-  .me{display:flex;justify-content:flex-end;margin:${간격}px 16px 0}
+  .me{display:flex;justify-content:flex-end;margin:${간격}px ${여백}px 0}
   .me span{background:${C.말풍선};border-radius:24px;padding:17px 24px;
            font-size:${T.질문폰트}px;font-weight:400;color:${T.질문색};
            line-height:1.4;letter-spacing:-.3px;max-width:540px}
   /* 서비스명 — 폰트·크기·색은 가이드 고정값(p.5). 절대 바꾸지 말 것. */
-  .who{display:flex;align-items:center;gap:10px;height:34px;margin:${간격}px 20px 0;
+  .who{display:flex;align-items:center;gap:10px;height:34px;margin:${간격}px ${여백}px 0;
        font-size:${T.서비스폰트}px;font-weight:500;color:${T.서비스색};letter-spacing:-.3px}
-  .ring{width:16px;height:16px;border-radius:50%;border:4px solid #FF4E24;flex:none}
+  /* Kakao Tools 링 — 가이드 예시에서 실측(바깥지름 29 · 획 5.3 · 원뿔 그라데이션).
+     ⛔ 가이드 p.6 Don't "블릿을 임의로 변경하는 경우". 단색으로 그리면 안 된다.
+     아래 색 정지점은 링 둘레를 30°씩 찍어 뽑은 실측값이다. */
+  .ring{width:29px;height:29px;border-radius:50%;flex:none;
+        background:conic-gradient(#DF218D 0deg,#E87E73 30deg,#FAC736 60deg,#F5CA1B 90deg,
+                   #F2C92E 120deg,#EA9E69 150deg,#EC6EB3 180deg,#E273C3 210deg,
+                   #EC6FD0 240deg,#F455C6 270deg,#D643B0 300deg,#E245AD 330deg,#DF218D 360deg);
+        -webkit-mask:radial-gradient(circle at center, transparent 9.2px, #000 9.3px);
+                mask:radial-gradient(circle at center, transparent 9.2px, #000 9.3px)}
   /* 답변 영역 — 393px 폭으로 그려 ${답변배율.toFixed(4)}배로 키운다(가이드 p.9 캡처 규격) */
   .ans{flex:1;margin-top:19px;overflow:hidden}
   .ans-in{width:393px;transform:scale(${답변배율});transform-origin:top left}
@@ -218,8 +238,9 @@ function 페이지(발화, widget) {
   .btn.s{background:${C.연회색};color:${C.잉크}}
 </style>
 <div class="phone"><div class="screen">
-  <div class="bar"><span class="x">✕</span><span class="gpt">ChatGPT</span>
-    <span class="fk">for Kakao</span><span class="icons">${아이콘}</span></div>
+  <div class="bar"><span class="x">${닫기}</span
+    ><span class="gpt"><b>ChatGPT</b> <span class="fk">for Kakao</span></span
+    ><span class="icons">${아이콘}</span></div>
   <div class="me"><span>${esc(발화)}</span></div>
   <div class="who"><span class="ring"></span>Kakao Tools · 법률 절차 길잡이</div>
   <div class="ans"><div class="ans-in"><div class="card">${본문}</div></div></div>
@@ -227,7 +248,18 @@ function 페이지(발화, widget) {
 }
 
 // ── 서버 호출 ───────────────────────────────────────────────────────────────
-async function 카드(tool, args) {
+// 로컬 서버가 드물게 연결을 끊는다(ECONNRESET). 한 장 실패로 5장이 다 날아가지 않게 재시도한다.
+async function 카드(tool, args, 시도 = 0) {
+  try {
+    return await 카드1회(tool, args);
+  } catch (e) {
+    if (시도 >= 2) throw e;
+    await new Promise((r) => setTimeout(r, 400));
+    return 카드(tool, args, 시도 + 1);
+  }
+}
+
+async function 카드1회(tool, args) {
   const r = await fetch(`${BASE}/mcp`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },

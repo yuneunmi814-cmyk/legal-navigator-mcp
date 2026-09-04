@@ -13,7 +13,8 @@
     "audit:law": "tsx scripts/verify-statutes.ts",
     "test": "vitest run",
     "audit:links": "node scripts/check-links.mjs",
-    "capture:intro": "node scripts/capture-intro.mjs"
+    "capture:intro": "node scripts/capture-intro.mjs && node scripts/check-intro.mjs",
+    "check:intro": "node scripts/check-intro.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

@@ -171,7 +171,9 @@ curl -s https://legal-navigator-kakaotools.playmcp-endpoint.kakaocloud.io/health
 - 명령: `npm test` · `npm run typecheck` · `npm run build` · 로컬 `WIDGETS=on PORT=4188 node dist/server.js`
 - 위젯 미리보기: `/widgets/{form|triage|calc|aid|procedure|checklist|deadline}` (aid는 `?lv=1`)
 - 소개 이미지 원본: `assets/kakao-tools-examples/` · 사본 `~/Downloads/카카오툴즈_소개이미지/`
-  ⏳ **9/4 19:5x 3차판 생성 완료 — 콘솔 업로드 대기**(진단·계산기·체크리스트·서식·전화).
+  ⏳ **9/4 20:0x 3차판 생성 완료 — 콘솔 업로드 대기**(진단·체크리스트·서식·계산기·전화).
+  `npm run check:intro` 규격 16항목 전부 통과. 분야도 노동·임대차·형사·민사·일반으로 흩었다
+  (1·2차판은 5장 중 4장이 임금체불이라 노동 전문 도구로 보였다).
   아린님 지적 세 번을 모두 반영한 판이다. ①폰 화면 안쪽 투명 → 흰색 ②비율 확대 →
   공식 가이드 PDF를 300dpi로 실측한 좌표(폰 664/좌148/상74/목업색 #383838)로 고정.
   ③좌우 여백을 흰색으로 칠한 것 → 바깥은 투명으로 되돌림(라이트/다크 대응 때문).
