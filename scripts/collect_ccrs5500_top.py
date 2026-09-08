@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 STORAGE_STATE = "naver_login_state.json"  # 기존 스크립트와 동일한 로그인 세션 재사용
+# 카페 주소(cafe.naver.com/<여기>). CLI 4번째 인자로 바꿀 수 있다.
 CAFE_URL_PATH = "ccrs5500"
 BOARD_KEYWORDS = [
     "채무고민 상담",
@@ -199,4 +200,8 @@ if __name__ == "__main__":
         SORT_BY = "LIKE" if sys.argv[2].upper() == "LIKE" else ""
     if len(sys.argv) > 3:
         OUT_PATH = Path(sys.argv[3])
+    if len(sys.argv) > 4:
+        CAFE_URL_PATH = sys.argv[4]
+    if len(sys.argv) > 5:
+        BOARD_KEYWORDS = sys.argv[5].split(",")
     asyncio.run(main(n))
