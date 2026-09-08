@@ -582,6 +582,9 @@ describe("서식 배치(formlayout)", () => {
 // 돌려보내면, 정작 그 이름의 서식을 12종이나 갖고 있으면서 없다고 답하게 된다(8/21 확인).
 describe("서식 이름 검색 (주제 검색이 빌 때의 대비책)", () => {
   it("'내용증명' 한 단어로 내용증명 서식을 찾는다", () => {
+    // "내용증명"은 13건인데 "내용증명 양식"은 0건이었다 — 모든 낱말이 이름에 있어야 하는
+    // 구조라 '양식' 하나가 통째로 막았다(2026-09-07 카페 제목 점검).
+    expect(matchFormsByName("내용증명 양식").length, "'양식'이 붙으면 0건이 된다").toBeGreaterThan(0);
     const hits = matchFormsByName("내용증명");
     expect(hits.length).toBeGreaterThanOrEqual(10);
     expect(hits).toContain("보증금반환_내용증명");

@@ -365,7 +365,11 @@ export function matchFormsByName(query: string): string[] {
   const n = (x: string) => x.replace(/[\s_·\-]/g, "");
   const nq = n(query);
   if (nq.length < 2) return [];
-  const toks = query.split(/[\s_·\-]+/).map(n).filter((t) => t.length >= 2);
+  // 문서 이름 뒤에 붙는 군더더기는 서식 이름에 없다. 모든 낱말이 일치해야 하는 구조라
+  // 이런 말이 하나만 껴도 통째로 0건이 됐다 — "내용증명"은 13건인데 "내용증명 양식"은 0건이었다
+  // (2026-09-07 카페 실사용 제목 점검). 군더더기만 남으면 전량 매칭이 되므로 그때는 찾지 않는다.
+  const 군더더기 = new Set(["양식", "서식", "샘플", "파일", "예시", "작성법", "쓰는법", "쓰는방법", "만드는법"]);
+  const toks = query.split(/[\s_·\-]+/).map(n).filter((t) => t.length >= 2 && !군더더기.has(t));
   const hit: string[] = [];
   for (const key of FORM_KEYS) {
     const hay = n(key + (FORMS[key]?.제목 ?? ""));
