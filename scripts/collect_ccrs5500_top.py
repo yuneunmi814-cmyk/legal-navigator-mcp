@@ -18,7 +18,12 @@ BOARD_KEYWORDS = [
 ]
 MAX_PAGES_PER_BOARD = 10
 TOP_N_PER_BOARD = 30
-OUT_PATH = Path("ccrs5500_top_engagement.json")
+# 정렬. 좋아요순(LIKE)은 정보공유·후기·팁이 몰린다 - 질문글에는 좋아요가 붙지 않는다.
+# 라우팅 검증에 필요한 것은 "사람이 실제로 묻는 문장"이라 최신순(빈 값)이 훨씬 낫다.
+# 2026-09-07 확인: 좋아요순 202개는 좋아요 중앙값 11 - 최대 839였고,
+# 0건 43개 중 절반 이상이 상담이 아니라 후기/팁이었다.
+SORT_BY = ""  # "" = 최신순, "LIKE" = 좋아요순
+OUT_PATH = Path("ccrs5500_recent.json")
 
 
 async def discover_cafe(page):
@@ -85,7 +90,8 @@ async def collect_board(context, clubid, menu_id, label, top_n, results, seen_id
     while page_num <= MAX_PAGES_PER_BOARD and collected < top_n:
         url = (
             f"https://cafe.naver.com/f-e/cafes/{clubid}/menus/{menu_id}"
-            f"?viewType=L&page={page_num}&sortBy=LIKE"
+            f"?viewType=L&page={page_num}"
+            + (f"&sortBy={SORT_BY}" if SORT_BY else "")
         )
         try:
             await page.goto(url, wait_until="load", timeout=30000)
@@ -176,7 +182,7 @@ async def main(top_n_per_board: int):
         results = []
         seen_ids = set()
         for m in target_menus:
-            print(f"\n▶ '{m['title']}' 좋아요순 상위 {top_n_per_board}개 수집 중...")
+            print(f"\n▶ '{m['title']}' {'좋아요순' if SORT_BY else '최신순'} {top_n_per_board}개 수집 중...")
             await collect_board(context, clubid, m['menuid'], m['title'], top_n_per_board, results, seen_ids)
 
         with open(OUT_PATH, "w", encoding="utf-8") as f:
@@ -187,5 +193,10 @@ async def main(top_n_per_board: int):
 
 
 if __name__ == "__main__":
+    # 사용법: python collect_ccrs5500_top.py [개수] [LIKE|RECENT] [출력파일]
     n = int(sys.argv[1]) if len(sys.argv) > 1 else TOP_N_PER_BOARD
+    if len(sys.argv) > 2:
+        SORT_BY = "LIKE" if sys.argv[2].upper() == "LIKE" else ""
+    if len(sys.argv) > 3:
+        OUT_PATH = Path(sys.argv[3])
     asyncio.run(main(n))
