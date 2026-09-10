@@ -17,8 +17,20 @@
 
 ```bash
 cd scripts
-python collect_ccrs5500_top.py 30   # 게시판당 상위 몇 개 (기본 30)
+python collect_ccrs5500_top.py 30                              # 최신순 30개 (기본)
+python collect_ccrs5500_top.py 30 LIKE ccrs5500_top.json       # 좋아요순
+python collect_ccrs5500_top.py 50 RECENT ccrs5500_recent.json  # 최신순 50개, 파일명 지정
 ```
+
+## 정렬 기준 — 기본값을 최신순으로 바꿨습니다 (2026-09-07)
+
+좋아요순으로 뽑으면 **정보공유·후기·팁만 올라옵니다.** 질문글에는 좋아요가 붙지 않기 때문입니다.
+
+좋아요순으로 모은 202개를 라우팅에 돌려본 결과, 좋아요 중앙값 11 · 최대 839였고
+**0건 43개 중 절반 이상이 상담 발화가 아니라 후기·팁**이었습니다. 라우팅 검증에 필요한 것은
+"사람이 실제로 묻는 문장"이라, 기본 정렬을 최신순으로 바꿨습니다.
+
+좋아요순이 필요하면 두 번째 인자에 `LIKE`를 넘기면 됩니다.
 
 최초 실행 시 `naver_login_state.json`이 없으면 브라우저가 뜨고 수동 로그인 후 Enter — 이후 세션 재사용.
 Playwright(`pip install playwright` + `playwright install chromium`) 필요.
