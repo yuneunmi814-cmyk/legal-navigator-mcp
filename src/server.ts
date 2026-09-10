@@ -397,6 +397,7 @@ function rankTopics(query: string): string[] {
     m.set(k, (m.get(k) ?? 0) + 1);
   };
   for (const syn of SEARCH_SYNONYMS) {
+    if (syn.requiresAny && !syn.requiresAny.some((ph) => nQ.includes(ph.replace(/\s/g, "")))) continue;
     if (syn.q.some((ph) => nQ.includes(ph.replace(/\s/g, "")) || Q.includes(ph))) {
       for (const t of syn.topics) add(t, 5);
     }
